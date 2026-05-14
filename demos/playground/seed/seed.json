@@ -6,12 +6,10 @@
 		"description": "A blog with posts and pages",
 		"author": "EmDash"
 	},
-
 	"settings": {
 		"title": "My Blog",
 		"tagline": "Thoughts on building for the web"
 	},
-
 	"collections": [
 		{
 			"slug": "posts",
@@ -65,9 +63,280 @@
 					"searchable": true
 				}
 			]
+		},
+		{
+			"slug": "rental_assets",
+			"label": "Rental Assets",
+			"labelSingular": "Rental Asset",
+			"supports": ["drafts", "revisions"],
+			"fields": [
+				{
+					"slug": "title",
+					"label": "Title",
+					"type": "string",
+					"required": true,
+					"searchable": true
+				},
+				{
+					"slug": "business_state",
+					"label": "Business State",
+					"type": "select"
+				},
+				{
+					"slug": "visibility_state",
+					"label": "Visibility State",
+					"type": "select"
+				},
+				{
+					"slug": "config_spec",
+					"label": "Config Spec",
+					"type": "json"
+				},
+				{
+					"slug": "condition_spec",
+					"label": "Condition Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "asset_config_items",
+			"label": "Asset Config Items",
+			"labelSingular": "Asset Config Item",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "item_key",
+					"label": "Item Key",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "label",
+					"label": "Label",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "expected_condition",
+					"label": "Expected Condition",
+					"type": "text"
+				},
+				{
+					"slug": "sort_order",
+					"label": "Sort Order",
+					"type": "integer"
+				}
+			]
+		},
+		{
+			"slug": "asset_interest",
+			"label": "Asset Interest",
+			"labelSingular": "Asset Interest",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "renter_id",
+					"label": "Renter ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "interest_state",
+					"label": "Interest State",
+					"type": "select"
+				},
+				{
+					"slug": "message",
+					"label": "Message",
+					"type": "text"
+				}
+			]
+		},
+		{
+			"slug": "negotiation_rounds",
+			"label": "Negotiation Rounds",
+			"labelSingular": "Negotiation Round",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "interest_id",
+					"label": "Interest ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "handover_id",
+					"label": "Handover ID",
+					"type": "string"
+				},
+				{
+					"slug": "round_phase",
+					"label": "Round Phase",
+					"type": "select"
+				},
+				{
+					"slug": "round_kind",
+					"label": "Round Kind",
+					"type": "select"
+				},
+				{
+					"slug": "round_state",
+					"label": "Round State",
+					"type": "select"
+				},
+				{
+					"slug": "actor_id",
+					"label": "Actor ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "terms",
+					"label": "Terms",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "agreement_versions",
+			"label": "Agreement Versions",
+			"labelSingular": "Agreement Version",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "interest_id",
+					"label": "Interest ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "agreement_state",
+					"label": "Agreement State",
+					"type": "select"
+				},
+				{
+					"slug": "printable_snapshot",
+					"label": "Printable Snapshot",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "agreement_terms",
+			"label": "Agreement Terms",
+			"labelSingular": "Agreement Term",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "agreement_id",
+					"label": "Agreement ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "term_key",
+					"label": "Term Key",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "term_value",
+					"label": "Term Value",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "handover_sessions",
+			"label": "Handover Sessions",
+			"labelSingular": "Handover Session",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "agreement_id",
+					"label": "Agreement ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "handover_state",
+					"label": "Handover State",
+					"type": "select"
+				}
+			]
+		},
+		{
+			"slug": "handover_item_checks",
+			"label": "Handover Item Checks",
+			"labelSingular": "Handover Item Check",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "handover_id",
+					"label": "Handover ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "asset_config_item_id",
+					"label": "Asset Config Item ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "baseline_condition",
+					"label": "Baseline Condition",
+					"type": "text"
+				},
+				{
+					"slug": "return_condition",
+					"label": "Return Condition",
+					"type": "text"
+				},
+				{
+					"slug": "dispute_state",
+					"label": "Dispute State",
+					"type": "select"
+				},
+				{
+					"slug": "dispute_notes",
+					"label": "Dispute Notes",
+					"type": "text"
+				}
+			]
 		}
 	],
-
 	"taxonomies": [
 		{
 			"name": "category",
@@ -76,9 +345,18 @@
 			"hierarchical": true,
 			"collections": ["posts"],
 			"terms": [
-				{ "slug": "development", "label": "Development" },
-				{ "slug": "design", "label": "Design" },
-				{ "slug": "notes", "label": "Notes" }
+				{
+					"slug": "development",
+					"label": "Development"
+				},
+				{
+					"slug": "design",
+					"label": "Design"
+				},
+				{
+					"slug": "notes",
+					"label": "Notes"
+				}
 			]
 		},
 		{
@@ -88,14 +366,25 @@
 			"hierarchical": false,
 			"collections": ["posts"],
 			"terms": [
-				{ "slug": "webdev", "label": "Web Development" },
-				{ "slug": "opinion", "label": "Opinion" },
-				{ "slug": "tools", "label": "Tools" },
-				{ "slug": "creativity", "label": "Creativity" }
+				{
+					"slug": "webdev",
+					"label": "Web Development"
+				},
+				{
+					"slug": "opinion",
+					"label": "Opinion"
+				},
+				{
+					"slug": "tools",
+					"label": "Tools"
+				},
+				{
+					"slug": "creativity",
+					"label": "Creativity"
+				}
 			]
 		}
 	],
-
 	"bylines": [
 		{
 			"id": "byline-editorial",
@@ -109,19 +398,29 @@
 			"isGuest": true
 		}
 	],
-
 	"menus": [
 		{
 			"name": "primary",
 			"label": "Primary Navigation",
 			"items": [
-				{ "type": "custom", "label": "Home", "url": "/" },
-				{ "type": "custom", "label": "About", "url": "/pages/about" },
-				{ "type": "custom", "label": "Posts", "url": "/posts" }
+				{
+					"type": "custom",
+					"label": "Home",
+					"url": "/"
+				},
+				{
+					"type": "custom",
+					"label": "About",
+					"url": "/pages/about"
+				},
+				{
+					"type": "custom",
+					"label": "Posts",
+					"url": "/posts"
+				}
 			]
 		}
 	],
-
 	"widgetAreas": [
 		{
 			"name": "sidebar",
@@ -187,7 +486,6 @@
 			]
 		}
 	],
-
 	"sections": [
 		{
 			"slug": "newsletter-signup",
@@ -199,7 +497,12 @@
 				{
 					"_type": "block",
 					"style": "h3",
-					"children": [{ "_type": "span", "text": "Stay in the loop" }]
+					"children": [
+						{
+							"_type": "span",
+							"text": "Stay in the loop"
+						}
+					]
 				},
 				{
 					"_type": "block",
@@ -233,7 +536,6 @@
 			]
 		}
 	],
-
 	"content": {
 		"pages": [
 			{
@@ -306,7 +608,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "What survives" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "What survives"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -341,8 +648,13 @@
 					]
 				},
 				"bylines": [
-					{ "byline": "byline-editorial" },
-					{ "byline": "byline-guest", "roleLabel": "Guest essay" }
+					{
+						"byline": "byline-editorial"
+					},
+					{
+						"byline": "byline-guest",
+						"roleLabel": "Guest essay"
+					}
 				],
 				"taxonomies": {
 					"category": ["development"],
@@ -387,7 +699,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "The performance argument" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "The performance argument"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -411,7 +728,11 @@
 						}
 					]
 				},
-				"bylines": [{ "byline": "byline-editorial" }],
+				"bylines": [
+					{
+						"byline": "byline-editorial"
+					}
+				],
 				"taxonomies": {
 					"category": ["development"],
 					"tag": ["webdev", "opinion"]
@@ -455,7 +776,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "The fear of being wrong" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "The fear of being wrong"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -522,7 +848,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "The Unix philosophy, revisited" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "The Unix philosophy, revisited"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -589,7 +920,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "Embracing the box" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "Embracing the box"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -656,7 +992,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "Why side projects matter" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "Why side projects matter"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -723,7 +1064,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "Removing as a feature" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "Removing as a feature"
+								}
+							]
 						},
 						{
 							"_type": "block",
