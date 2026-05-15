@@ -8,9 +8,10 @@ import {
 } from "../constants.js";
 import { appendAssetEvent } from "../events.js";
 import type { DomainStore, UserContext } from "../types.js";
-import { createSlug } from "../validation.js";
+import { createSlug, ownerConditionsHash } from "../validation.js";
 
 export async function addAsset(store: DomainStore, user: UserContext, input: AddAssetRequest) {
+	const ownerConditionsSpec = input.ownerConditionsSpec ?? {};
 	const asset = await store.insert(COLLECTIONS.ASSETS, {
 		slug: createSlug(input.title),
 		status: CMS_STATUS.DRAFT,
@@ -33,6 +34,9 @@ export async function addAsset(store: DomainStore, user: UserContext, input: Add
 		gallery_images: [],
 		config_spec: {},
 		condition_spec: {},
+		owner_conditions_spec: ownerConditionsSpec,
+		conditions_version: 1,
+		conditions_hash: ownerConditionsHash(ownerConditionsSpec),
 	});
 	await appendAssetEvent(store, {
 		assetId: asset.id,

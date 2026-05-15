@@ -137,6 +137,17 @@ export async function acceptFinalTerms(
 			},
 			config_spec: asJsonObject(asset.config_spec),
 			condition_spec: asJsonObject(asset.condition_spec),
+			owner_conditions: {
+				version: asset.conditions_version ?? null,
+				hash: asset.conditions_hash ?? null,
+				spec: asJsonObject(asset.owner_conditions_spec),
+			},
+			renter_accepted_conditions: {
+				version: interest.accepted_conditions_version ?? null,
+				hash: interest.accepted_conditions_hash ?? null,
+				accepted_at: interest.accepted_conditions_at ?? null,
+				snapshot: asJsonObject(interest.accepted_conditions_snapshot),
+			},
 			accepted_items: acceptedItems,
 			negotiation_round_ids: rounds.map((round) => round.id),
 			extra_terms: input.extraTerms ?? {},

@@ -35,6 +35,27 @@ export function optionalObject(value: unknown): Record<string, unknown> | undefi
 	return Object.fromEntries(Object.entries(value));
 }
 
+function sortJsonValue(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(sortJsonValue);
+	if (!value || typeof value !== "object") return value;
+	return Object.fromEntries(
+		Object.entries(value)
+			.toSorted(([a], [b]) => a.localeCompare(b))
+			.map(([key, entry]) => [key, sortJsonValue(entry)]),
+	);
+}
+
+export function stableJson(value: unknown): string {
+	return JSON.stringify(sortJsonValue(value));
+}
+
+export function ownerConditionsHash(value: unknown): string {
+	const input = stableJson(value);
+	let hash = 5381;
+	for (const char of input) hash = (hash * 33) ^ char.charCodeAt(0);
+	return `cond_${(hash >>> 0).toString(36)}`;
+}
+
 export function slugify(input: string): string {
 	const slug = input
 		.trim()

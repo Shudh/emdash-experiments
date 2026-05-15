@@ -165,3 +165,68 @@
 - Audit result before this fix: the only binary diff entry was `zip-file/emdash-rental-backend-pack.zip`.
 - Fix applied: removed `zip-file/emdash-rental-backend-pack.zip` from git tracking and added `zip-file/*.zip` to `.gitignore` so local/provenance archives do not enter future PR diffs.
 - Resulting expectation: the branch PR diff no longer contains binary files; the rental backend source, seed, routes, tests, and findings remain as text files.
+
+## Real auth/session rental SaaS follow-up
+
+### Product fixes
+
+- Added separate owner/rental condition fields on assets: `owner_conditions_spec`, `conditions_version`, and `conditions_hash`.
+- Added accepted-condition fields on interests: `accepted_conditions_version`, `accepted_conditions_hash`, `accepted_conditions_at`, and `accepted_conditions_snapshot`.
+- `expressInterest()` now rejects missing condition acceptance with `CONDITIONS_ACCEPTANCE_REQUIRED` and rejects stale version/hash with `STALE_CONDITIONS_ACCEPTANCE`; successful interests persist an immutable copy of the accepted owner conditions.
+- Agreement printable snapshots now include both the current owner conditions and the renter's accepted-condition snapshot, so later owner condition edits do not rewrite old interest/agreement evidence.
+- `publishAssetToMarketplace()` now runs inside `store.transaction(...)`.
+- `addNegotiationRound()` derives `actor_role` from the authenticated user relationship (`owner_user_id` or `interested_user_id`) and no longer trusts request JSON. Public request parsing ignores `actorRole`.
+- Added handover return negotiation support through `addHandoverNegotiationRound()` and `/api/handover/[handoverId]/add-round`, so damage/deposit/repair disputes can use append-only `round_phase = "return"` rounds.
+
+### Route tests
+
+- Added `demos/playground/tests/domain/routes.test.ts` for route-level backend coverage:
+  - unauthenticated protected route returns `401 UNAUTHORIZED`;
+  - invalid add-asset body returns `400 VALIDATION_ERROR`;
+  - authenticated add-asset uses `locals.user.id` as both `author_id` and `owner_user_id`;
+  - express-interest requires accepted owner conditions;
+  - stale condition version/hash is rejected;
+  - negotiation `actor_role` is derived from the authenticated relationship even when JSON tries to spoof it.
+
+### Real user creation and session strategy
+
+- Added `e2e/tests/rental-saas-flow.spec.ts` using the existing Playwright global setup and invite/passkey patterns.
+- The test creates three real EmDash users through `POST /_emdash/api/auth/invite`, accepts each invite in the admin invite flow, registers a passkey with the repo's CDP virtual WebAuthn authenticator, and captures the real EmDash session cookie established by that invite/passkey flow.
+- Passkey was actually exercised through the repo's invite registration flow for each user. The invite flow creates an authenticated EmDash session for the newly registered user; the test captures that real session cookie and verifies it with `GET /_emdash/api/auth/me` before calling rental APIs. Earlier attempted variants that forced an additional logout/login were flaky because the admin redirected authenticated users away from `/login`, so the final stable path uses the real post-registration session created by the passkey-backed invite flow.
+- Owner, renter, and unrelated user IDs are not hard-coded. They are read from `GET /_emdash/api/auth/me` inside each authenticated browser context and then asserted in rental API responses (`owner_user_id`, `author_id`, `interested_user_id`, `actor_user_id`, access checks).
+- Session/cookie strategy: each user gets a separate Playwright browser context. Rental API calls use that context's `APIRequestContext`, so requests carry the real session cookie set by EmDash auth. Anonymous marketplace/login-gate assertions use Node `fetch` without those cookies.
+- The E2E fixture is used because `playwright.config.ts` starts `e2e/fixture`, not `demos/playground`. To avoid adding frontend UI or modifying the admin, a minimal backend-only route hook was added at `e2e/fixture/src/pages/api/rental/[...path].ts`. It reuses the playground rental domain commands against an in-memory rental store while relying on the fixture's real EmDash auth middleware and sessions for `locals.user`.
+
+### E2E SaaS flow coverage
+
+- `e2e/tests/rental-saas-flow.spec.ts` covers:
+  - registered users are not special asset owners before creation;
+  - authenticated asset creation sets `owner_user_id` and `author_id` from the session user;
+  - public marketplace list/detail reads expose published owner conditions;
+  - anonymous express-interest is rejected with `401`;
+  - logged-in renter must accept current conditions before interest;
+  - accepted condition snapshots survive later owner condition edits;
+  - owner dashboard/inbox contains the renter's submitted interest and profile details;
+  - many pre-agreement rounds are append-only and actor identity/role are session-derived;
+  - final accepted terms create an agreement snapshot, restrict/private the asset, remove it from marketplace, and grant owner/renter access;
+  - unrelated logged-in user cannot read the restricted agreement;
+  - move-in/move-out handover plus return-phase damage dispute rounds close with settlement, maintenance/private asset state, and unchanged agreement snapshot.
+
+### Command verification after real-session follow-up
+
+- `pnpm install --frozen-lockfile`: PASS.
+- `pnpm run build`: PASS.
+- `pnpm --filter @emdash-cms/playground typecheck`: PASS, `0 errors`, `0 warnings`, `0 hints`.
+- `pnpm --filter @emdash-cms/playground build`: PASS.
+- `packages/blocks/node_modules/.bin/vitest run demos/playground/tests/domain`: PASS, `Test Files 2 passed (2)`, `Tests 8 passed (8)`.
+- `pnpm exec playwright install chromium`: PASS; installed the Chromium browser required by Playwright in this container.
+- `pnpm exec playwright install-deps chromium`: PASS; installed missing system libraries required by Chromium in this container.
+- `pnpm test:e2e --grep rental`: PASS after installing Playwright browser/system dependencies; `1 passed`.
+- `pnpm typecheck`: PASS.
+- `pnpm lint`: PASS with 45 existing warnings and 0 errors; no warnings are in the rental/playground/e2e files added here.
+- `pnpm test`: FAIL due an environment/network dependency in `packages/core/tests/integration/wordpress-migration/theme-unit-test.test.ts`. It tried downloading `https://raw.githubusercontent.com/WordPress/theme-test-data/master/themeunittestdata.wordpress.xml` and failed with `TypeError: fetch failed` / `ENETUNREACH`. The failure is outside the rental changes; package tests before that point passed, and the rental domain/E2E checks passed.
+
+### Remaining blockers
+
+- Full `pnpm test` is still blocked by network reachability for the WordPress theme-unit-test fixture download, not by the rental SaaS flow.
+- The E2E rental route hook intentionally lives in `e2e/fixture` because the repository's Playwright config does not start `demos/playground`; if the project later adds playground-specific Playwright orchestration, this test can move from the fixture adapter to the real playground server without changing the domain assertions.

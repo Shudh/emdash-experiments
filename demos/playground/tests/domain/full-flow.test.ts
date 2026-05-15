@@ -101,6 +101,10 @@ async function runLifecycle(store: DomainStore) {
 		featuredImage: "media_flat_main",
 		configSpec: { bedrooms: 3, bathrooms: 2, furnishing: "fully_furnished" },
 		conditionSpec: { walls: "good", flooring: "good" },
+		ownerConditionsSpec: {
+			deposit_policy: "Deposit covers damage beyond normal wear.",
+			documents_required: ["company_id", "salary_slip"],
+		},
 		items: [
 			{
 				itemKind: "furniture",
@@ -139,6 +143,8 @@ async function runLifecycle(store: DomainStore) {
 		offeredPrice: 52_000,
 		requestedMinimumMonths: 11,
 		message: "Interested if owner can include deep cleaning before move-in.",
+		acceptedConditionsVersion: Number(published.asset.conditions_version),
+		acceptedConditionsHash: String(published.asset.conditions_hash),
 	});
 	expect(interest.interest.interest_state).toBe("submitted");
 	expect(interest.interest.interested_user_id).toBe(renter.id);
@@ -147,21 +153,18 @@ async function runLifecycle(store: DomainStore) {
 	await addNegotiationRound(store, owner, interest.interest.id, {
 		roundPhase: ROUND_PHASE.PRE_AGREEMENT,
 		roundKind: ROUND_KIND.QUESTION,
-		actorRole: "owner",
 		message: "Please confirm official ID and intended move-in date.",
 	});
 	await addNegotiationRound(store, renter, interest.interest.id, {
 		roundPhase: ROUND_PHASE.PRE_AGREEMENT,
 		roundKind: ROUND_KIND.ANSWER,
 		roundState: ROUND_STATE.ANSWERED,
-		actorRole: "renter",
 		message: "Official ID shared. Move-in from 2026-06-01.",
 	});
 	const acceptedRound = await addNegotiationRound(store, owner, interest.interest.id, {
 		roundPhase: ROUND_PHASE.PRE_AGREEMENT,
 		roundKind: ROUND_KIND.ACCEPTANCE,
 		roundState: ROUND_STATE.ACCEPTED,
-		actorRole: "owner",
 		price: 54_000,
 		currency: "INR",
 		minimumMonths: 11,
@@ -181,6 +184,7 @@ async function runLifecycle(store: DomainStore) {
 		ROUND_KIND.ACCEPTANCE,
 	]);
 	expect(rounds.every((round) => round.round_phase === ROUND_PHASE.PRE_AGREEMENT)).toBe(true);
+	expect(rounds.map((round) => round.actor_role)).toEqual(["owner", "renter", "owner"]);
 
 	const agreementResult = await acceptFinalTerms(store, owner, interest.interest.id, {
 		acceptedRoundId: acceptedRound.round.id,
@@ -204,6 +208,10 @@ async function runLifecycle(store: DomainStore) {
 		agreementResult.agreement.id,
 	);
 	expect(agreementPrintBeforeEdit).toBeTruthy();
+	expect(agreementPrintBeforeEdit?.agreement.printable_snapshot).toMatchObject({
+		owner_conditions: { version: 2, hash: published.asset.conditions_hash },
+		renter_accepted_conditions: { version: 2, hash: published.asset.conditions_hash },
+	});
 	const snapshotBeforeEdit = JSON.stringify(agreementPrintBeforeEdit?.agreement.printable_snapshot);
 
 	await signAgreement(store, owner, agreementResult.agreement.id, {
@@ -265,6 +273,10 @@ async function runLifecycle(store: DomainStore) {
 			repairedAfterMoveOut: true,
 		},
 		conditionSpec: { walls: "repainted", flooring: "good", mirror: "replaced" },
+		ownerConditionsSpec: {
+			deposit_policy: "Updated for future renters only.",
+			documents_required: ["company_id", "salary_slip", "reference_letter"],
+		},
 	});
 	const agreementPrintAfterEdit = await getAgreementPrintQuery(store, agreementResult.agreement.id);
 	expect(JSON.stringify(agreementPrintAfterEdit?.agreement.printable_snapshot)).toBe(

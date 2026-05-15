@@ -12,30 +12,36 @@ export async function publishAssetToMarketplace(
 	user: UserContext,
 	assetId: string,
 ) {
-	await requireAssetOwner(store, user, assetId);
-	const asset = await getAssetOrThrow(store, assetId);
-	const fromState = asString(asset.business_state);
-	assertAllowedAssetTransition(fromState, ASSET_BUSINESS_STATE.LISTED, "publishAssetToMarketplace");
-	if (!asset.title || !asset.asset_kind)
-		throw new DomainError("ASSET_INCOMPLETE", "Asset title and kind are required", 422);
-	if (!asset.config_spec || typeof asset.config_spec !== "object")
-		throw new DomainError("ASSET_INCOMPLETE", "Asset config_spec is required", 422);
-	const updated = await store.update(COLLECTIONS.ASSETS, assetId, {
-		business_state: ASSET_BUSINESS_STATE.LISTED,
-		visibility_state: VISIBILITY_STATE.MARKETPLACE,
+	return store.transaction(async (tx) => {
+		await requireAssetOwner(tx, user, assetId);
+		const asset = await getAssetOrThrow(tx, assetId);
+		const fromState = asString(asset.business_state);
+		assertAllowedAssetTransition(
+			fromState,
+			ASSET_BUSINESS_STATE.LISTED,
+			"publishAssetToMarketplace",
+		);
+		if (!asset.title || !asset.asset_kind)
+			throw new DomainError("ASSET_INCOMPLETE", "Asset title and kind are required", 422);
+		if (!asset.config_spec || typeof asset.config_spec !== "object")
+			throw new DomainError("ASSET_INCOMPLETE", "Asset config_spec is required", 422);
+		const updated = await tx.update(COLLECTIONS.ASSETS, assetId, {
+			business_state: ASSET_BUSINESS_STATE.LISTED,
+			visibility_state: VISIBILITY_STATE.MARKETPLACE,
+		});
+		const published = await publishAssetCmsState(tx, assetId);
+		await appendAssetEvent(tx, {
+			assetId,
+			eventKind: EVENT_KIND.ASSET_PUBLISHED,
+			actor: user,
+			fromBusinessState: fromState,
+			toBusinessState: ASSET_BUSINESS_STATE.LISTED,
+			eventSpec: {
+				visibilityState: VISIBILITY_STATE.MARKETPLACE,
+				updatedVersion: updated.version,
+				publishedVersion: published.version,
+			},
+		});
+		return { asset: published };
 	});
-	const published = await publishAssetCmsState(store, assetId);
-	await appendAssetEvent(store, {
-		assetId,
-		eventKind: EVENT_KIND.ASSET_PUBLISHED,
-		actor: user,
-		fromBusinessState: fromState,
-		toBusinessState: ASSET_BUSINESS_STATE.LISTED,
-		eventSpec: {
-			visibilityState: VISIBILITY_STATE.MARKETPLACE,
-			updatedVersion: updated.version,
-			publishedVersion: published.version,
-		},
-	});
-	return { asset: published };
 }

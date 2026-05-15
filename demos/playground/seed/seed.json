@@ -164,6 +164,21 @@
 					"slug": "condition_spec",
 					"label": "Condition Spec",
 					"type": "json"
+				},
+				{
+					"slug": "owner_conditions_spec",
+					"label": "Owner Conditions",
+					"type": "json"
+				},
+				{
+					"slug": "conditions_version",
+					"label": "Conditions Version",
+					"type": "number"
+				},
+				{
+					"slug": "conditions_hash",
+					"label": "Conditions Hash",
+					"type": "string"
 				}
 			]
 		},
@@ -311,6 +326,26 @@
 				{
 					"slug": "interest_spec",
 					"label": "Interest Spec",
+					"type": "json"
+				},
+				{
+					"slug": "accepted_conditions_version",
+					"label": "Accepted Conditions Version",
+					"type": "number"
+				},
+				{
+					"slug": "accepted_conditions_hash",
+					"label": "Accepted Conditions Hash",
+					"type": "string"
+				},
+				{
+					"slug": "accepted_conditions_at",
+					"label": "Accepted Conditions At",
+					"type": "datetime"
+				},
+				{
+					"slug": "accepted_conditions_snapshot",
+					"label": "Accepted Conditions Snapshot",
 					"type": "json"
 				}
 			]

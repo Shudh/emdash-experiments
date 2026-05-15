@@ -11,7 +11,7 @@ import { appendAssetEvent } from "../events.js";
 import { getAssetOrThrow } from "../repositories/assets.js";
 import { assertAllowedAssetTransition } from "../transitions.js";
 import type { DomainStore, UserContext } from "../types.js";
-import { DomainError, asString } from "../types.js";
+import { DomainError, asJsonObject, asNumber, asString } from "../types.js";
 
 export async function expressInterest(
 	store: DomainStore,
@@ -39,6 +39,27 @@ export async function expressInterest(
 	if (!rentableStates.has(fromState)) {
 		throw new DomainError("ASSET_NOT_AVAILABLE", "Asset is not accepting interests", 409);
 	}
+	const conditionsVersion = asNumber(asset.conditions_version, 1);
+	const conditionsHash = asString(asset.conditions_hash);
+	if (input.acceptedConditionsVersion === undefined || !input.acceptedConditionsHash) {
+		throw new DomainError(
+			"CONDITIONS_ACCEPTANCE_REQUIRED",
+			"Current owner rental conditions must be accepted before expressing interest",
+			422,
+		);
+	}
+	if (
+		input.acceptedConditionsVersion !== conditionsVersion ||
+		input.acceptedConditionsHash !== conditionsHash
+	) {
+		throw new DomainError(
+			"STALE_CONDITIONS_ACCEPTANCE",
+			"Owner rental conditions changed; review and accept the latest conditions",
+			409,
+		);
+	}
+	const acceptedAt = store.now();
+	const ownerConditionsSnapshot = asJsonObject(asset.owner_conditions_spec);
 	const interest = await store.insert(COLLECTIONS.ASSET_INTERESTS, {
 		status: CMS_STATUS.PUBLISHED,
 		author_id: user.id,
@@ -56,6 +77,10 @@ export async function expressInterest(
 		requested_km_limit: input.requestedKmLimit ?? null,
 		message: input.message ?? null,
 		interest_spec: input.interestSpec ?? {},
+		accepted_conditions_version: conditionsVersion,
+		accepted_conditions_hash: conditionsHash,
+		accepted_conditions_at: acceptedAt,
+		accepted_conditions_snapshot: ownerConditionsSnapshot,
 	});
 	let updatedAsset = asset;
 	if (fromState === ASSET_BUSINESS_STATE.LISTED) {

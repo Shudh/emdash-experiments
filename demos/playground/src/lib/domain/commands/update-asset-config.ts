@@ -4,7 +4,8 @@ import { COLLECTIONS, CMS_STATUS, EVENT_KIND } from "../constants.js";
 import { appendAssetEvent } from "../events.js";
 import { getAssetOrThrow } from "../repositories/assets.js";
 import type { DomainStore, UserContext } from "../types.js";
-import { createSlug } from "../validation.js";
+import { asNumber } from "../types.js";
+import { createSlug, ownerConditionsHash } from "../validation.js";
 
 export async function updateAssetConfig(
 	store: DomainStore,
@@ -23,6 +24,11 @@ export async function updateAssetConfig(
 	if (input.galleryImages !== undefined) patch.gallery_images = input.galleryImages;
 	if (input.configSpec !== undefined) patch.config_spec = input.configSpec;
 	if (input.conditionSpec !== undefined) patch.condition_spec = input.conditionSpec;
+	if (input.ownerConditionsSpec !== undefined) {
+		patch.owner_conditions_spec = input.ownerConditionsSpec;
+		patch.conditions_version = asNumber(asset.conditions_version, 1) + 1;
+		patch.conditions_hash = ownerConditionsHash(input.ownerConditionsSpec);
+	}
 	const updatedAsset = Object.keys(patch).length
 		? await store.update(COLLECTIONS.ASSETS, assetId, patch)
 		: asset;

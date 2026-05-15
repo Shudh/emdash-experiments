@@ -30,6 +30,7 @@ export const addAssetRequestSchema = z.object({
 	locationLabel: z.string().trim().min(1).optional(),
 	publicPrice: finiteNumberSchema.optional(),
 	currency: z.string().trim().min(1).default("INR"),
+	ownerConditionsSpec: optionalJsonObjectSchema,
 });
 
 export type AddAssetRequest = z.infer<typeof addAssetRequestSchema>;
@@ -47,6 +48,7 @@ export const updateAssetConfigRequestSchema = z.object({
 	galleryImages: z.array(jsonObjectSchema).optional(),
 	configSpec: optionalJsonObjectSchema,
 	conditionSpec: optionalJsonObjectSchema,
+	ownerConditionsSpec: optionalJsonObjectSchema,
 	items: z.array(assetConfigItemInputSchema).default([]),
 });
 
@@ -68,6 +70,8 @@ export const expressInterestRequestSchema = z.object({
 	requestedKmLimit: finiteNumberSchema.optional(),
 	message: z.string().trim().min(1).optional(),
 	interestSpec: optionalJsonObjectSchema,
+	acceptedConditionsVersion: finiteNumberSchema.optional(),
+	acceptedConditionsHash: z.string().trim().min(1).optional(),
 });
 
 export type ExpressInterestRequest = z.infer<typeof expressInterestRequestSchema>;
@@ -80,7 +84,6 @@ export const addNegotiationRoundRequestSchema = z.object({
 	roundPhase: z.string().trim().min(1),
 	roundKind: z.string().trim().min(1),
 	roundState: z.string().trim().min(1).optional(),
-	actorRole: z.string().trim().min(1),
 	price: finiteNumberSchema.optional(),
 	currency: z.string().trim().min(1).optional(),
 	minimumMonths: finiteNumberSchema.optional(),
