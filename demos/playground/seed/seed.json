@@ -6,12 +6,10 @@
 		"description": "A blog with posts and pages",
 		"author": "EmDash"
 	},
-
 	"settings": {
 		"title": "My Blog",
 		"tagline": "Thoughts on building for the web"
 	},
-
 	"collections": [
 		{
 			"slug": "posts",
@@ -65,9 +63,769 @@
 					"searchable": true
 				}
 			]
+		},
+		{
+			"slug": "assets",
+			"label": "Assets",
+			"labelSingular": "Asset",
+			"supports": ["drafts", "revisions", "search"],
+			"fields": [
+				{
+					"slug": "title",
+					"label": "Title",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "asset_kind",
+					"label": "Asset Kind",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "business_state",
+					"label": "Business State",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "visibility_state",
+					"label": "Visibility State",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "public_price",
+					"label": "Public Price",
+					"type": "number"
+				},
+				{
+					"slug": "currency",
+					"label": "Currency",
+					"type": "string"
+				},
+				{
+					"slug": "location_label",
+					"label": "Location Label",
+					"type": "string"
+				},
+				{
+					"slug": "minimum_months",
+					"label": "Minimum Months",
+					"type": "number"
+				},
+				{
+					"slug": "included_km",
+					"label": "Included KM",
+					"type": "number"
+				},
+				{
+					"slug": "active_interest_id",
+					"label": "Active Interest ID",
+					"type": "string"
+				},
+				{
+					"slug": "active_agreement_id",
+					"label": "Active Agreement ID",
+					"type": "string"
+				},
+				{
+					"slug": "active_handover_id",
+					"label": "Active Handover ID",
+					"type": "string"
+				},
+				{
+					"slug": "active_renter_user_id",
+					"label": "Active Renter User ID",
+					"type": "string"
+				},
+				{
+					"slug": "featured_image",
+					"label": "Featured Image",
+					"type": "image"
+				},
+				{
+					"slug": "gallery_images",
+					"label": "Gallery Images",
+					"type": "json"
+				},
+				{
+					"slug": "config_spec",
+					"label": "Config Spec",
+					"type": "json"
+				},
+				{
+					"slug": "condition_spec",
+					"label": "Condition Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "asset_config_items",
+			"label": "Asset Config Items",
+			"labelSingular": "Asset Config Item",
+			"supports": ["drafts", "revisions"],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "item_kind",
+					"label": "Item Kind",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "item_group",
+					"label": "Item Group",
+					"type": "string"
+				},
+				{
+					"slug": "item_label",
+					"label": "Item Label",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "owner_declared_state",
+					"label": "Owner Declared State",
+					"type": "string"
+				},
+				{
+					"slug": "renter_accepted_state",
+					"label": "Renter Accepted State",
+					"type": "string"
+				},
+				{
+					"slug": "return_observed_state",
+					"label": "Return Observed State",
+					"type": "string"
+				},
+				{
+					"slug": "chargeable_state",
+					"label": "Chargeable State",
+					"type": "string"
+				},
+				{
+					"slug": "estimated_repair_cost",
+					"label": "Estimated Repair Cost",
+					"type": "number"
+				},
+				{
+					"slug": "media_refs",
+					"label": "Media Refs",
+					"type": "json"
+				},
+				{
+					"slug": "item_spec",
+					"label": "Item Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "asset_interests",
+			"label": "Asset Interests",
+			"labelSingular": "Asset Interest",
+			"supports": ["drafts", "revisions"],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "interested_user_id",
+					"label": "Interested User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "interest_state",
+					"label": "Interest State",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "name",
+					"label": "Name",
+					"type": "string"
+				},
+				{
+					"slug": "official_email",
+					"label": "Official Email",
+					"type": "string"
+				},
+				{
+					"slug": "phone",
+					"label": "Phone",
+					"type": "string"
+				},
+				{
+					"slug": "employer_name",
+					"label": "Employer Name",
+					"type": "string"
+				},
+				{
+					"slug": "offered_price",
+					"label": "Offered Price",
+					"type": "number"
+				},
+				{
+					"slug": "requested_start_date",
+					"label": "Requested Start Date",
+					"type": "datetime"
+				},
+				{
+					"slug": "requested_minimum_months",
+					"label": "Requested Minimum Months",
+					"type": "number"
+				},
+				{
+					"slug": "requested_km_limit",
+					"label": "Requested KM Limit",
+					"type": "number"
+				},
+				{
+					"slug": "message",
+					"label": "Message",
+					"type": "text"
+				},
+				{
+					"slug": "interest_spec",
+					"label": "Interest Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "negotiation_rounds",
+			"label": "Negotiation Rounds",
+			"labelSingular": "Negotiation Round",
+			"supports": ["drafts", "revisions"],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "interest_id",
+					"label": "Interest ID",
+					"type": "string"
+				},
+				{
+					"slug": "agreement_id",
+					"label": "Agreement ID",
+					"type": "string"
+				},
+				{
+					"slug": "handover_id",
+					"label": "Handover ID",
+					"type": "string"
+				},
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "renter_user_id",
+					"label": "Renter User ID",
+					"type": "string"
+				},
+				{
+					"slug": "actor_user_id",
+					"label": "Actor User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "actor_role",
+					"label": "Actor Role",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "round_phase",
+					"label": "Round Phase",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "round_kind",
+					"label": "Round Kind",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "round_state",
+					"label": "Round State",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "price",
+					"label": "Price",
+					"type": "number"
+				},
+				{
+					"slug": "currency",
+					"label": "Currency",
+					"type": "string"
+				},
+				{
+					"slug": "minimum_months",
+					"label": "Minimum Months",
+					"type": "number"
+				},
+				{
+					"slug": "km_limit",
+					"label": "KM Limit",
+					"type": "number"
+				},
+				{
+					"slug": "deposit_amount",
+					"label": "Deposit Amount",
+					"type": "number"
+				},
+				{
+					"slug": "start_date",
+					"label": "Start Date",
+					"type": "datetime"
+				},
+				{
+					"slug": "end_date",
+					"label": "End Date",
+					"type": "datetime"
+				},
+				{
+					"slug": "message",
+					"label": "Message",
+					"type": "text"
+				},
+				{
+					"slug": "proposed_patch",
+					"label": "Proposed Patch",
+					"type": "json"
+				},
+				{
+					"slug": "terms_spec",
+					"label": "Terms Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "agreement_versions",
+			"label": "Agreement Versions",
+			"labelSingular": "Agreement Version",
+			"supports": ["drafts", "revisions"],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "interest_id",
+					"label": "Interest ID",
+					"type": "string"
+				},
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "renter_user_id",
+					"label": "Renter User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "agreement_state",
+					"label": "Agreement State",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "agreement_number",
+					"label": "Agreement Number",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "agreement_kind",
+					"label": "Agreement Kind",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "accepted_offer_round_id",
+					"label": "Accepted Offer Round ID",
+					"type": "string"
+				},
+				{
+					"slug": "owner_accepted_at",
+					"label": "Owner Accepted At",
+					"type": "datetime"
+				},
+				{
+					"slug": "renter_accepted_at",
+					"label": "Renter Accepted At",
+					"type": "datetime"
+				},
+				{
+					"slug": "signed_at",
+					"label": "Signed At",
+					"type": "datetime"
+				},
+				{
+					"slug": "effective_from",
+					"label": "Effective From",
+					"type": "datetime"
+				},
+				{
+					"slug": "effective_to",
+					"label": "Effective To",
+					"type": "datetime"
+				},
+				{
+					"slug": "printable_snapshot",
+					"label": "Printable Snapshot",
+					"type": "json"
+				},
+				{
+					"slug": "contract_text",
+					"label": "Contract Text",
+					"type": "text"
+				},
+				{
+					"slug": "signature_spec",
+					"label": "Signature Spec",
+					"type": "json"
+				},
+				{
+					"slug": "notarization_spec",
+					"label": "Notarization Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "agreement_terms",
+			"label": "Agreement Terms",
+			"labelSingular": "Agreement Term",
+			"supports": ["drafts"],
+			"fields": [
+				{
+					"slug": "agreement_id",
+					"label": "Agreement ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "term_kind",
+					"label": "Term Kind",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "term_label",
+					"label": "Term Label",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "term_value_text",
+					"label": "Term Value Text",
+					"type": "text"
+				},
+				{
+					"slug": "term_value_number",
+					"label": "Term Value Number",
+					"type": "number"
+				},
+				{
+					"slug": "term_value_date",
+					"label": "Term Value Date",
+					"type": "datetime"
+				},
+				{
+					"slug": "term_state",
+					"label": "Term State",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "source_round_id",
+					"label": "Source Round ID",
+					"type": "string"
+				},
+				{
+					"slug": "term_spec",
+					"label": "Term Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "handover_sessions",
+			"label": "Handover Sessions",
+			"labelSingular": "Handover Session",
+			"supports": ["drafts", "revisions"],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "agreement_id",
+					"label": "Agreement ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "renter_user_id",
+					"label": "Renter User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "handover_kind",
+					"label": "Handover Kind",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "handover_state",
+					"label": "Handover State",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "baseline_handover_id",
+					"label": "Baseline Handover ID",
+					"type": "string"
+				},
+				{
+					"slug": "started_at",
+					"label": "Started At",
+					"type": "datetime"
+				},
+				{
+					"slug": "submitted_at",
+					"label": "Submitted At",
+					"type": "datetime"
+				},
+				{
+					"slug": "accepted_at",
+					"label": "Accepted At",
+					"type": "datetime"
+				},
+				{
+					"slug": "closed_at",
+					"label": "Closed At",
+					"type": "datetime"
+				},
+				{
+					"slug": "summary_spec",
+					"label": "Summary Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "handover_item_checks",
+			"label": "Handover Item Checks",
+			"labelSingular": "Handover Item Check",
+			"supports": ["drafts"],
+			"fields": [
+				{
+					"slug": "handover_id",
+					"label": "Handover ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "baseline_handover_id",
+					"label": "Baseline Handover ID",
+					"type": "string"
+				},
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "asset_config_item_id",
+					"label": "Asset Config Item ID",
+					"type": "string"
+				},
+				{
+					"slug": "item_label",
+					"label": "Item Label",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "expected_state",
+					"label": "Expected State",
+					"type": "string"
+				},
+				{
+					"slug": "observed_state",
+					"label": "Observed State",
+					"type": "string"
+				},
+				{
+					"slug": "owner_claimed_state",
+					"label": "Owner Claimed State",
+					"type": "string"
+				},
+				{
+					"slug": "renter_response_state",
+					"label": "Renter Response State",
+					"type": "string"
+				},
+				{
+					"slug": "dispute_state",
+					"label": "Dispute State",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "estimated_repair_cost",
+					"label": "Estimated Repair Cost",
+					"type": "number"
+				},
+				{
+					"slug": "agreed_repair_cost",
+					"label": "Agreed Repair Cost",
+					"type": "number"
+				},
+				{
+					"slug": "media_refs",
+					"label": "Media Refs",
+					"type": "json"
+				},
+				{
+					"slug": "check_spec",
+					"label": "Check Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "asset_access",
+			"label": "Asset Access",
+			"labelSingular": "Asset Access",
+			"supports": ["drafts"],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "user_id",
+					"label": "User ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "access_role",
+					"label": "Access Role",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "access_state",
+					"label": "Access State",
+					"type": "string",
+					"required": true
+				}
+			]
+		},
+		{
+			"slug": "asset_events",
+			"label": "Asset Events",
+			"labelSingular": "Asset Event",
+			"supports": ["drafts"],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset ID",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "event_kind",
+					"label": "Event Kind",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "actor_user_id",
+					"label": "Actor User ID",
+					"type": "string"
+				},
+				{
+					"slug": "from_business_state",
+					"label": "From Business State",
+					"type": "string"
+				},
+				{
+					"slug": "to_business_state",
+					"label": "To Business State",
+					"type": "string"
+				},
+				{
+					"slug": "event_spec",
+					"label": "Event Spec",
+					"type": "json"
+				}
+			]
 		}
 	],
-
 	"taxonomies": [
 		{
 			"name": "category",
@@ -76,9 +834,18 @@
 			"hierarchical": true,
 			"collections": ["posts"],
 			"terms": [
-				{ "slug": "development", "label": "Development" },
-				{ "slug": "design", "label": "Design" },
-				{ "slug": "notes", "label": "Notes" }
+				{
+					"slug": "development",
+					"label": "Development"
+				},
+				{
+					"slug": "design",
+					"label": "Design"
+				},
+				{
+					"slug": "notes",
+					"label": "Notes"
+				}
 			]
 		},
 		{
@@ -88,14 +855,25 @@
 			"hierarchical": false,
 			"collections": ["posts"],
 			"terms": [
-				{ "slug": "webdev", "label": "Web Development" },
-				{ "slug": "opinion", "label": "Opinion" },
-				{ "slug": "tools", "label": "Tools" },
-				{ "slug": "creativity", "label": "Creativity" }
+				{
+					"slug": "webdev",
+					"label": "Web Development"
+				},
+				{
+					"slug": "opinion",
+					"label": "Opinion"
+				},
+				{
+					"slug": "tools",
+					"label": "Tools"
+				},
+				{
+					"slug": "creativity",
+					"label": "Creativity"
+				}
 			]
 		}
 	],
-
 	"bylines": [
 		{
 			"id": "byline-editorial",
@@ -109,19 +887,29 @@
 			"isGuest": true
 		}
 	],
-
 	"menus": [
 		{
 			"name": "primary",
 			"label": "Primary Navigation",
 			"items": [
-				{ "type": "custom", "label": "Home", "url": "/" },
-				{ "type": "custom", "label": "About", "url": "/pages/about" },
-				{ "type": "custom", "label": "Posts", "url": "/posts" }
+				{
+					"type": "custom",
+					"label": "Home",
+					"url": "/"
+				},
+				{
+					"type": "custom",
+					"label": "About",
+					"url": "/pages/about"
+				},
+				{
+					"type": "custom",
+					"label": "Posts",
+					"url": "/posts"
+				}
 			]
 		}
 	],
-
 	"widgetAreas": [
 		{
 			"name": "sidebar",
@@ -187,7 +975,6 @@
 			]
 		}
 	],
-
 	"sections": [
 		{
 			"slug": "newsletter-signup",
@@ -199,7 +986,12 @@
 				{
 					"_type": "block",
 					"style": "h3",
-					"children": [{ "_type": "span", "text": "Stay in the loop" }]
+					"children": [
+						{
+							"_type": "span",
+							"text": "Stay in the loop"
+						}
+					]
 				},
 				{
 					"_type": "block",
@@ -233,7 +1025,6 @@
 			]
 		}
 	],
-
 	"content": {
 		"pages": [
 			{
@@ -306,7 +1097,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "What survives" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "What survives"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -341,8 +1137,13 @@
 					]
 				},
 				"bylines": [
-					{ "byline": "byline-editorial" },
-					{ "byline": "byline-guest", "roleLabel": "Guest essay" }
+					{
+						"byline": "byline-editorial"
+					},
+					{
+						"byline": "byline-guest",
+						"roleLabel": "Guest essay"
+					}
 				],
 				"taxonomies": {
 					"category": ["development"],
@@ -387,7 +1188,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "The performance argument" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "The performance argument"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -411,7 +1217,11 @@
 						}
 					]
 				},
-				"bylines": [{ "byline": "byline-editorial" }],
+				"bylines": [
+					{
+						"byline": "byline-editorial"
+					}
+				],
 				"taxonomies": {
 					"category": ["development"],
 					"tag": ["webdev", "opinion"]
@@ -455,7 +1265,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "The fear of being wrong" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "The fear of being wrong"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -522,7 +1337,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "The Unix philosophy, revisited" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "The Unix philosophy, revisited"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -589,7 +1409,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "Embracing the box" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "Embracing the box"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -656,7 +1481,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "Why side projects matter" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "Why side projects matter"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -723,7 +1553,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "Removing as a feature" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "Removing as a feature"
+								}
+							]
 						},
 						{
 							"_type": "block",
