@@ -96,7 +96,7 @@ export async function acceptFinalTerms(
 		const rounds = await listInterestRounds(tx, interestId);
 		const configItems = await tx.list(
 			COLLECTIONS.ASSET_CONFIG_ITEMS,
-			{ asset_id: asset.id },
+			{ asset_id: asset.id, item_state: "active" },
 			{ orderBy: "created_at", direction: "asc", limit: 500 },
 		);
 		const now = tx.now();
@@ -149,6 +149,22 @@ export async function acceptFinalTerms(
 				snapshot: asJsonObject(interest.accepted_conditions_snapshot),
 			},
 			accepted_items: acceptedItems,
+			accepted_round: acceptedRound
+				? {
+						id: acceptedRound.id,
+						round_kind: acceptedRound.round_kind,
+						round_state: acceptedRound.round_state,
+						message: acceptedRound.message,
+						price: acceptedRound.price ?? null,
+						currency: acceptedRound.currency ?? null,
+						minimum_months: acceptedRound.minimum_months ?? null,
+						km_limit: acceptedRound.km_limit ?? null,
+						deposit_amount: acceptedRound.deposit_amount ?? null,
+						start_date: acceptedRound.start_date ?? null,
+						end_date: acceptedRound.end_date ?? null,
+						terms_spec: asJsonObject(acceptedRound.terms_spec),
+					}
+				: null,
 			negotiation_round_ids: rounds.map((round) => round.id),
 			extra_terms: input.extraTerms ?? {},
 		};
@@ -194,13 +210,13 @@ export async function acceptFinalTerms(
 			active_agreement_id: agreement.id,
 			active_renter_user_id: renterUserId,
 		});
-		await grantAssetAccess(tx, {
+		const ownerAccess = await grantAssetAccess(tx, {
 			assetId: asset.id,
 			userId: ownerUserId,
 			role: ACCESS_ROLE.OWNER,
 			authorId: user.id,
 		});
-		await grantAssetAccess(tx, {
+		const renterAccess = await grantAssetAccess(tx, {
 			assetId: asset.id,
 			userId: renterUserId,
 			role: ACCESS_ROLE.RENTER,
@@ -214,6 +230,6 @@ export async function acceptFinalTerms(
 			toBusinessState: ASSET_BUSINESS_STATE.BOOKED,
 			eventSpec: { agreementId: agreement.id, interestId, termCount: terms.length },
 		});
-		return { agreement, terms, asset: updatedAsset };
+		return { agreement, terms, asset: updatedAsset, access: [ownerAccess, renterAccess] };
 	});
 }

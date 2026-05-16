@@ -4,7 +4,7 @@ import { CMS_STATUS, COLLECTIONS, EVENT_KIND, HANDOVER_STATE } from "../constant
 import { appendAssetEvent } from "../events.js";
 import { getAssetOrThrow } from "../repositories/assets.js";
 import type { DomainStore, UserContext } from "../types.js";
-import { asString } from "../types.js";
+import { asNumber, asString } from "../types.js";
 
 export async function startHandover(
 	store: DomainStore,
@@ -18,6 +18,8 @@ export async function startHandover(
 		const agreementId = asString(asset.active_agreement_id);
 		const renterUserId = asString(asset.active_renter_user_id);
 		const ownerUserId = asString(asset.owner_user_id);
+		const configVersion = asNumber(asset.config_version, 1);
+
 		const handover = await tx.insert(COLLECTIONS.HANDOVER_SESSIONS, {
 			status: CMS_STATUS.PUBLISHED,
 			author_id: user.id,
@@ -34,11 +36,13 @@ export async function startHandover(
 			closed_at: null,
 			summary_spec: input.summarySpec ?? {},
 		});
+
 		const configItems = await tx.list(
 			COLLECTIONS.ASSET_CONFIG_ITEMS,
-			{ asset_id: assetId },
+			{ asset_id: assetId, item_state: "active" },
 			{ orderBy: "created_at", direction: "asc", limit: 500 },
 		);
+
 		const checks = [];
 		for (const item of configItems) {
 			checks.push(
@@ -60,10 +64,15 @@ export async function startHandover(
 					estimated_repair_cost: null,
 					agreed_repair_cost: null,
 					media_refs: item.media_refs ?? [],
-					check_spec: { sourceItemSpec: item.item_spec ?? {} },
+					check_spec: {
+						configVersion,
+						sourceItemConfigVersion: item.config_version ?? null,
+						sourceItemSpec: item.item_spec ?? {},
+					},
 				}),
 			);
 		}
+
 		await tx.update(COLLECTIONS.ASSETS, assetId, { active_handover_id: handover.id });
 		await appendAssetEvent(tx, {
 			assetId,
@@ -72,6 +81,7 @@ export async function startHandover(
 			eventSpec: {
 				handoverId: handover.id,
 				handoverKind: input.handoverKind,
+				configVersion,
 				checkCount: checks.length,
 			},
 		});

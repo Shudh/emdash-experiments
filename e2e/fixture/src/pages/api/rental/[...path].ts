@@ -10,7 +10,10 @@ import {
 	parseStartHandoverRequest,
 	parseUpdateAssetConfigRequest,
 } from "../../../../../../demos/playground/src/lib/domain/api-contracts.js";
-import { requireAgreementParticipant } from "../../../../../../demos/playground/src/lib/domain/auth.js";
+import {
+	requireAgreementParticipant,
+	requireHandoverParticipant,
+} from "../../../../../../demos/playground/src/lib/domain/auth.js";
 import { acceptFinalTerms } from "../../../../../../demos/playground/src/lib/domain/commands/accept-final-terms.js";
 import { acceptHandover } from "../../../../../../demos/playground/src/lib/domain/commands/accept-handover.js";
 import { addAsset } from "../../../../../../demos/playground/src/lib/domain/commands/add-asset.js";
@@ -239,6 +242,7 @@ export const ALL: APIRoute = async ({ request, locals, params }) => {
 				);
 		}
 		if (request.method === "GET" && parts[0] === "handover" && parts[1]) {
+			await requireHandoverParticipant(domainStore, user, parts[1]);
 			return ok(await getHandoverSessionQuery(domainStore, parts[1]));
 		}
 

@@ -1,0 +1,341 @@
+
+
+================================================================================
+INGEST METADATA
+================================================================================
+Generated at: 2026-05-15T15:02:29+05:30
+Repository: ~/PycharmProjects/emdash-experiments
+Branch: review/pr2-rental
+HEAD: 55f04d0f90f7bc4d7318f7088549c3cd045a324e
+Base ref: origin/main
+Node: v22.22.3
+pnpm: 10.28.0
+
+Git status:
+ M e2e/fixture/emdash-env.d.ts
+ M e2e/fixtures/admin.ts
+ M e2e/global-setup.ts
+?? emdash-rental-pr2-ingest.txt
+
+
+================================================================================
+COMMAND: recent commits
+================================================================================
+$ git log --oneline --decorate --max-count=20 
+
+55f04d0 (HEAD -> review/pr2-rental, origin/codex/run-mkdir-and-curl-command) Add real-session rental SaaS tests
+a1caf6d Remove binary archive from playground rental PR
+e3afb80 (origin/main, origin/feature/alm, origin/HEAD, main) chore(deps): bump changesets/action from 1.7.0 to 1.8.0 (#1015)
+8252e62 chore: add plugins-site worker for plugins.emdashcms.com (#1039)
+94fb50b Fix invite passkey RP ID behind proxy (#1000)
+e3745fe chore(deps): bump actions/create-github-app-token from 3.1.1 to 3.2.0 (#1017)
+d014b48 i18n(id): add missing translations and replace Edit→Sunting, Tagline→Slogan (#1020)
+a78fad5 ci: always report code scanning results for CodeQL and zizmor (#1037)
+b789158 chore: extract locale catalogs [skip ci]
+dbaea9c feat(admin): install sandboxed plugins from the experimental registry (#1011)
+5681eb2 fix(deps): catalog-pin zod so trusted plugins typecheck (#1019)
+3820bb9 ci: add zizmor static analysis workflow (#1012)
+e440b82 ci: address zizmor findings across workflows (#1009)
+5185c4f chore: extract locale catalogs [skip ci]
+0cd8c6d fix(admin): don't steal slash menu selection on stationary pointer (#1013)
+b6e5b66 ci: diagnose CI-only slash-menu test flakes (#1010)
+29eeee7 ci: release (#999)
+a925a8d chore: extract locale catalogs [skip ci]
+35791ff fix(admin): sync slash menu state ref synchronously to avoid stale reads (#1004)
+815763e Switch playground domain to try.emdashcms.com (#1001)
+
+
+================================================================================
+COMMAND: changed files from origin/main
+================================================================================
+$ git diff --name-status origin/main...HEAD 
+
+M	.gitignore
+M	demos/playground/package.json
+M	demos/playground/seed/seed.json
+A	demos/playground/src/lib/domain/api-contracts.ts
+A	demos/playground/src/lib/domain/auth.ts
+A	demos/playground/src/lib/domain/commands/accept-final-terms.ts
+A	demos/playground/src/lib/domain/commands/accept-handover.ts
+A	demos/playground/src/lib/domain/commands/add-asset.ts
+A	demos/playground/src/lib/domain/commands/add-handover-negotiation-round.ts
+A	demos/playground/src/lib/domain/commands/add-negotiation-round.ts
+A	demos/playground/src/lib/domain/commands/claim-handover-damage.ts
+A	demos/playground/src/lib/domain/commands/express-interest.ts
+A	demos/playground/src/lib/domain/commands/publish-asset-to-marketplace.ts
+A	demos/playground/src/lib/domain/commands/relist-asset.ts
+A	demos/playground/src/lib/domain/commands/return-asset-to-draft.ts
+A	demos/playground/src/lib/domain/commands/settle-handover.ts
+A	demos/playground/src/lib/domain/commands/sign-agreement.ts
+A	demos/playground/src/lib/domain/commands/start-handover.ts
+A	demos/playground/src/lib/domain/commands/update-asset-config.ts
+A	demos/playground/src/lib/domain/constants.ts
+A	demos/playground/src/lib/domain/db.ts
+A	demos/playground/src/lib/domain/events.ts
+A	demos/playground/src/lib/domain/kysely-store.ts
+A	demos/playground/src/lib/domain/queries/agreement-print.ts
+A	demos/playground/src/lib/domain/queries/handover-session.ts
+A	demos/playground/src/lib/domain/queries/marketplace.ts
+A	demos/playground/src/lib/domain/queries/negotiation-thread.ts
+A	demos/playground/src/lib/domain/queries/owner-dashboard.ts
+A	demos/playground/src/lib/domain/queries/renter-dashboard.ts
+A	demos/playground/src/lib/domain/repositories/access.ts
+A	demos/playground/src/lib/domain/repositories/agreements.ts
+A	demos/playground/src/lib/domain/repositories/assets.ts
+A	demos/playground/src/lib/domain/repositories/handover.ts
+A	demos/playground/src/lib/domain/repositories/interests.ts
+A	demos/playground/src/lib/domain/repositories/negotiations.ts
+A	demos/playground/src/lib/domain/transitions.ts
+A	demos/playground/src/lib/domain/types.ts
+A	demos/playground/src/lib/domain/validation.ts
+A	demos/playground/src/pages/api/_domain-route-utils.ts
+A	demos/playground/src/pages/api/agreements/[agreementId]/sign.ts
+A	demos/playground/src/pages/api/assets/[assetId]/relist.ts
+A	demos/playground/src/pages/api/assets/[assetId]/return-to-draft.ts
+A	demos/playground/src/pages/api/handover/[assetId]/start.ts
+A	demos/playground/src/pages/api/handover/[handoverId]/accept.ts
+A	demos/playground/src/pages/api/handover/[handoverId]/add-round.ts
+A	demos/playground/src/pages/api/handover/[handoverId]/claim-damage.ts
+A	demos/playground/src/pages/api/handover/[handoverId]/settle.ts
+A	demos/playground/src/pages/api/marketplace/assets/[id]/express-interest.ts
+A	demos/playground/src/pages/api/negotiations/[interestId]/accept-final-terms.ts
+A	demos/playground/src/pages/api/negotiations/[interestId]/add-round.ts
+A	demos/playground/src/pages/api/owner/assets/[id]/config.ts
+A	demos/playground/src/pages/api/owner/assets/[id]/publish-to-marketplace.ts
+A	demos/playground/src/pages/api/owner/assets/add.ts
+A	demos/playground/tests/domain/full-flow.test.ts
+A	demos/playground/tests/domain/routes.test.ts
+A	demos/playground/tsconfig.test.json
+A	e2e/fixture/src/pages/api/rental/[...path].ts
+A	e2e/tests/rental-saas-flow.spec.ts
+A	findings.md
+M	pnpm-lock.yaml
+
+
+================================================================================
+COMMAND: changed file numstat from origin/main
+================================================================================
+$ git diff --numstat origin/main...HEAD 
+
+3	0	.gitignore
+7	2	demos/playground/package.json
+899	29	demos/playground/seed/seed.json
+166	0	demos/playground/src/lib/domain/api-contracts.ts
+83	0	demos/playground/src/lib/domain/auth.ts
+219	0	demos/playground/src/lib/domain/commands/accept-final-terms.ts
+47	0	demos/playground/src/lib/domain/commands/accept-handover.ts
+49	0	demos/playground/src/lib/domain/commands/add-asset.ts
+46	0	demos/playground/src/lib/domain/commands/add-handover-negotiation-round.ts
+81	0	demos/playground/src/lib/domain/commands/add-negotiation-round.ts
+68	0	demos/playground/src/lib/domain/commands/claim-handover-damage.ts
+106	0	demos/playground/src/lib/domain/commands/express-interest.ts
+47	0	demos/playground/src/lib/domain/commands/publish-asset-to-marketplace.ts
+30	0	demos/playground/src/lib/domain/commands/relist-asset.ts
+29	0	demos/playground/src/lib/domain/commands/return-asset-to-draft.ts
+61	0	demos/playground/src/lib/domain/commands/settle-handover.ts
+44	0	demos/playground/src/lib/domain/commands/sign-agreement.ts
+80	0	demos/playground/src/lib/domain/commands/start-handover.ts
+68	0	demos/playground/src/lib/domain/commands/update-asset-config.ts
+135	0	demos/playground/src/lib/domain/constants.ts
+192	0	demos/playground/src/lib/domain/db.ts
+25	0	demos/playground/src/lib/domain/events.ts
+204	0	demos/playground/src/lib/domain/kysely-store.ts
+13	0	demos/playground/src/lib/domain/queries/agreement-print.ts
+18	0	demos/playground/src/lib/domain/queries/handover-session.ts
+18	0	demos/playground/src/lib/domain/queries/marketplace.ts
+17	0	demos/playground/src/lib/domain/queries/negotiation-thread.ts
+18	0	demos/playground/src/lib/domain/queries/owner-dashboard.ts
+18	0	demos/playground/src/lib/domain/queries/renter-dashboard.ts
+24	0	demos/playground/src/lib/domain/repositories/access.ts
+23	0	demos/playground/src/lib/domain/repositories/agreements.ts
+44	0	demos/playground/src/lib/domain/repositories/assets.ts
+23	0	demos/playground/src/lib/domain/repositories/handover.ts
+23	0	demos/playground/src/lib/domain/repositories/interests.ts
+27	0	demos/playground/src/lib/domain/repositories/negotiations.ts
+53	0	demos/playground/src/lib/domain/transitions.ts
+91	0	demos/playground/src/lib/domain/types.ts
+80	0	demos/playground/src/lib/domain/validation.ts
+98	0	demos/playground/src/pages/api/_domain-route-utils.ts
+26	0	demos/playground/src/pages/api/agreements/[agreementId]/sign.ts
+17	0	demos/playground/src/pages/api/assets/[assetId]/relist.ts
+17	0	demos/playground/src/pages/api/assets/[assetId]/return-to-draft.ts
+26	0	demos/playground/src/pages/api/handover/[assetId]/start.ts
+17	0	demos/playground/src/pages/api/handover/[handoverId]/accept.ts
+26	0	demos/playground/src/pages/api/handover/[handoverId]/add-round.ts
+26	0	demos/playground/src/pages/api/handover/[handoverId]/claim-damage.ts
+26	0	demos/playground/src/pages/api/handover/[handoverId]/settle.ts
+26	0	demos/playground/src/pages/api/marketplace/assets/[id]/express-interest.ts
+26	0	demos/playground/src/pages/api/negotiations/[interestId]/accept-final-terms.ts
+26	0	demos/playground/src/pages/api/negotiations/[interestId]/add-round.ts
+26	0	demos/playground/src/pages/api/owner/assets/[id]/config.ts
+23	0	demos/playground/src/pages/api/owner/assets/[id]/publish-to-marketplace.ts
+18	0	demos/playground/src/pages/api/owner/assets/add.ts
+336	0	demos/playground/tests/domain/full-flow.test.ts
+183	0	demos/playground/tests/domain/routes.test.ts
+16	0	demos/playground/tsconfig.test.json
+249	0	e2e/fixture/src/pages/api/rental/[...path].ts
+493	0	e2e/tests/rental-saas-flow.spec.ts
+232	0	findings.md
+15	0	pnpm-lock.yaml
+
+
+================================================================================
+COMMAND: binary files in PR diff
+================================================================================
+$ bash -lc git\ diff\ --numstat\ origin/main...HEAD\ \|\ awk\ \'\$1==\"-\"\ \|\|\ \$2==\"-\"\ \{print\}\' 
+
+
+
+================================================================================
+COMMAND: zip/archive files in PR diff
+================================================================================
+$ bash -lc git\ diff\ --name-only\ origin/main...HEAD\ \|\ grep\ -E\ \'\(\^\|/\)\(zip-file/\|.\*\\.zip\$\)\'\ \|\|\ true 
+
+
+
+================================================================================
+LOCAL UNCOMMITTED PATCHES
+================================================================================
+These are local patches not necessarily in PR. They matter for local E2E harness debugging.
+
+diff --git a/e2e/fixture/emdash-env.d.ts b/e2e/fixture/emdash-env.d.ts
+index 918ed35..eb76158 100644
+--- a/e2e/fixture/emdash-env.d.ts
++++ b/e2e/fixture/emdash-env.d.ts
+@@ -22,7 +22,7 @@ export interface Post {
+   slug: string | null;
+   status: string;
+   title: string;
+-  featured_image?: { id: string; src?: string; alt?: string; width?: number; height?: number };
++  featured_image?: { id: string; src?: string; alt?: string; width?: number; height?: number; provider?: string; previewUrl?: string; meta?: Record<string, unknown> };
+   body?: PortableTextBlock[];
+   excerpt?: string;
+   theme_color?: string;
+diff --git a/e2e/fixtures/admin.ts b/e2e/fixtures/admin.ts
+index 18351a4..b1d4aed 100644
+--- a/e2e/fixtures/admin.ts
++++ b/e2e/fixtures/admin.ts
+@@ -69,7 +69,7 @@ export class AdminPage {
+ 	 * Astro removes the `ssr` attribute from `<astro-island>` after hydration.
+ 	 */
+ 	async waitForHydration(): Promise<void> {
+-		await this.page.waitForSelector("astro-island:not([ssr])", { timeout: 15000 });
++		await this.page.waitForSelector("astro-island:not([ssr])", { timeout: 60000 });
+ 	}
+ 
+ 	/**
+diff --git a/e2e/global-setup.ts b/e2e/global-setup.ts
+index 3fbedd9..cdf2f1a 100644
+--- a/e2e/global-setup.ts
++++ b/e2e/global-setup.ts
+@@ -269,7 +269,8 @@ export default async function globalSetup(): Promise<void> {
+ 	try {
+ 		// 3. Wait for server
+ 		console.log("[pw] Waiting for server...");
+-		await waitForServer(`${baseUrl}/_emdash/api/setup/dev-bypass`, 60_000);
++		// await waitForServer(`${baseUrl}/_emdash/api/setup/dev-bypass`, 60_000);
++		await waitForServer(`${baseUrl}/`, 60_000);
+ 
+ 		// 4. Run setup + create PAT
+ 		const setupRes = await fetch(`${baseUrl}/_emdash/api/setup/dev-bypass?token=1`);
+
+
+================================================================================
+RELEVANT DIRECTORY TREES
+================================================================================
+
+--- demos/playground/src/lib/domain ---
+demos/playground/src/lib/domain/api-contracts.ts
+demos/playground/src/lib/domain/auth.ts
+demos/playground/src/lib/domain/commands/accept-final-terms.ts
+demos/playground/src/lib/domain/commands/accept-handover.ts
+demos/playground/src/lib/domain/commands/add-asset.ts
+demos/playground/src/lib/domain/commands/add-handover-negotiation-round.ts
+demos/playground/src/lib/domain/commands/add-negotiation-round.ts
+demos/playground/src/lib/domain/commands/claim-handover-damage.ts
+demos/playground/src/lib/domain/commands/express-interest.ts
+demos/playground/src/lib/domain/commands/publish-asset-to-marketplace.ts
+demos/playground/src/lib/domain/commands/relist-asset.ts
+demos/playground/src/lib/domain/commands/return-asset-to-draft.ts
+demos/playground/src/lib/domain/commands/settle-handover.ts
+demos/playground/src/lib/domain/commands/sign-agreement.ts
+demos/playground/src/lib/domain/commands/start-handover.ts
+demos/playground/src/lib/domain/commands/update-asset-config.ts
+demos/playground/src/lib/domain/constants.ts
+demos/playground/src/lib/domain/db.ts
+demos/playground/src/lib/domain/events.ts
+demos/playground/src/lib/domain/kysely-store.ts
+demos/playground/src/lib/domain/queries/agreement-print.ts
+demos/playground/src/lib/domain/queries/handover-session.ts
+demos/playground/src/lib/domain/queries/marketplace.ts
+demos/playground/src/lib/domain/queries/negotiation-thread.ts
+demos/playground/src/lib/domain/queries/owner-dashboard.ts
+demos/playground/src/lib/domain/queries/renter-dashboard.ts
+demos/playground/src/lib/domain/repositories/access.ts
+demos/playground/src/lib/domain/repositories/agreements.ts
+demos/playground/src/lib/domain/repositories/assets.ts
+demos/playground/src/lib/domain/repositories/handover.ts
+demos/playground/src/lib/domain/repositories/interests.ts
+demos/playground/src/lib/domain/repositories/negotiations.ts
+demos/playground/src/lib/domain/transitions.ts
+demos/playground/src/lib/domain/types.ts
+demos/playground/src/lib/domain/validation.ts
+
+--- demos/playground/src/pages/api ---
+demos/playground/src/pages/api/agreements/[agreementId]/sign.ts
+demos/playground/src/pages/api/assets/[assetId]/relist.ts
+demos/playground/src/pages/api/assets/[assetId]/return-to-draft.ts
+demos/playground/src/pages/api/_domain-route-utils.ts
+demos/playground/src/pages/api/handover/[assetId]/start.ts
+demos/playground/src/pages/api/handover/[handoverId]/accept.ts
+demos/playground/src/pages/api/handover/[handoverId]/add-round.ts
+demos/playground/src/pages/api/handover/[handoverId]/claim-damage.ts
+demos/playground/src/pages/api/handover/[handoverId]/settle.ts
+demos/playground/src/pages/api/marketplace/assets/[id]/express-interest.ts
+demos/playground/src/pages/api/negotiations/[interestId]/accept-final-terms.ts
+demos/playground/src/pages/api/negotiations/[interestId]/add-round.ts
+demos/playground/src/pages/api/owner/assets/add.ts
+demos/playground/src/pages/api/owner/assets/[id]/config.ts
+demos/playground/src/pages/api/owner/assets/[id]/publish-to-marketplace.ts
+
+--- demos/playground/tests/domain ---
+demos/playground/tests/domain/full-flow.test.ts
+demos/playground/tests/domain/routes.test.ts
+
+--- e2e/fixture/src/pages/api/rental ---
+e2e/fixture/src/pages/api/rental/[...path].ts
+
+--- e2e/tests rental files ---
+e2e/tests/auth.spec.ts
+e2e/tests/device-auth.spec.ts
+e2e/tests/invite-flow.spec.ts
+e2e/tests/passkey-full-setup-virtual-auth.spec.ts
+e2e/tests/rental-saas-flow.spec.ts
+
+--- scripts current ---
+scripts/build-perf-d1.mjs
+scripts/query-counts-dump.mjs
+scripts/query-counts.mjs
+scripts/query-counts.snapshot.d1.json
+scripts/query-counts.snapshot.sqlite.json
+scripts/query-dumps/classify.mjs
+scripts/query-dumps/cold-only.mjs
+scripts/query-dumps/inspect-other.mjs
+scripts/query-dumps/README.md
+scripts/relink-bins-if-needed.mjs
+scripts/screenshot-all-templates.mjs
+scripts/screenshot-templates.mjs
+scripts/sync-blog-demos.sh
+scripts/sync-cloudflare-templates.sh
+scripts/sync-template-skills.sh
+scripts/sync-templates-repo.mjs
+
+
+================================================================================
+AGENT/PR PROJECT FILES: DEMO RENTAL DOMAIN
+================================================================================
+
+
+================================================================================
+FILE: demos/playground/src/lib/domain/api-contracts.ts
+================================================================================

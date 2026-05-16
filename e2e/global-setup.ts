@@ -269,7 +269,8 @@ export default async function globalSetup(): Promise<void> {
 	try {
 		// 3. Wait for server
 		console.log("[pw] Waiting for server...");
-		await waitForServer(`${baseUrl}/_emdash/api/setup/dev-bypass`, 60_000);
+		// await waitForServer(`${baseUrl}/_emdash/api/setup/dev-bypass`, 60_000);
+		await waitForServer(`${baseUrl}/`, 60_000);
 
 		// 4. Run setup + create PAT
 		const setupRes = await fetch(`${baseUrl}/_emdash/api/setup/dev-bypass?token=1`);

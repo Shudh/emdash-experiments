@@ -27,6 +27,13 @@ export async function claimHandoverDamage(
 		const check = await tx.get(COLLECTIONS.HANDOVER_ITEM_CHECKS, input.handoverItemCheckId);
 		if (!check)
 			throw new DomainError("HANDOVER_ITEM_CHECK_NOT_FOUND", "Handover item check not found", 404);
+		if (asString(check.handover_id) !== handoverId) {
+			throw new DomainError(
+				"HANDOVER_ITEM_CHECK_NOT_FOUND",
+				"Handover item check not found for this handover",
+				404,
+			);
+		}
 		const updatedCheck = await tx.update(COLLECTIONS.HANDOVER_ITEM_CHECKS, check.id, {
 			owner_claimed_state: input.ownerClaimedState,
 			observed_state: input.observedState ?? check.observed_state,

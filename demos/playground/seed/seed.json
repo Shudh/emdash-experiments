@@ -179,6 +179,11 @@
 					"slug": "conditions_hash",
 					"label": "Conditions Hash",
 					"type": "string"
+				},
+				{
+					"slug": "config_version",
+					"label": "Config Version",
+					"type": "number"
 				}
 			]
 		},
@@ -245,6 +250,16 @@
 					"slug": "item_spec",
 					"label": "Item Spec",
 					"type": "json"
+				},
+				{
+					"slug": "config_version",
+					"label": "Config Version",
+					"type": "number"
+				},
+				{
+					"slug": "item_state",
+					"label": "Item State",
+					"type": "string"
 				}
 			]
 		},
@@ -347,6 +362,31 @@
 					"slug": "accepted_conditions_snapshot",
 					"label": "Accepted Conditions Snapshot",
 					"type": "json"
+				},
+				{
+					"slug": "asset_title",
+					"label": "Asset Title",
+					"type": "string"
+				},
+				{
+					"slug": "asset_slug",
+					"label": "Asset Slug",
+					"type": "string"
+				},
+				{
+					"slug": "asset_kind",
+					"label": "Asset Kind",
+					"type": "string"
+				},
+				{
+					"slug": "asset_location_label",
+					"label": "Asset Location Label",
+					"type": "string"
+				},
+				{
+					"slug": "asset_public_price",
+					"label": "Asset Public Price",
+					"type": "number"
 				}
 			]
 		},
