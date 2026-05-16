@@ -1,0 +1,35 @@
+{
+  "baseUrl": "http://localhost:4444",
+  "adminUser": {
+    "id": "01KRNJ5EM2RGRASCDBDKJ9DQKS",
+    "email": "dev@emdash.local",
+    "name": "Dev Admin",
+    "role": 50
+  },
+  "owner": {
+    "email": "owner_manual_created_1@example.com",
+    "name": "Owner Manual Created 1",
+    "role": 30,
+    "status": "registered",
+    "inviteUrl": null,
+    "user": {
+      "id": "01KRNMVVJV3N502FG7EBRQYWY0",
+      "email": "owner_manual_created_1@example.com",
+      "name": "Owner Manual Created 1",
+      "role": 30
+    }
+  },
+  "tenant": {
+    "email": "tenant_manual_created_1@example.com",
+    "name": "Tenant Manual Created 1",
+    "role": 30,
+    "status": "registered",
+    "inviteUrl": null,
+    "user": {
+      "id": "01KRQFHQ2SRBBJ18BC50WXVXKK",
+      "email": "tenant_manual_created_1@example.com",
+      "name": "Tenant Manual Created 1",
+      "role": 30
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"target": "ES2023",
+		"lib": ["ES2023", "DOM"],
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"outDir": "dist",
+		"rootDir": "."
+	},
+	"include": ["src/lib/domain/**/*.ts", "tests/**/*.ts"],
+	"exclude": ["src/pages/**/*.ts", "src/middleware.ts", "src/lib/domain/kysely-store.ts"]
+}

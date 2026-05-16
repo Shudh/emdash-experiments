@@ -1,21 +1,361 @@
 ---
-import { getEmDashCollection } from "emdash";
-const { entries: posts } = await getEmDashCollection("posts");
+export const prerender = false;
 ---
 
-<html>
-	<body>
-		<h1>Posts</h1>
-		<ul id="post-list">
-			{
-				posts.map((p) => (
-					<li>
-						<a href={`/posts/${p.id}`}>{p.data.title}</a>
-						{p.data.excerpt && <span class="excerpt">{p.data.excerpt}</span>}
-					</li>
-				))
-			}
-		</ul>
-		{posts.length === 0 && <p id="empty">No posts</p>}
-	</body>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rental Local Sandbox</title>
+<style>
+:root {
+color-scheme: light dark;
+font-family:
+Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+background: #f7f7f2;
+color: #1b1b18;
+}
+
+body {
+margin: 0;
+min-height: 100vh;
+background:
+radial-gradient(circle at top left, rgba(128, 128, 0, 0.16), transparent 36rem),
+linear-gradient(135deg, #fbfbf6 0%, #f2f0e4 100%);
+}
+
+a {
+color: inherit;
+}
+
+.shell {
+max-width: 1180px;
+margin: 0 auto;
+padding: 24px;
+}
+
+.header {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 16px;
+margin-bottom: 32px;
+}
+
+.brand {
+display: flex;
+flex-direction: column;
+gap: 4px;
+}
+
+.brand h1 {
+margin: 0;
+font-size: clamp(28px, 5vw, 52px);
+letter-spacing: -0.05em;
+}
+
+.brand p {
+margin: 0;
+color: #5d6046;
+font-size: 16px;
+}
+
+.auth-panel {
+display: flex;
+flex-wrap: wrap;
+justify-content: flex-end;
+gap: 8px;
+align-items: center;
+}
+
+.badge {
+display: inline-flex;
+border: 1px solid rgba(27, 27, 24, 0.14);
+border-radius: 999px;
+padding: 8px 12px;
+background: rgba(255, 255, 255, 0.8);
+font-size: 14px;
+}
+
+button,
+.button {
+border: 0;
+border-radius: 999px;
+padding: 10px 15px;
+background: #1b1b18;
+color: white;
+font-weight: 700;
+cursor: pointer;
+text-decoration: none;
+font-size: 14px;
+}
+
+button.secondary,
+.button.secondary {
+background: white;
+color: #1b1b18;
+border: 1px solid rgba(27, 27, 24, 0.16);
+}
+
+button.danger {
+background: #b42318;
+}
+
+.hero {
+display: grid;
+grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+gap: 24px;
+margin-bottom: 32px;
+}
+
+.card {
+border-radius: 28px;
+border: 1px solid rgba(27, 27, 24, 0.12);
+background: rgba(255, 255, 255, 0.82);
+box-shadow: 0 20px 60px rgba(31, 35, 20, 0.08);
+padding: 24px;
+}
+
+.hero-card {
+min-height: 240px;
+display: flex;
+flex-direction: column;
+justify-content: space-between;
+}
+
+.hero-card h2 {
+margin: 0;
+font-size: clamp(26px, 4vw, 44px);
+letter-spacing: -0.04em;
+}
+
+.hero-card p {
+max-width: 680px;
+line-height: 1.7;
+color: #4f533a;
+}
+
+.grid {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+gap: 18px;
+}
+
+.asset-card {
+min-height: 220px;
+display: flex;
+flex-direction: column;
+justify-content: space-between;
+transition:
+transform 160ms ease,
+box-shadow 160ms ease;
+}
+
+.asset-card:hover {
+transform: translateY(-3px);
+box-shadow: 0 18px 48px rgba(31, 35, 20, 0.12);
+}
+
+.asset-card h3 {
+margin: 0 0 8px;
+font-size: 22px;
+letter-spacing: -0.03em;
+}
+
+.asset-card p {
+margin: 0;
+line-height: 1.6;
+color: #555942;
+}
+
+.meta {
+display: flex;
+flex-wrap: wrap;
+gap: 8px;
+margin-top: 18px;
+}
+
+.meta span {
+border-radius: 999px;
+background: #f0efd9;
+padding: 6px 10px;
+font-size: 13px;
+color: #4c4f34;
+}
+
+.notice {
+color: #555942;
+line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+.header,
+.hero {
+grid-template-columns: 1fr;
+flex-direction: column;
+align-items: stretch;
+}
+
+.auth-panel {
+justify-content: flex-start;
+}
+}
+</style>
+</head>
+<body>
+<main class="shell">
+<header class="header">
+<div class="brand">
+<h1>Rental Local Sandbox</h1>
+<p>Persistent local users, thin marketplace, backend-first rental workflow.</p>
+</div>
+
+<div class="auth-panel">
+<span id="whoami" class="badge">Checking login...</span>
+<button id="login-owner" type="button">Login as owner</button>
+<button id="login-tenant" type="button" class="secondary">Login as tenant</button>
+<a class="button secondary" href="/_emdash/admin/login">Admin login</a>
+<button id="logout" type="button" class="danger">Logout</button>
+</div>
+</header>
+
+<section class="hero">
+<article class="card hero-card">
+<div>
+<h2>Flats, cars, handovers, conditions, negotiations.</h2>
+<p>
+This page is a local control surface. It keeps the UI thin and pushes workflow
+state to the rental backend routes.
+</p>
+</div>
+<div class="meta">
+<span>owner_manual_created_1@example.com</span>
+<span>tenant_manual_created_1@example.com</span>
+</div>
+</article>
+
+<aside class="card">
+<h2>Manual setup</h2>
+<p class="notice">
+Start the sandbox, create the two invite URLs, accept both invites once, then reuse
+these login buttons for local flow testing.
+</p>
+</aside>
+</section>
+
+<section>
+<div class="header">
+<div class="brand">
+<h2>Marketplace assets</h2>
+<p>Loaded from <code>/api/rental/marketplace/assets</code>.</p>
+</div>
+<button id="refresh-assets" type="button" class="secondary">Refresh</button>
+</div>
+<div id="assets" class="grid"></div>
+</section>
+</main>
+
+<script type="module">
+const OWNER_EMAIL = "owner_manual_created_1@example.com";
+const TENANT_EMAIL = "tenant_manual_created_1@example.com";
+
+const whoami = document.querySelector("#whoami");
+const assets = document.querySelector("#assets");
+
+async function jsonFetch(url, options = {}) {
+const response = await fetch(url, {
+...options,
+headers: {
+"Content-Type": "application/json",
+...(options.headers ?? {}),
+},
+});
+const payload = await response.json().catch(() => ({}));
+if (!response.ok) {
+throw new Error(payload?.error?.message ?? `${url} failed with ${response.status}`);
+}
+return payload;
+}
+
+async function loadMe() {
+try {
+const payload = await jsonFetch("/_emdash/api/auth/me");
+const user = payload?.data?.user ?? payload?.user ?? payload?.data ?? null;
+if (user?.email) {
+whoami.textContent = `Welcome ${user.email}`;
+return;
+}
+whoami.textContent = "Not logged in";
+} catch {
+whoami.textContent = "Not logged in";
+}
+}
+
+async function loginAs(email) {
+await jsonFetch("/api/setup/dev-login-as", {
+method: "POST",
+body: JSON.stringify({ email }),
+});
+await loadMe();
+await loadAssets();
+}
+
+async function logout() {
+await jsonFetch("/api/setup/dev-logout-local", { method: "POST", body: "{}" });
+await loadMe();
+}
+
+function renderAssetCard(asset) {
+const title = asset.title ?? asset.slug ?? asset.id;
+const price = asset.public_price ? `₹${Number(asset.public_price).toLocaleString("en-IN")}` : "Price on request";
+const location = asset.location_label ?? "Location not set";
+const state = asset.business_state ?? "state unknown";
+const kind = asset.asset_kind ?? "asset";
+
+return `
+<article class="card asset-card">
+<div>
+<h3>${escapeHtml(title)}</h3>
+<p>${escapeHtml(location)}</p>
+</div>
+<div class="meta">
+<span>${escapeHtml(kind)}</span>
+<span>${escapeHtml(price)}</span>
+<span>${escapeHtml(state)}</span>
+</div>
+</article>
+`;
+}
+
+function escapeHtml(value) {
+return String(value)
+.replaceAll("&", "&amp;")
+.replaceAll("<", "&lt;")
+.replaceAll(">", "&gt;")
+.replaceAll('"', "&quot;")
+.replaceAll("'", "&#039;");
+}
+
+async function loadAssets() {
+try {
+const payload = await jsonFetch("/api/rental/marketplace/assets");
+const items = payload?.data?.items ?? [];
+assets.innerHTML = items.length
+? items.map(renderAssetCard).join("")
+: `<article class="card"><p class="notice">No marketplace assets yet.</p></article>`;
+} catch (error) {
+assets.innerHTML = `<article class="card"><p class="notice">${escapeHtml(error.message)}</p></article>`;
+}
+}
+
+document.querySelector("#login-owner")?.addEventListener("click", () => loginAs(OWNER_EMAIL));
+document.querySelector("#login-tenant")?.addEventListener("click", () => loginAs(TENANT_EMAIL));
+document.querySelector("#logout")?.addEventListener("click", logout);
+document.querySelector("#refresh-assets")?.addEventListener("click", loadAssets);
+
+await loadMe();
+await loadAssets();
+</script>
+</body>
 </html>

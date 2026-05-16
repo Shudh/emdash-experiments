@@ -17,12 +17,17 @@
 		"astro": "catalog:",
 		"emdash": "workspace:*",
 		"react": "catalog:",
-		"react-dom": "catalog:"
+		"react-dom": "catalog:",
+		"zod": "catalog:"
 	},
 	"devDependencies": {
 		"@astrojs/check": "catalog:",
 		"@cloudflare/workers-types": "catalog:",
-		"wrangler": "catalog:"
+		"@types/better-sqlite3": "^7.6.13",
+		"wrangler": "catalog:",
+		"better-sqlite3": "catalog:",
+		"kysely": "^0.27.0",
+		"vitest": "catalog:"
 	},
 	"emdash": {
 		"seed": "seed/seed.json"

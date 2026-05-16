@@ -1,0 +1,26 @@
+import type { APIRoute } from "astro";
+
+import { parseStartHandoverRequest } from "../../../../lib/domain/api-contracts.js";
+import { startHandover } from "../../../../lib/domain/commands/start-handover.js";
+import {
+	getStore,
+	getUser,
+	jsonError,
+	jsonOk,
+	readJson,
+	requireParam,
+} from "../../_domain-route-utils.js";
+
+export const prerender = false;
+
+export const POST: APIRoute = async (context) => {
+	try {
+		const store = getStore(context);
+		const user = getUser(context);
+		const assetId = requireParam(context, "assetId");
+		const body = parseStartHandoverRequest(await readJson(context.request));
+		return jsonOk(await startHandover(store, user, assetId, body), 201);
+	} catch (error) {
+		return jsonError(error);
+	}
+};
