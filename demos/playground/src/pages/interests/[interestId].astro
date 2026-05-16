@@ -1,0 +1,164 @@
+---
+import ActionForm from "../../components/rental/ActionForm.astro";
+import SpecTable from "../../components/rental/SpecTable.astro";
+import ThreadPanel from "../../components/rental/ThreadPanel.astro";
+import RentalBase from "../../layouts/RentalBase.astro";
+
+export const prerender = false;
+
+const interestId = Astro.params.interestId;
+
+async function loadThread() {
+	if (!interestId) return null;
+	try {
+		const response = await fetch(new URL(`/api/rental/negotiations/${interestId}`, Astro.url), {
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
+		});
+		const payload = await response.json() as { data?: Record<string, unknown> };
+		return response.ok ? payload.data ?? null : null;
+	} catch {
+		return null;
+	}
+}
+
+const thread = await loadThread();
+const asset = thread?.asset as Record<string, unknown> | undefined;
+const interest = thread?.interest as Record<string, unknown> | undefined;
+const rounds = (thread?.rounds as Array<Record<string, unknown>> | undefined) ?? [];
+---
+
+<RentalBase title="Negotiation" description="Shared rental negotiation">
+	<section class="rental-section">
+		<div class="rental-shell negotiation-grid">
+			{
+				thread ? (
+					<>
+						<aside class="rental-panel">
+							<p class="rental-kicker">Asset summary</p>
+							<h1>{String(asset?.title ?? "Asset")}</h1>
+							<p class="rental-muted">{String(asset?.location_label ?? "Location pending")}</p>
+							<div class="rental-badges">
+								<span class="rental-badge">{String(asset?.business_state ?? "state")}</span>
+								<span class="rental-badge">{String(interest?.interest_state ?? "interest")}</span>
+							</div>
+							<SpecTable title="Renter details" spec={{
+								name: interest?.name,
+								official_email: interest?.official_email,
+								employer_name: interest?.employer_name,
+								offered_price: interest?.offered_price,
+							}} />
+							<SpecTable title="Accepted owner conditions" spec={interest?.accepted_conditions_snapshot as Record<string, unknown>} />
+						</aside>
+						<div class="thread-column">
+							<ThreadPanel title="Pre-agreement thread" rounds={rounds} />
+							<div class="action-grid">
+								<ActionForm title="Owner asks question" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Ask question" successRedirect={`/interests/${interestId}`}>
+									<input type="hidden" name="roundPhase" value="pre_agreement" />
+									<input type="hidden" name="roundKind" value="question" />
+									<div class="rental-field full">
+										<label for="owner-question">Question</label>
+										<textarea id="owner-question" name="message" required>Please upload company ID and salary slip.</textarea>
+									</div>
+								</ActionForm>
+								<ActionForm title="Owner request document" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Request document" successRedirect={`/interests/${interestId}`}>
+									<input type="hidden" name="roundPhase" value="pre_agreement" />
+									<input type="hidden" name="roundKind" value="document_request" />
+									<div class="rental-field full">
+										<label for="document-request">Request</label>
+										<textarea id="document-request" name="message">Please provide salary proof.</textarea>
+									</div>
+								</ActionForm>
+								<ActionForm title="Owner counter" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Counter" successRedirect={`/interests/${interestId}`}>
+									<input type="hidden" name="roundPhase" value="pre_agreement" />
+									<input type="hidden" name="roundKind" value="counter" />
+									<input type="hidden" name="roundState" value="countered" />
+									<div class="rental-field">
+										<label for="counter-price">Price</label>
+										<input id="counter-price" name="price" type="number" data-number="true" />
+									</div>
+									<div class="rental-field full">
+										<label for="counter-message">Message</label>
+										<textarea id="counter-message" name="message">Counter at listed rent.</textarea>
+									</div>
+								</ActionForm>
+								<ActionForm title="Renter answer" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Answer" successRedirect={`/interests/${interestId}`}>
+									<input type="hidden" name="roundPhase" value="pre_agreement" />
+									<input type="hidden" name="roundKind" value="answer" />
+									<input type="hidden" name="roundState" value="answered" />
+									<div class="rental-field full">
+										<label for="renter-answer">Answer</label>
+										<textarea id="renter-answer" name="message" required>Company ID and salary slip shared.</textarea>
+									</div>
+								</ActionForm>
+								<ActionForm title="Renter offer" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Offer" successRedirect={`/interests/${interestId}`}>
+									<input type="hidden" name="roundPhase" value="pre_agreement" />
+									<input type="hidden" name="roundKind" value="offer" />
+									<input type="hidden" name="roundState" value="offered" />
+									<div class="rental-field">
+										<label for="offer-price">Price</label>
+										<input id="offer-price" name="price" type="number" data-number="true" />
+									</div>
+									<div class="rental-field">
+										<label for="offer-deposit">Deposit</label>
+										<input id="offer-deposit" name="depositAmount" type="number" data-number="true" />
+									</div>
+									<div class="rental-field full">
+										<label for="offer-message">Message</label>
+										<textarea id="offer-message" name="message">Offer submitted.</textarea>
+									</div>
+								</ActionForm>
+								<ActionForm title="Accept final terms" action={`/api/rental/negotiations/${interestId}/accept-final-terms`} submitLabel="Accept final terms" successRedirect="/owner">
+									<input type="hidden" name="agreementKind" value="flat_rental" />
+									<div class="rental-field">
+										<label for="effectiveFrom">Effective from</label>
+										<input id="effectiveFrom" name="effectiveFrom" value="2026-07-01" />
+									</div>
+									<div class="rental-field full">
+										<label for="extraTerms-note">Extra term</label>
+										<input id="extraTerms-note" name="extraTerms.note" value="Accepted from thin Astro UI." />
+									</div>
+								</ActionForm>
+							</div>
+						</div>
+					</>
+				) : (
+					<div class="rental-panel">
+						<h1>Negotiation unavailable</h1>
+						<p class="rental-muted">Login as a participant to view this thread.</p>
+					</div>
+				)
+			}
+		</div>
+	</section>
+</RentalBase>
+
+<style>
+	.negotiation-grid {
+		display: grid;
+		grid-template-columns: 340px minmax(0, 1fr);
+		gap: 18px;
+		align-items: start;
+	}
+
+	.negotiation-grid aside,
+	.thread-column {
+		display: grid;
+		gap: 18px;
+	}
+
+	.action-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 18px;
+	}
+
+	@media (max-width: 980px) {
+		.negotiation-grid,
+		.action-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

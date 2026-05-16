@@ -1,0 +1,78 @@
+---
+interface Props {
+	title: string;
+	rounds?: Array<Record<string, unknown>>;
+	empty?: string;
+}
+
+const { title, rounds = [], empty = "No messages yet." } = Astro.props;
+---
+
+<section class="thread-panel rental-panel">
+	<h2>{title}</h2>
+	<div class="thread-list">
+		{
+			rounds.length ? (
+				rounds.map((round) => (
+					<article class="thread-round">
+						<div class="thread-meta">
+							<span>{String(round.actor_role ?? "actor")}</span>
+							<span>{String(round.round_kind ?? "round")}</span>
+							{round.round_state && <span>{String(round.round_state)}</span>}
+						</div>
+						{round.message && <p>{String(round.message)}</p>}
+						<div class="rental-badges">
+							{round.price && <span class="rental-badge">price {String(round.price)}</span>}
+							{round.deposit_amount && (
+								<span class="rental-badge">deposit {String(round.deposit_amount)}</span>
+							)}
+							{round.minimum_months && (
+								<span class="rental-badge">{String(round.minimum_months)} months</span>
+							)}
+						</div>
+					</article>
+				))
+			) : (
+				<p class="rental-muted">{empty}</p>
+			)
+		}
+	</div>
+	<slot />
+</section>
+
+<style>
+	.thread-panel {
+		display: grid;
+		gap: 18px;
+	}
+
+	.thread-panel h2 {
+		font-size: 1.25rem;
+	}
+
+	.thread-list {
+		display: grid;
+		gap: 12px;
+	}
+
+	.thread-round {
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 14px;
+		background: var(--r-bg);
+	}
+
+	.thread-round p {
+		margin: 8px 0 12px;
+	}
+
+	.thread-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		color: var(--r-muted);
+		font-size: 0.82rem;
+		font-weight: 750;
+		text-transform: capitalize;
+	}
+</style>

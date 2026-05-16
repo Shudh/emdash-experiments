@@ -1,0 +1,139 @@
+---
+import AssetCard from "../../components/rental/AssetCard.astro";
+import RentalBase from "../../layouts/RentalBase.astro";
+
+export const prerender = false;
+
+async function loadDashboard() {
+	try {
+		const response = await fetch(new URL("/api/rental/owner/dashboard", Astro.url), {
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
+		});
+		const payload = await response.json() as {
+			data?: {
+				assets?: Array<Record<string, unknown>>;
+				inbox?: Array<Record<string, unknown>>;
+			};
+			error?: { message?: string };
+		};
+		return {
+			ok: response.ok,
+			assets: payload.data?.assets ?? [],
+			inbox: payload.data?.inbox ?? [],
+			error: payload.error?.message,
+		};
+	} catch (error) {
+		return {
+			ok: false,
+			assets: [],
+			inbox: [],
+			error: error instanceof Error ? error.message : "Dashboard unavailable",
+		};
+	}
+}
+
+const dashboard = await loadDashboard();
+---
+
+<RentalBase title="Owner dashboard" description="Owner rental dashboard">
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">Owner</p>
+					<h1>Dashboard</h1>
+					<p class="rental-muted">Owned assets, submitted interests, negotiation tasks, and handover work.</p>
+				</div>
+				<a class="rental-button" href="/owner/assets/new">Create asset</a>
+			</div>
+			{
+				!dashboard.ok ? (
+					<div class="rental-panel">
+						<h2>Login required</h2>
+						<p class="rental-muted">{dashboard.error ?? "Owner dashboard requires a session."}</p>
+					</div>
+				) : (
+					<div class="dashboard-grid">
+						<section>
+							<h2>Owned assets</h2>
+							<div class="rental-grid">
+								{dashboard.assets.length ? (
+									dashboard.assets.map((asset) => (
+										<AssetCard asset={asset} href={`/marketplace/assets/${asset.id}`} />
+									))
+								) : (
+									<div class="rental-panel"><p class="rental-muted">No owned assets yet.</p></div>
+								)}
+							</div>
+						</section>
+						<section class="rental-panel">
+							<h2>Submitted interest inbox</h2>
+							<div class="inbox-list">
+								{dashboard.inbox.length ? (
+									dashboard.inbox.map((interest) => (
+										<a href={`/interests/${interest.id}`} class="inbox-item">
+											<strong>{String(interest.name ?? interest.official_email ?? "Interested renter")}</strong>
+											<span>{String(interest.employer_name ?? "Employer pending")}</span>
+											<span class="rental-badge">{String(interest.interest_state ?? "submitted")}</span>
+										</a>
+									))
+								) : (
+									<p class="rental-muted">No submitted interests yet.</p>
+								)}
+							</div>
+						</section>
+						<section class="rental-panel">
+							<h2>Active negotiation tasks</h2>
+							<p class="rental-muted">Open each inbox item to ask questions, request documents, counter, reject, or accept final terms.</p>
+						</section>
+						<section class="rental-panel">
+							<h2>Handover tasks</h2>
+							<p class="rental-muted">Handover sessions appear after final terms create restricted asset access.</p>
+						</section>
+					</div>
+				)
+			}
+		</div>
+	</section>
+</RentalBase>
+
+<style>
+	.dashboard-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
+		gap: 18px;
+		align-items: start;
+	}
+
+	.dashboard-grid section {
+		display: grid;
+		gap: 16px;
+	}
+
+	.inbox-list {
+		display: grid;
+		gap: 10px;
+	}
+
+	.inbox-item {
+		display: grid;
+		gap: 5px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 14px;
+		background: var(--r-bg);
+	}
+
+	.inbox-item span:not(.rental-badge) {
+		color: var(--r-muted);
+	}
+
+	@media (max-width: 900px) {
+		.dashboard-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

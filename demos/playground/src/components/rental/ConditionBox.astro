@@ -1,0 +1,74 @@
+---
+interface Props {
+	conditions?: {
+		version?: unknown;
+		hash?: unknown;
+		spec?: Record<string, unknown> | null;
+	} | null;
+}
+
+const { conditions } = Astro.props;
+const spec = conditions?.spec && typeof conditions.spec === "object" ? conditions.spec : {};
+---
+
+<section class="condition-box rental-panel">
+	<div class="condition-head">
+		<div>
+			<p class="rental-kicker">Owner conditions</p>
+			<h2>Current terms to accept</h2>
+		</div>
+		<span class="rental-badge">v{String(conditions?.version ?? "0")}</span>
+	</div>
+	{
+		Object.entries(spec).length ? (
+			<ul>
+				{Object.entries(spec).map(([key, value]) => (
+					<li>
+						<strong>{key.replaceAll("_", " ")}:</strong>{" "}
+						<span>{Array.isArray(value) ? value.join(", ") : String(value)}</span>
+					</li>
+				))}
+			</ul>
+		) : (
+			<p class="rental-muted">No owner conditions have been added.</p>
+		)
+	}
+	{conditions?.hash && <p class="condition-hash">Hash {String(conditions.hash)}</p>}
+</section>
+
+<style>
+	.condition-box {
+		display: grid;
+		gap: 16px;
+	}
+
+	.condition-head {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	.condition-box h2 {
+		font-size: 1.2rem;
+	}
+
+	.condition-box ul {
+		display: grid;
+		gap: 10px;
+		margin: 0;
+		padding-left: 18px;
+	}
+
+	.condition-box strong {
+		text-transform: capitalize;
+	}
+
+	.condition-hash {
+		margin: 0;
+		color: var(--r-muted);
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.78rem;
+		overflow-wrap: anywhere;
+	}
+</style>

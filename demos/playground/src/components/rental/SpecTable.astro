@@ -1,0 +1,63 @@
+---
+interface Props {
+	title: string;
+	spec?: Record<string, unknown> | null;
+	empty?: string;
+}
+
+const { title, spec, empty = "No details yet." } = Astro.props;
+const rows = spec && typeof spec === "object" ? Object.entries(spec) : [];
+---
+
+<section class="spec-table">
+	<h2>{title}</h2>
+	{
+		rows.length ? (
+			<dl>
+				{rows.map(([key, value]) => (
+					<div>
+						<dt>{key.replaceAll("_", " ")}</dt>
+						<dd>{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd>
+					</div>
+				))}
+			</dl>
+		) : (
+			<p class="rental-muted">{empty}</p>
+		)
+	}
+</section>
+
+<style>
+	.spec-table {
+		display: grid;
+		gap: 14px;
+	}
+
+	.spec-table h2 {
+		font-size: 1.15rem;
+	}
+
+	.spec-table dl {
+		display: grid;
+		gap: 8px;
+		margin: 0;
+	}
+
+	.spec-table div {
+		display: grid;
+		grid-template-columns: minmax(120px, 0.45fr) 1fr;
+		gap: 12px;
+		border-bottom: 1px solid var(--r-border);
+		padding-bottom: 8px;
+	}
+
+	.spec-table dt {
+		color: var(--r-muted);
+		font-weight: 750;
+		text-transform: capitalize;
+	}
+
+	.spec-table dd {
+		margin: 0;
+	}
+</style>

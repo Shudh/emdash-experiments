@@ -1,0 +1,61 @@
+---
+interface Props {
+	checks?: Array<Record<string, unknown>>;
+}
+
+const { checks = [] } = Astro.props;
+---
+
+<section class="handover-checklist rental-panel">
+	<h2>Handover checklist</h2>
+	{
+		checks.length ? (
+			<div class="check-list">
+				{checks.map((check) => (
+					<article>
+						<div>
+							<strong>{String(check.item_label ?? check.asset_config_item_id ?? "Item")}</strong>
+							<p class="rental-muted">
+								Owner state: {String(check.owner_declared_state ?? check.owner_claimed_state ?? "pending")}
+							</p>
+						</div>
+						<span class="rental-badge">{String(check.dispute_state ?? check.check_state ?? "open")}</span>
+					</article>
+				))}
+			</div>
+		) : (
+			<p class="rental-muted">No checklist items yet.</p>
+		)
+	}
+</section>
+
+<style>
+	.handover-checklist {
+		display: grid;
+		gap: 16px;
+	}
+
+	.handover-checklist h2 {
+		font-size: 1.25rem;
+	}
+
+	.check-list {
+		display: grid;
+		gap: 10px;
+	}
+
+	.check-list article {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 14px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 14px;
+		background: var(--r-bg);
+	}
+
+	.check-list p {
+		margin: 4px 0 0;
+	}
+</style>

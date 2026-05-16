@@ -1,0 +1,110 @@
+---
+interface Props {
+	title: string;
+	description?: string;
+	action: string;
+	submitLabel: string;
+	successRedirect?: string;
+}
+
+const { title, description, action, submitLabel, successRedirect } = Astro.props;
+---
+
+<form class="rental-panel rental-action-form" data-rental-form action={action} data-success={successRedirect}>
+	<h2>{title}</h2>
+	{description && <p class="rental-muted">{description}</p>}
+	<div class="rental-form-grid">
+		<slot />
+	</div>
+	<button class="rental-button" type="submit">{submitLabel}</button>
+	<p class="rental-status" data-status></p>
+</form>
+
+<script>
+	function setNested(target: Record<string, any>, path: string, value: unknown) {
+		const parts = path.split(".");
+		let cursor = target;
+		for (const [index, part] of parts.entries()) {
+			const last = index === parts.length - 1;
+			if (last) {
+				cursor[part] = value;
+				return;
+			}
+			cursor[part] ??= {};
+			cursor = cursor[part];
+		}
+	}
+
+	function valueFrom(input: FormDataEntryValue, element: Element) {
+		const value = String(input).trim();
+		if (element instanceof HTMLInputElement && element.type === "checkbox") {
+			return element.checked;
+		}
+		if ((element as HTMLElement).dataset.number === "true") {
+			return value ? Number(value) : undefined;
+		}
+		if ((element as HTMLElement).dataset.lines === "true") {
+			return value
+				.split("\n")
+				.map((line) => line.trim())
+				.filter(Boolean);
+		}
+		return value || undefined;
+	}
+
+	for (const form of document.querySelectorAll<HTMLFormElement>("[data-rental-form]")) {
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			const status = form.querySelector<HTMLElement>("[data-status]");
+			const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+			const body: Record<string, unknown> = {};
+			const data = new FormData(form);
+			status?.removeAttribute("data-state");
+			if (status) status.textContent = "Saving...";
+			if (submit) submit.disabled = true;
+			for (const [name, raw] of data.entries()) {
+				const element = form.querySelector(`[name="${CSS.escape(name)}"]`);
+				if (!element) continue;
+				const value = valueFrom(raw, element);
+				if (value === undefined || value === false) continue;
+				setNested(body, name, value);
+			}
+			try {
+				const response = await fetch(form.action, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"X-EmDash-Request": "1",
+					},
+					body: JSON.stringify(body),
+				});
+				const payload = await response.json().catch(() => ({}));
+				if (!response.ok) throw new Error(payload?.error?.message ?? "Request failed");
+				const redirect = form.dataset.success;
+				if (redirect) {
+					location.href = redirect;
+					return;
+				}
+				if (status) status.textContent = "Saved.";
+			} catch (error) {
+				if (status) {
+					status.dataset.state = "error";
+					status.textContent = error instanceof Error ? error.message : "Request failed";
+				}
+			} finally {
+				if (submit) submit.disabled = false;
+			}
+		});
+	}
+</script>
+
+<style>
+	.rental-action-form {
+		display: grid;
+		gap: 16px;
+	}
+
+	.rental-action-form h2 {
+		font-size: 1.2rem;
+	}
+</style>

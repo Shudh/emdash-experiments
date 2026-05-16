@@ -1,0 +1,126 @@
+---
+import ActionForm from "../../components/rental/ActionForm.astro";
+import HandoverChecklist from "../../components/rental/HandoverChecklist.astro";
+import ThreadPanel from "../../components/rental/ThreadPanel.astro";
+import RentalBase from "../../layouts/RentalBase.astro";
+
+export const prerender = false;
+
+const handoverId = Astro.params.handoverId;
+
+async function loadHandover() {
+	if (!handoverId) return null;
+	try {
+		const response = await fetch(new URL(`/api/rental/handover/${handoverId}`, Astro.url), {
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
+		});
+		const payload = await response.json() as { data?: Record<string, unknown> };
+		return response.ok ? payload.data ?? null : null;
+	} catch {
+		return null;
+	}
+}
+
+const session = await loadHandover();
+const handover = session?.handover as Record<string, unknown> | undefined;
+const checks = (session?.checks as Array<Record<string, unknown>> | undefined) ?? [];
+const rounds = (session?.rounds as Array<Record<string, unknown>> | undefined) ?? [];
+const firstCheck = checks[0];
+---
+
+<RentalBase title="Handover" description="Move-in and return handover">
+	<section class="rental-section">
+		<div class="rental-shell handover-grid">
+			{
+				session ? (
+					<>
+						<aside class="rental-panel">
+							<p class="rental-kicker">Handover</p>
+							<h1>{String(handover?.handover_kind ?? "handover")}</h1>
+							<div class="rental-badges">
+								<span class="rental-badge">{String(handover?.handover_state ?? "open")}</span>
+								<span class="rental-badge">{String(handover?.asset_id ?? "asset")}</span>
+							</div>
+						</aside>
+						<div class="handover-main">
+							<HandoverChecklist checks={checks} />
+							<ThreadPanel title="Return negotiation" rounds={rounds} />
+							<div class="action-grid">
+								<ActionForm title="Damage claim" action={`/api/rental/handover/${handoverId}/claim-damage`} submitLabel="Claim damage" successRedirect={`/handover/${handoverId}`}>
+									<input type="hidden" name="handoverItemCheckId" value={String(firstCheck?.id ?? "")} />
+									<div class="rental-field">
+										<label for="ownerClaimedState">Owner claimed state</label>
+										<input id="ownerClaimedState" name="ownerClaimedState" value="damaged" />
+									</div>
+									<div class="rental-field">
+										<label for="estimatedRepairCost">Estimated repair cost</label>
+										<input id="estimatedRepairCost" name="estimatedRepairCost" type="number" data-number="true" />
+									</div>
+									<div class="rental-field full">
+										<label for="damage-message">Message</label>
+										<textarea id="damage-message" name="message">Damage found during return.</textarea>
+									</div>
+								</ActionForm>
+								<ActionForm title="Return dispute thread" action={`/api/rental/handover/${handoverId}/add-round`} submitLabel="Add return round" successRedirect={`/handover/${handoverId}`}>
+									<input type="hidden" name="roundPhase" value="return" />
+									<input type="hidden" name="roundKind" value="answer" />
+									<input type="hidden" name="roundState" value="answered" />
+									<div class="rental-field full">
+										<label for="return-message">Message</label>
+										<textarea id="return-message" name="message">Disputing charge.</textarea>
+									</div>
+								</ActionForm>
+								<ActionForm title="Settlement action" action={`/api/rental/handover/${handoverId}/settle`} submitLabel="Settle handover" successRedirect="/owner">
+									<div class="rental-field">
+										<label for="settlement-cost">Agreed repair cost</label>
+										<input id="settlement-cost" name="settlementSpec.agreedRepairCost" type="number" data-number="true" />
+									</div>
+									<div class="rental-field">
+										<label>
+											<input name="settlementSpec.renterAccepted" type="checkbox" checked />
+											Renter accepted
+										</label>
+									</div>
+								</ActionForm>
+							</div>
+						</div>
+					</>
+				) : (
+					<div class="rental-panel">
+						<h1>Handover unavailable</h1>
+						<p class="rental-muted">Login as a participant to view this handover.</p>
+					</div>
+				)
+			}
+		</div>
+	</section>
+</RentalBase>
+
+<style>
+	.handover-grid {
+		display: grid;
+		grid-template-columns: 300px minmax(0, 1fr);
+		gap: 18px;
+		align-items: start;
+	}
+
+	.handover-main,
+	.action-grid {
+		display: grid;
+		gap: 18px;
+	}
+
+	.action-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	@media (max-width: 980px) {
+		.handover-grid,
+		.action-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

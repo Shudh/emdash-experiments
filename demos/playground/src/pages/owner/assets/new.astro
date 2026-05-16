@@ -1,0 +1,189 @@
+---
+import RentalBase from "../../../layouts/RentalBase.astro";
+
+export const prerender = false;
+---
+
+<RentalBase title="Create asset" description="Create a rental asset">
+	<section class="rental-section">
+		<div class="rental-shell create-grid">
+			<div>
+				<p class="rental-kicker">Owner asset</p>
+				<h1>Create a marketplace-ready asset</h1>
+				<p class="rental-muted">
+					The form creates the asset, stores specs and owner conditions, adds one config item,
+					and can publish to marketplace.
+				</p>
+			</div>
+			<form class="rental-panel create-form" id="asset-form">
+				<div class="rental-form-grid">
+					<div class="rental-field">
+						<label for="assetKind">Asset kind</label>
+						<select id="assetKind" name="assetKind" required>
+							<option value="flat">Flat</option>
+							<option value="car">Car</option>
+							<option value="equipment">Equipment</option>
+						</select>
+					</div>
+					<div class="rental-field">
+						<label for="title">Title</label>
+						<input id="title" name="title" required />
+					</div>
+					<div class="rental-field">
+						<label for="locationLabel">Location</label>
+						<input id="locationLabel" name="locationLabel" />
+					</div>
+					<div class="rental-field">
+						<label for="publicPrice">Price</label>
+						<input id="publicPrice" name="publicPrice" type="number" required />
+					</div>
+					<div class="rental-field">
+						<label for="minimumMonths">Minimum months</label>
+						<input id="minimumMonths" name="minimumMonths" type="number" value="11" />
+					</div>
+					<div class="rental-field">
+						<label for="bedrooms">Bedrooms</label>
+						<input id="bedrooms" name="bedrooms" type="number" value="2" />
+					</div>
+					<div class="rental-field">
+						<label for="furnishing">Furnishing</label>
+						<input id="furnishing" name="furnishing" value="semi_furnished" />
+					</div>
+					<div class="rental-field">
+						<label for="walls">Physical condition</label>
+						<input id="walls" name="walls" value="freshly_painted" />
+					</div>
+					<div class="rental-field full">
+						<label for="depositPolicy">Owner rental conditions</label>
+						<textarea id="depositPolicy" name="depositPolicy" required>Two months deposit covers chargeable damage.</textarea>
+					</div>
+					<div class="rental-field">
+						<label for="documentsRequired">Documents required</label>
+						<textarea id="documentsRequired" name="documentsRequired">company_id
+salary_slip</textarea>
+					</div>
+					<div class="rental-field">
+						<label for="itemLabel">Granular config item</label>
+						<input id="itemLabel" name="itemLabel" value="Geyser" />
+					</div>
+					<div class="rental-field">
+						<label for="ownerDeclaredState">Item state</label>
+						<input id="ownerDeclaredState" name="ownerDeclaredState" value="working" />
+					</div>
+					<div class="rental-field">
+						<label>
+							<input name="publish" type="checkbox" checked />
+							Publish to marketplace
+						</label>
+					</div>
+				</div>
+				<button class="rental-button" type="submit">Create asset</button>
+				<p class="rental-status" id="asset-status"></p>
+			</form>
+		</div>
+	</section>
+</RentalBase>
+
+<script>
+	const form = document.querySelector<HTMLFormElement>("#asset-form");
+	const status = document.querySelector<HTMLElement>("#asset-status");
+
+	function lines(value: FormDataEntryValue | null) {
+		return String(value ?? "")
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean);
+	}
+
+	async function postJson(url: string, body: Record<string, unknown>) {
+		const response = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"X-EmDash-Request": "1",
+			},
+			body: JSON.stringify(body),
+		});
+		const payload = await response.json().catch(() => ({}));
+		if (!response.ok) throw new Error(payload?.error?.message ?? `${url} failed`);
+		return payload.data;
+	}
+
+	form?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const data = new FormData(form);
+		if (status) {
+			status.removeAttribute("data-state");
+			status.textContent = "Creating asset...";
+		}
+		try {
+			const addData = await postJson("/api/rental/owner/assets/add", {
+				assetKind: data.get("assetKind"),
+				title: data.get("title"),
+				locationLabel: data.get("locationLabel"),
+				publicPrice: Number(data.get("publicPrice")),
+				currency: "INR",
+				ownerConditionsSpec: {
+					depositPolicy: data.get("depositPolicy"),
+					documentsRequired: lines(data.get("documentsRequired")),
+				},
+			});
+			const assetId = addData.asset.id;
+			await postJson(`/api/rental/owner/assets/${assetId}/config`, {
+				publicPrice: Number(data.get("publicPrice")),
+				minimumMonths: Number(data.get("minimumMonths")),
+				configSpec: {
+					bedrooms: Number(data.get("bedrooms")),
+					furnishing: data.get("furnishing"),
+				},
+				conditionSpec: {
+					walls: data.get("walls"),
+				},
+				ownerConditionsSpec: {
+					depositPolicy: data.get("depositPolicy"),
+					documentsRequired: lines(data.get("documentsRequired")),
+				},
+				items: [
+					{
+						itemKind: "fixture",
+						itemLabel: data.get("itemLabel"),
+						ownerDeclaredState: data.get("ownerDeclaredState"),
+					},
+				],
+			});
+			if (data.get("publish")) {
+				await postJson(`/api/rental/owner/assets/${assetId}/publish-to-marketplace`, {});
+			}
+			location.href = `/marketplace/assets/${assetId}`;
+		} catch (error) {
+			if (status) {
+				status.dataset.state = "error";
+				status.textContent = error instanceof Error ? error.message : "Create asset failed";
+			}
+		}
+	});
+</script>
+
+<style>
+	.create-grid {
+		display: grid;
+		grid-template-columns: minmax(260px, 0.65fr) minmax(0, 1.35fr);
+		gap: 28px;
+		align-items: start;
+	}
+
+	.create-grid h1 {
+		font-size: clamp(2.2rem, 5vw, 4.5rem);
+	}
+
+	.create-form {
+		display: grid;
+		gap: 16px;
+	}
+
+	@media (max-width: 900px) {
+		.create-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

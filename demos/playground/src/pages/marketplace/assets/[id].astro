@@ -1,0 +1,170 @@
+---
+import ActionForm from "../../../components/rental/ActionForm.astro";
+import ConditionBox from "../../../components/rental/ConditionBox.astro";
+import SpecTable from "../../../components/rental/SpecTable.astro";
+import RentalBase from "../../../layouts/RentalBase.astro";
+
+export const prerender = false;
+
+const assetId = Astro.params.id;
+
+async function loadDetails() {
+	if (!assetId) return null;
+	try {
+		const response = await fetch(new URL(`/api/rental/marketplace/assets/${assetId}`, Astro.url), {
+			headers: { Accept: "application/json" },
+		});
+		const payload = await response.json() as {
+			data?: {
+				asset?: Record<string, unknown>;
+				ownerConditions?: { version?: unknown; hash?: unknown; spec?: Record<string, unknown> };
+			};
+		};
+		return response.ok ? payload.data ?? null : null;
+	} catch {
+		return null;
+	}
+}
+
+const details = await loadDetails();
+const asset = details?.asset;
+const ownerConditions = details?.ownerConditions;
+const user = Astro.locals.user;
+const price =
+	asset && typeof asset.public_price === "number"
+		? new Intl.NumberFormat("en-IN", {
+				style: "currency",
+				currency: String(asset.currency ?? "INR"),
+				maximumFractionDigits: 0,
+			}).format(asset.public_price)
+		: "Price on request";
+---
+
+<RentalBase title={asset ? String(asset.title) : "Asset"} description="Rental asset details">
+	<section class="rental-section">
+		<div class="rental-shell detail-grid">
+			{
+				asset ? (
+					<>
+						<article class="rental-panel detail-main">
+							<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
+							<h1>{String(asset.title ?? "Untitled asset")}</h1>
+							<p class="detail-price">{price}</p>
+							<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+							<div class="rental-badges">
+								<span class="rental-badge">{String(asset.business_state ?? "listed")}</span>
+								<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+							</div>
+						</article>
+						<div class="detail-side">
+							<ConditionBox conditions={ownerConditions} />
+							{user ? (
+								<ActionForm
+									title="Express interest"
+									description="Accept the current owner conditions before submitting interest."
+									action={`/api/rental/marketplace/assets/${asset.id}/express-interest`}
+									submitLabel="Express interest"
+									successRedirect="/marketplace"
+								>
+									<input type="hidden" name="acceptedConditionsVersion" value={String(ownerConditions?.version ?? "")} data-number="true" />
+									<input type="hidden" name="acceptedConditionsHash" value={String(ownerConditions?.hash ?? "")} />
+									<div class="rental-field">
+										<label for="name">Name</label>
+										<input id="name" name="name" required />
+									</div>
+									<div class="rental-field">
+										<label for="officialEmail">Official email</label>
+										<input id="officialEmail" name="officialEmail" type="email" />
+									</div>
+									<div class="rental-field">
+										<label for="employerName">Employer</label>
+										<input id="employerName" name="employerName" />
+									</div>
+									<div class="rental-field">
+										<label for="offeredPrice">Offer</label>
+										<input id="offeredPrice" name="offeredPrice" type="number" data-number="true" />
+									</div>
+									<div class="rental-field full">
+										<label for="message">Message</label>
+										<textarea id="message" name="message"></textarea>
+									</div>
+									<div class="rental-field full accept-field">
+										<label>
+											<input name="accepted" type="checkbox" required />
+											I accept the current owner conditions.
+										</label>
+									</div>
+								</ActionForm>
+							) : (
+								<div class="rental-panel">
+									<h2>Login required</h2>
+									<p class="rental-muted">Create or login to a renter account before expressing interest.</p>
+									<a class="rental-button" href="/">Login or register</a>
+								</div>
+							)}
+						</div>
+						<div class="rental-panel">
+							<SpecTable title="Configuration" spec={asset.config_spec as Record<string, unknown>} />
+						</div>
+						<div class="rental-panel">
+							<SpecTable title="Physical condition" spec={asset.condition_spec as Record<string, unknown>} />
+						</div>
+					</>
+				) : (
+					<div class="rental-panel">
+						<h1>Asset not found</h1>
+						<p class="rental-muted">This asset is unavailable or no longer public.</p>
+					</div>
+				)
+			}
+		</div>
+	</section>
+</RentalBase>
+
+<style>
+	.detail-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 380px;
+		gap: 18px;
+		align-items: start;
+	}
+
+	.detail-main {
+		display: grid;
+		gap: 14px;
+		min-height: 300px;
+		align-content: end;
+		background:
+			linear-gradient(135deg, rgba(49, 95, 86, 0.12), rgba(184, 111, 52, 0.14)),
+			var(--r-panel);
+	}
+
+	.detail-main h1 {
+		font-size: clamp(2rem, 5vw, 4.2rem);
+	}
+
+	.detail-price {
+		margin: 0;
+		color: var(--r-brand-strong);
+		font-size: 2rem;
+		font-weight: 900;
+	}
+
+	.detail-side {
+		display: grid;
+		gap: 18px;
+	}
+
+	.accept-field label {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		color: var(--r-text);
+	}
+
+	@media (max-width: 900px) {
+		.detail-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>
