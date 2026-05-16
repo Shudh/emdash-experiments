@@ -258,6 +258,12 @@ async function runLifecycle(store: DomainStore) {
 	});
 	expect(settled.asset.business_state).toBe(ASSET_BUSINESS_STATE.MAINTENANCE);
 	expect(settled.asset.visibility_state).toBe(VISIBILITY_STATE.PRIVATE);
+	const settledChecks = await store.list(COLLECTIONS.HANDOVER_ITEM_CHECKS, {
+		handover_id: moveOut.handover.id,
+	});
+	expect(settledChecks.find((check) => check.id === mirrorCheck?.id)?.agreed_repair_cost).toBe(
+		2500,
+	);
 
 	const draftAgain = await returnAssetToDraft(store, owner, added.asset.id);
 	expect(draftAgain.asset.status).toBe(CMS_STATUS.DRAFT);

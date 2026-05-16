@@ -1,0 +1,49 @@
+---
+import AssetCard from "../../components/rental/AssetCard.astro";
+import RentalBase from "../../layouts/RentalBase.astro";
+
+export const prerender = false;
+
+async function loadAssets() {
+	try {
+		const response = await fetch(new URL("/api/rental/marketplace/assets", Astro.url), {
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
+		});
+		const payload = await response.json() as { data?: { items?: Array<Record<string, unknown>> } };
+		return response.ok ? payload.data?.items ?? [] : [];
+	} catch {
+		return [];
+	}
+}
+
+const assets = await loadAssets();
+---
+
+<RentalBase title="Marketplace" description="Public rental asset marketplace">
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">Marketplace</p>
+					<h1>Published assets</h1>
+					<p class="rental-muted">Public listings show price, location, specs, and owner condition summaries.</p>
+				</div>
+				<a class="rental-button secondary" href="/owner/assets/new">List asset</a>
+			</div>
+			{
+				assets.length ? (
+					<div class="rental-grid" data-marketplace-grid>
+						{assets.map((asset) => <AssetCard asset={asset} />)}
+					</div>
+				) : (
+					<div class="rental-panel">
+						<p class="rental-muted">No marketplace assets are currently listed.</p>
+					</div>
+				)
+			}
+		</div>
+	</section>
+</RentalBase>

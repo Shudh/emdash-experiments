@@ -1,0 +1,149 @@
+---
+interface Props {
+	asset: Record<string, unknown>;
+	href?: string;
+}
+
+const { asset, href = `/marketplace/assets/${asset.id}` } = Astro.props;
+const title = String(asset.title ?? asset.slug ?? "Untitled asset");
+const price =
+	typeof asset.public_price === "number"
+		? new Intl.NumberFormat("en-IN", {
+				style: "currency",
+				currency: String(asset.currency ?? "INR"),
+				maximumFractionDigits: 0,
+			}).format(asset.public_price)
+		: "Price on request";
+const location = String(asset.location_label ?? "Location pending");
+const kind = String(asset.asset_kind ?? "asset");
+const config = asset.config_spec && typeof asset.config_spec === "object"
+	? (asset.config_spec as Record<string, unknown>)
+	: {};
+const condition = asset.condition_spec && typeof asset.condition_spec === "object"
+	? (asset.condition_spec as Record<string, unknown>)
+	: {};
+const conditionSummary = Object.entries(condition)
+	.slice(0, 2)
+	.map(([key, value]) => `${key}: ${String(value)}`)
+	.join(", ");
+const viewer = asset.viewer && typeof asset.viewer === "object"
+	? asset.viewer as Record<string, unknown>
+	: {};
+const relationship = String(viewer.relationship ?? "");
+const interestId = typeof viewer.interestId === "string" ? viewer.interestId : "";
+const interestState = String(viewer.interestState ?? "");
+const canExpressInterest = viewer.canExpressInterest === true;
+const isUnavailable =
+	asset.business_state && !["listed", "interest_received", "negotiating"].includes(String(asset.business_state));
+---
+
+<article class="rental-card asset-card">
+	<div class="asset-visual" aria-hidden="true">
+		<span>{kind.slice(0, 2).toUpperCase()}</span>
+	</div>
+	<div class="asset-body">
+		<div>
+			<p class="rental-kicker">{kind}</p>
+			<h2><a href={href}>{title}</a></h2>
+			<p class="rental-muted">{location}</p>
+		</div>
+		<div class="asset-price">{price}</div>
+		<div class="rental-badges">
+			{
+				Object.entries(config).slice(0, 3).map(([key, value]) => (
+					<span class="rental-badge">{key}: {String(value)}</span>
+				))
+			}
+			{asset.business_state && <span class="rental-badge">{String(asset.business_state)}</span>}
+			{asset.status && <span class="rental-badge">status: {String(asset.status)}</span>}
+			{asset.visibility_state && <span class="rental-badge">visibility: {String(asset.visibility_state)}</span>}
+		</div>
+		{
+			relationship === "owner" ? (
+				<p class="asset-relationship">This is your asset.</p>
+			) : relationship === "interested_applicant" ? (
+				<p class="asset-relationship">
+					Interest submitted{interestState ? `: ${interestState}` : ""}.
+				</p>
+			) : isUnavailable ? (
+				<p class="asset-relationship">Booked or unavailable.</p>
+			) : null
+		}
+		{conditionSummary && <p class="asset-condition">{conditionSummary}</p>}
+		<div class="asset-actions">
+			<a class="rental-button secondary" href={href}>View details</a>
+			{
+				relationship === "owner" ? (
+					<a class="rental-button secondary" href="/owner">Dashboard</a>
+				) : interestId ? (
+					<a class="rental-button" href={`/interests/${interestId}`}>Go to application</a>
+				) : canExpressInterest ? (
+					<a class="rental-button" href={href}>Express interest</a>
+				) : relationship === "anonymous" ? (
+					<a class="rental-button" href="/_emdash/admin/login">Login to express interest</a>
+				) : (
+					<span class="rental-badge">Interest unavailable</span>
+				)
+			}
+		</div>
+	</div>
+</article>
+
+<style>
+	.asset-card {
+		overflow: hidden;
+		display: grid;
+	}
+
+	.asset-visual {
+		display: flex;
+		align-items: end;
+		min-height: 150px;
+		padding: 16px;
+		background:
+			linear-gradient(135deg, rgba(49, 95, 86, 0.18), rgba(184, 111, 52, 0.22)),
+			var(--r-panel-soft);
+	}
+
+	.asset-visual span {
+		border-radius: 999px;
+		padding: 8px 11px;
+		background: rgba(255, 255, 255, 0.82);
+		font-weight: 900;
+		color: var(--r-brand-strong);
+	}
+
+	.asset-body {
+		display: grid;
+		gap: 14px;
+		padding: 18px;
+	}
+
+	.asset-body h2 {
+		font-size: 1.28rem;
+	}
+
+	.asset-price {
+		font-size: 1.45rem;
+		font-weight: 900;
+		color: var(--r-brand-strong);
+	}
+
+	.asset-condition {
+		margin: 0;
+		color: var(--r-muted);
+		font-size: 0.92rem;
+	}
+
+	.asset-relationship {
+		margin: 0;
+		color: var(--r-brand-strong);
+		font-weight: 800;
+	}
+
+	.asset-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+</style>

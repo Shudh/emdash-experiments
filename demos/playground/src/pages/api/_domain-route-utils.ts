@@ -51,6 +51,15 @@ export function getUser(context: AstroLikeContext): UserContext {
 	};
 }
 
+export function getOptionalUser(context: AstroLikeContext): UserContext | null {
+	try {
+		return getUser(context);
+	} catch (error) {
+		if (error instanceof DomainError && error.code === "UNAUTHORIZED") return null;
+		throw error;
+	}
+}
+
 export function getStore(context: AstroLikeContext): DomainStore {
 	const existingStore = context.locals.emdash?.domainStore;
 	if (existingStore) return requireStore(existingStore);

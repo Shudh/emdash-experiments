@@ -1,0 +1,130 @@
+---
+interface Props {
+	checks?: Array<Record<string, unknown>>;
+}
+
+const { checks = [] } = Astro.props;
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: {};
+}
+
+function sourceSpec(check: Record<string, unknown>) {
+	return objectValue(objectValue(check.check_spec).sourceItemSpec);
+}
+
+function money(value: unknown) {
+	const amount = typeof value === "number" ? value : Number(value);
+	if (!Number.isFinite(amount)) return "";
+	return new Intl.NumberFormat("en-IN", {
+		style: "currency",
+		currency: "INR",
+		maximumFractionDigits: 0,
+	}).format(amount);
+}
+---
+
+<section class="handover-checklist rental-panel">
+	<h2>Handover checklist</h2>
+	{
+		checks.length ? (
+			<div class="check-list">
+				{checks.map((check) => (
+					<article>
+						<div class="check-main">
+							<div>
+								<strong>{String(check.item_label ?? check.asset_config_item_id ?? "Item")}</strong>
+								<p class="rental-muted">
+									Quantity: {String(sourceSpec(check).quantity ?? "1")} · Expected:{" "}
+									{String(check.expected_state ?? "pending")}
+								</p>
+								{sourceSpec(check).conditionDetails && (
+									<p>{String(sourceSpec(check).conditionDetails)}</p>
+								)}
+								{sourceSpec(check).notes && <p class="rental-muted">{String(sourceSpec(check).notes)}</p>}
+							</div>
+							<div class="rental-badges">
+								<span class="rental-badge">observed: {String(check.observed_state ?? "pending")}</span>
+								<span class="rental-badge">{String(check.dispute_state ?? check.check_state ?? "open")}</span>
+							</div>
+						</div>
+						{
+							check.owner_claimed_state || check.estimated_repair_cost || check.agreed_repair_cost ? (
+								<div class="damage-row">
+									<span>Owner claim: {String(check.owner_claimed_state ?? "none")}</span>
+									{check.estimated_repair_cost && <span>Estimated: {money(check.estimated_repair_cost)}</span>}
+									{check.agreed_repair_cost && <span>Agreed: {money(check.agreed_repair_cost)}</span>}
+									{check.renter_response_state && <span>Tenant: {String(check.renter_response_state)}</span>}
+								</div>
+							) : null
+						}
+						<p class="rental-muted evidence-note">
+							Evidence/photo URL or note: {String(sourceSpec(check).evidenceNote ?? "not provided")}
+						</p>
+					</article>
+				))}
+			</div>
+		) : (
+			<p class="rental-muted">No checklist items yet.</p>
+		)
+	}
+</section>
+
+<style>
+	.handover-checklist {
+		display: grid;
+		gap: 16px;
+	}
+
+	.handover-checklist h2 {
+		font-size: 1.25rem;
+	}
+
+	.check-list {
+		display: grid;
+		gap: 10px;
+	}
+
+	.check-list article {
+		display: grid;
+		gap: 14px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 14px;
+		background: var(--r-bg);
+	}
+
+	.check-main {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 14px;
+		align-items: start;
+	}
+
+	.check-list p {
+		margin: 4px 0 0;
+	}
+
+	.damage-row {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 8px;
+		border-top: 1px solid var(--r-border);
+		padding-top: 10px;
+		color: var(--r-muted);
+		font-weight: 650;
+	}
+
+	.evidence-note {
+		border-top: 1px solid var(--r-border);
+		padding-top: 10px;
+	}
+
+	@media (max-width: 640px) {
+		.check-main {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

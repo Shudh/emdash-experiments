@@ -1,0 +1,430 @@
+---
+import RentalBase from "../../../layouts/RentalBase.astro";
+
+export const prerender = false;
+---
+
+<RentalBase title="Create asset" description="Create a rental asset">
+	<section class="rental-section">
+		<div class="rental-shell create-grid">
+			<div>
+				<p class="rental-kicker">Owner asset</p>
+				<h1>Create a marketplace-ready asset</h1>
+				<p class="rental-muted">
+					Create the property, structured owner conditions, and the inventory that will later
+					drive move-in, move-out, and deposit checks.
+				</p>
+			</div>
+			<form class="rental-panel create-form" id="asset-form">
+				<div class="rental-form-grid">
+					<div class="rental-field">
+						<label for="assetKind">Asset kind</label>
+						<select id="assetKind" name="assetKind" required>
+							<option value="flat">Flat</option>
+							<option value="car">Car</option>
+							<option value="equipment">Equipment</option>
+						</select>
+					</div>
+					<div class="rental-field">
+						<label for="title">Title</label>
+						<input id="title" name="title" required />
+					</div>
+					<div class="rental-field">
+						<label for="locationLabel">Location</label>
+						<input id="locationLabel" name="locationLabel" />
+					</div>
+					<div class="rental-field">
+						<label for="publicPrice">Price</label>
+						<input id="publicPrice" name="publicPrice" type="number" required />
+					</div>
+					<div class="rental-field">
+						<label for="minimumMonths">Minimum months</label>
+						<input id="minimumMonths" name="minimumMonths" type="number" value="11" />
+					</div>
+					<div class="rental-field">
+						<label for="bedrooms">Bedrooms</label>
+						<input id="bedrooms" name="bedrooms" type="number" value="2" />
+					</div>
+					<div class="rental-field">
+						<label for="furnishing">Furnishing</label>
+						<input id="furnishing" name="furnishing" value="semi_furnished" />
+					</div>
+					<div class="rental-field">
+						<label for="walls">Physical condition</label>
+						<input id="walls" name="walls" value="freshly_painted" />
+					</div>
+					<div class="rental-field full">
+						<label for="depositPolicy">Owner rental conditions</label>
+						<textarea id="depositPolicy" name="depositPolicy" required>Two months deposit covers chargeable damage.</textarea>
+					</div>
+					<div class="rental-field">
+						<label>
+							<input name="publish" type="checkbox" checked />
+							Publish to marketplace
+						</label>
+					</div>
+				</div>
+				<section class="form-section" aria-labelledby="documents-heading">
+					<div class="section-head">
+						<div>
+							<p class="rental-kicker">Documents</p>
+							<h2 id="documents-heading">Document requirements</h2>
+						</div>
+						<button class="rental-button secondary" type="button" id="add-document">Add document</button>
+					</div>
+					<div class="document-editor" id="document-editor"></div>
+				</section>
+				<section class="form-section" aria-labelledby="inventory-heading">
+					<div class="section-head">
+						<div>
+							<p class="rental-kicker">Inventory</p>
+							<h2 id="inventory-heading">Asset config items</h2>
+						</div>
+						<div class="section-actions">
+							<button class="rental-button secondary" type="button" id="add-starter-inventory">
+								Add starter flat inventory
+							</button>
+							<button class="rental-button secondary" type="button" id="add-inventory-row">Add row</button>
+						</div>
+					</div>
+					<div class="inventory-editor" id="inventory-editor"></div>
+					<p class="rental-muted">
+						Media uploads are not duplicated here. Use existing EmDash media references or notes as
+						placeholders until signed document/photo upload is wired to the media library.
+					</p>
+				</section>
+				<button class="rental-button" type="submit">Create asset</button>
+				<p class="rental-status" id="asset-status"></p>
+			</form>
+		</div>
+	</section>
+</RentalBase>
+
+<script>
+	const form = document.querySelector<HTMLFormElement>("#asset-form");
+	const status = document.querySelector<HTMLElement>("#asset-status");
+	const inventoryEditor = document.querySelector<HTMLElement>("#inventory-editor");
+	const documentEditor = document.querySelector<HTMLElement>("#document-editor");
+	const addInventoryRowButton = document.querySelector<HTMLButtonElement>("#add-inventory-row");
+	const addStarterInventoryButton = document.querySelector<HTMLButtonElement>("#add-starter-inventory");
+	const addDocumentButton = document.querySelector<HTMLButtonElement>("#add-document");
+	const DOCUMENT_KEY_PATTERN = /[^a-z0-9]+/g;
+	const EDGE_UNDERSCORE_PATTERN = /^_|_$/g;
+
+	type InventoryItem = {
+		itemLabel: string;
+		itemKind: string;
+		itemGroup: string;
+		quantity: string;
+		ownerDeclaredState: string;
+		conditionDetails: string;
+		evidenceNote: string;
+		notes: string;
+	};
+
+	type DocumentRequirement = {
+		key: string;
+		label: string;
+		required: boolean;
+		attachmentRequired: boolean;
+		description: string;
+		acceptedFileTypes: string;
+	};
+
+	const starterInventory: InventoryItem[] = [
+		{ itemLabel: "Geyser", itemKind: "appliance", itemGroup: "bathroom", quantity: "1", ownerDeclaredState: "working", conditionDetails: "Heats water, no leakage.", evidenceNote: "", notes: "" },
+		{ itemLabel: "Fridge", itemKind: "appliance", itemGroup: "kitchen", quantity: "1", ownerDeclaredState: "working", conditionDetails: "Silent, cooling is ok.", evidenceNote: "", notes: "" },
+		{ itemLabel: "Washing machine", itemKind: "appliance", itemGroup: "utility", quantity: "1", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "RO purifier", itemKind: "appliance", itemGroup: "kitchen", quantity: "1", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Fans", itemKind: "fixture", itemGroup: "all rooms", quantity: "4", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Lights", itemKind: "fixture", itemGroup: "all rooms", quantity: "8", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Curtains", itemKind: "furnishing", itemGroup: "bedrooms", quantity: "4", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Wardrobe", itemKind: "furniture", itemGroup: "bedroom", quantity: "2", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Sofa", itemKind: "furniture", itemGroup: "living room", quantity: "1", ownerDeclaredState: "worn", conditionDetails: "Minor fabric marks.", evidenceNote: "", notes: "" },
+		{ itemLabel: "Dining table", itemKind: "furniture", itemGroup: "dining", quantity: "1", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Bed", itemKind: "furniture", itemGroup: "bedroom", quantity: "2", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Mattress", itemKind: "furnishing", itemGroup: "bedroom", quantity: "2", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Keys", itemKind: "access", itemGroup: "main door", quantity: "2", ownerDeclaredState: "handed over", conditionDetails: "Two physical keys.", evidenceNote: "", notes: "" },
+		{ itemLabel: "Remote controls", itemKind: "accessory", itemGroup: "living room", quantity: "2", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+	];
+
+	const defaultDocuments: DocumentRequirement[] = [
+		{ key: "company_id", label: "Company ID", required: true, attachmentRequired: true, description: "Upload company-issued ID card.", acceptedFileTypes: "image/pdf placeholder" },
+		{ key: "salary_slip", label: "Latest salary slip", required: true, attachmentRequired: true, description: "Latest salary slip or employer certificate.", acceptedFileTypes: "image/pdf placeholder" },
+	];
+
+	function input(name: string, label: string, value = "", type = "text") {
+		return `<label>${label}<input name="${name}" type="${type}" value="${value.replaceAll('"', "&quot;")}" /></label>`;
+	}
+
+	function textarea(name: string, label: string, value = "") {
+		return `<label>${label}<textarea name="${name}">${value}</textarea></label>`;
+	}
+
+	function addInventoryRow(item: Partial<InventoryItem> = {}) {
+		if (!inventoryEditor) return;
+		const row = document.createElement("article");
+		row.className = "inventory-row";
+		row.innerHTML = `
+			${input("itemLabel", "Item label", item.itemLabel ?? "")}
+			${input("itemKind", "Item kind", item.itemKind ?? "fixture")}
+			${input("itemGroup", "Room / group", item.itemGroup ?? "")}
+			${input("quantity", "Quantity", item.quantity ?? "1", "number")}
+			${input("ownerDeclaredState", "Owner declared state", item.ownerDeclaredState ?? "working")}
+			${textarea("conditionDetails", "Condition details", item.conditionDetails ?? "")}
+			${input("evidenceNote", "Evidence/media reference placeholder", item.evidenceNote ?? "")}
+			${textarea("notes", "Notes", item.notes ?? "")}
+			<button class="rental-button secondary remove-row" type="button">Delete row</button>
+		`;
+		row.querySelector(".remove-row")?.addEventListener("click", () => row.remove());
+		inventoryEditor.append(row);
+	}
+
+	function addDocumentRow(documentRequirement: Partial<DocumentRequirement> = {}) {
+		if (!documentEditor) return;
+		const row = document.createElement("article");
+		row.className = "document-row-editor";
+		row.innerHTML = `
+			${input("key", "Document key", documentRequirement.key ?? "")}
+			${input("label", "Document name", documentRequirement.label ?? "")}
+			<label>Required
+				<select name="required">
+					<option value="true" ${documentRequirement.required === false ? "" : "selected"}>Yes</option>
+					<option value="false" ${documentRequirement.required === false ? "selected" : ""}>No</option>
+				</select>
+			</label>
+			<label>Attachment required
+				<select name="attachmentRequired">
+					<option value="true" ${documentRequirement.attachmentRequired === false ? "" : "selected"}>Yes</option>
+					<option value="false" ${documentRequirement.attachmentRequired === false ? "selected" : ""}>No</option>
+				</select>
+			</label>
+			${textarea("description", "Description", documentRequirement.description ?? "")}
+			${input("acceptedFileTypes", "Accepted file types placeholder", documentRequirement.acceptedFileTypes ?? "image/pdf placeholder")}
+			<button class="rental-button secondary remove-row" type="button">Delete row</button>
+		`;
+		row.querySelector(".remove-row")?.addEventListener("click", () => row.remove());
+		documentEditor.append(row);
+	}
+
+	function collectInventoryRows() {
+		return Array.from(document.querySelectorAll<HTMLElement>(".inventory-row"), (row) => {
+			const scoped = (name: string) => (row.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)?.value ?? "").trim();
+			return {
+				itemKind: scoped("itemKind") || "fixture",
+				itemGroup: scoped("itemGroup") || undefined,
+				itemLabel: scoped("itemLabel"),
+				ownerDeclaredState: scoped("ownerDeclaredState") || "working",
+				mediaRefs: scoped("evidenceNote") ? [{ kind: "emdash_media_reference_or_note", value: scoped("evidenceNote") }] : [],
+				itemSpec: {
+					quantity: Number(scoped("quantity") || "1"),
+					room: scoped("itemGroup") || undefined,
+					conditionDetails: scoped("conditionDetails") || undefined,
+					evidenceNote: scoped("evidenceNote") || undefined,
+					notes: scoped("notes") || undefined,
+				},
+			};
+		}).filter((item) => item.itemLabel);
+	}
+
+	function collectDocumentRows() {
+		return Array.from(document.querySelectorAll<HTMLElement>(".document-row-editor"), (row) => {
+			const scoped = (name: string) => (row.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[name="${name}"]`)?.value ?? "").trim();
+			const label = scoped("label");
+			const key = scoped("key") || label.toLowerCase().replaceAll(DOCUMENT_KEY_PATTERN, "_").replaceAll(EDGE_UNDERSCORE_PATTERN, "");
+			return {
+				key,
+				label: label || key,
+				required: scoped("required") !== "false",
+				attachmentRequired: scoped("attachmentRequired") !== "false",
+				description: scoped("description"),
+				acceptedFileTypes: scoped("acceptedFileTypes"),
+			};
+		}).filter((documentRequirement) => documentRequirement.key);
+	}
+
+	async function postJson(url: string, body: Record<string, unknown>) {
+		const response = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"X-EmDash-Request": "1",
+			},
+			body: JSON.stringify(body),
+		});
+		const payload = await response.json().catch(() => ({}));
+		if (!response.ok) throw new Error(payload?.error?.message ?? `${url} failed`);
+		return payload.data;
+	}
+
+	form?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const data = new FormData(form);
+		if (status) {
+			status.removeAttribute("data-state");
+			status.textContent = "Creating asset...";
+		}
+		try {
+			const addData = await postJson("/api/rental/owner/assets/add", {
+				assetKind: data.get("assetKind"),
+				title: data.get("title"),
+				locationLabel: data.get("locationLabel"),
+				publicPrice: Number(data.get("publicPrice")),
+				currency: "INR",
+				ownerConditionsSpec: {
+					depositPolicy: data.get("depositPolicy"),
+					documentsRequired: collectDocumentRows(),
+				},
+			});
+			const assetId = addData.asset.id;
+			await postJson(`/api/rental/owner/assets/${assetId}/config`, {
+				publicPrice: Number(data.get("publicPrice")),
+				minimumMonths: Number(data.get("minimumMonths")),
+				configSpec: {
+					bedrooms: Number(data.get("bedrooms")),
+					furnishing: data.get("furnishing"),
+				},
+				conditionSpec: {
+					walls: data.get("walls"),
+				},
+				ownerConditionsSpec: {
+					depositPolicy: data.get("depositPolicy"),
+					documentsRequired: collectDocumentRows(),
+				},
+				items: collectInventoryRows(),
+			});
+			if (data.get("publish")) {
+				await postJson(`/api/rental/owner/assets/${assetId}/publish-to-marketplace`, {});
+			}
+			location.href = `/marketplace/assets/${assetId}`;
+		} catch (error) {
+			if (status) {
+				status.dataset.state = "error";
+				status.textContent = error instanceof Error ? error.message : "Create asset failed";
+			}
+		}
+	});
+
+	addInventoryRow({
+		itemLabel: "Geyser",
+		itemKind: "appliance",
+		itemGroup: "bathroom",
+		quantity: "1",
+		ownerDeclaredState: "working",
+		conditionDetails: "Heats water, no leakage.",
+	});
+	defaultDocuments.forEach(addDocumentRow);
+
+	addInventoryRowButton?.addEventListener("click", () => addInventoryRow());
+	addStarterInventoryButton?.addEventListener("click", () => {
+		inventoryEditor?.replaceChildren();
+		starterInventory.forEach(addInventoryRow);
+	});
+	addDocumentButton?.addEventListener("click", () => addDocumentRow());
+</script>
+
+<style>
+	.create-grid {
+		display: grid;
+		grid-template-columns: minmax(260px, 0.65fr) minmax(0, 1.35fr);
+		gap: 28px;
+		align-items: start;
+	}
+
+	.create-grid h1 {
+		font-size: clamp(2.2rem, 5vw, 4.5rem);
+	}
+
+	.create-form {
+		display: grid;
+		gap: 16px;
+	}
+
+	.form-section {
+		display: grid;
+		gap: 14px;
+		border-top: 1px solid var(--r-border);
+		padding-top: 18px;
+	}
+
+	.section-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.section-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+
+	.inventory-editor,
+	.document-editor {
+		display: grid;
+		gap: 12px;
+	}
+
+	.inventory-row,
+	.document-row-editor {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(130px, 1fr));
+		gap: 10px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 12px;
+		background: var(--r-bg);
+	}
+
+	.inventory-row label,
+	.document-row-editor label {
+		display: grid;
+		gap: 6px;
+		color: var(--r-muted);
+		font-size: 0.84rem;
+		font-weight: 750;
+	}
+
+	.inventory-row input,
+	.inventory-row textarea,
+	.document-row-editor input,
+	.document-row-editor textarea,
+	.document-row-editor select {
+		width: 100%;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 9px 10px;
+		background: var(--r-panel);
+		color: var(--r-text);
+	}
+
+	.inventory-row textarea,
+	.document-row-editor textarea {
+		min-height: 80px;
+		resize: vertical;
+	}
+
+	.remove-row {
+		align-self: end;
+	}
+
+	@media (max-width: 900px) {
+		.create-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.inventory-row,
+		.document-row-editor {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	@media (max-width: 560px) {
+		.inventory-row,
+		.document-row-editor {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

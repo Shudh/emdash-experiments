@@ -431,6 +431,9 @@ expect(afterAgreementListData.body.data?.items.some((item) => item.id === asset.
 false,
 );
 
+const anonymousRestrictedDetail = await anonymousGet(`/api/rental/marketplace/assets/${asset.id}`);
+expect([403, 404]).toContain(anonymousRestrictedDetail.status);
+
 const renterAgreementData = await mustRentalRequest<{
 agreement: Record<string, unknown>;
 }>(tenant, "GET", `/api/rental/agreements/${agreement.id}`);
