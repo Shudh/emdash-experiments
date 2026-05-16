@@ -17,6 +17,7 @@ import { POST as addAssetPost } from "../../src/pages/api/owner/assets/add.js";
 
 const owner: UserContext = { id: "route_owner", email: "owner@example.com", role: "author" };
 const renter: UserContext = { id: "route_renter", email: "renter@example.com", role: "author" };
+const unrelated: UserContext = { id: "route_unrelated", email: "other@example.com", role: "author" };
 
 type RouteContext = Parameters<typeof addAssetPost>[0];
 type RentalBridgeContext = Parameters<typeof rentalBridgeAll>[0];
@@ -260,6 +261,7 @@ describe("rental API route auth and validation", () => {
 			bridgeContext(store, owner, "POST", `owner/assets/${assetId}/publish-to-marketplace`, {}),
 		);
 		expect(publishResponse.status).toBe(200);
+		const publishedAsset = (await bodyOf(publishResponse)).data.asset as Record<string, unknown>;
 
 		const ownerDetail = await rentalBridgeAll(
 			bridgeContext(store, owner, "GET", `marketplace/assets/${assetId}`),
@@ -272,6 +274,54 @@ describe("rental API route auth and validation", () => {
 		);
 		const renterBody = await bodyOf(renterDetail);
 		expect(renterBody.data.asset.viewer.canExpressInterest).toBe(true);
+
+		const interestResponse = await rentalBridgeAll(
+			bridgeContext(store, renter, "POST", `marketplace/assets/${assetId}/express-interest`, {
+				name: "Route Renter",
+				acceptedConditionsVersion: Number(publishedAsset.conditions_version),
+				acceptedConditionsHash: String(publishedAsset.conditions_hash),
+			}),
+		);
+		expect(interestResponse.status).toBe(201);
+		const interestId = (await bodyOf(interestResponse)).data.interest.id as string;
+
+		const agreementResponse = await rentalBridgeAll(
+			bridgeContext(store, owner, "POST", `negotiations/${interestId}/accept-final-terms`, {
+				agreementKind: "flat_rental",
+				effectiveFrom: "2026-07-01",
+			}),
+		);
+		expect(agreementResponse.status).toBe(201);
+		const agreementId = (await bodyOf(agreementResponse)).data.agreement.id as string;
+
+		const anonymousRestrictedDetail = await rentalBridgeAll(
+			bridgeContext(store, null, "GET", `marketplace/assets/${assetId}`),
+		);
+		expect([403, 404]).toContain(anonymousRestrictedDetail.status);
+
+		const unrelatedRestrictedDetail = await rentalBridgeAll(
+			bridgeContext(store, unrelated, "GET", `marketplace/assets/${assetId}`),
+		);
+		expect([403, 404]).toContain(unrelatedRestrictedDetail.status);
+
+		const ownerRestrictedDetail = await rentalBridgeAll(
+			bridgeContext(store, owner, "GET", `marketplace/assets/${assetId}`),
+		);
+		expect(ownerRestrictedDetail.status).toBe(200);
+		expect((await bodyOf(ownerRestrictedDetail)).data.asset.viewer.relationship).toBe("owner");
+
+		const renterRestrictedDetail = await rentalBridgeAll(
+			bridgeContext(store, renter, "GET", `marketplace/assets/${assetId}`),
+		);
+		expect(renterRestrictedDetail.status).toBe(200);
+		expect((await bodyOf(renterRestrictedDetail)).data.asset.viewer.relationship).toBe("renter");
+
+		expect(
+			await rentalBridgeAll(bridgeContext(store, owner, "GET", `negotiations/${interestId}`)),
+		).toHaveProperty("status", 200);
+		expect(
+			await rentalBridgeAll(bridgeContext(store, renter, "GET", `agreements/${agreementId}`)),
+		).toHaveProperty("status", 200);
 
 		const resetResponse = await rentalBridgeAll(
 			bridgeContext(store, owner, "POST", "reset", {}),

@@ -75,7 +75,7 @@ const refundDue = Math.max(0, securityDeposit - totalAgreed);
 							<div class="action-grid">
 								{
 									isRenter && isMoveIn && isOpen ? (
-										<ActionForm title="Accept move-in handover" action={`/api/rental/handover/${handoverId}/accept`} submitLabel="Accept move-in handover" successRedirect="/owner">
+										<ActionForm title="Accept move-in handover" action={`/api/rental/handover/${handoverId}/accept`} submitLabel="Accept move-in handover" successRedirect={`/handover/${handoverId}`}>
 											<div class="rental-field full">
 												<label for="move-in-note">Tenant remark</label>
 												<input id="move-in-note" name="summarySpec.tenantRemark" value="Accepted move-in inventory." />

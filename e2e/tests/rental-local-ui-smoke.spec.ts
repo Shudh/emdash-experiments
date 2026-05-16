@@ -200,7 +200,9 @@ test("local persistent users complete the thin Astro rental UI flow", async ({ b
 		await tenant.page.goto(handoverUrl, { waitUntil: "domcontentloaded" });
 		await tenant.page.waitForFunction(() => (window as { __rentalFormsReady?: boolean }).__rentalFormsReady === true);
 		await tenant.page.getByRole("button", { name: "Accept move-in handover" }).click();
-		await expect(tenant.page).toHaveURL(/\/owner$/);
+		await expect(tenant.page).not.toHaveURL(/\/owner$/);
+		await expect(tenant.page).toHaveURL(handoverUrl);
+		await expect(tenant.page.getByText("accepted", { exact: true })).toBeVisible();
 		await owner.page.goto("/owner", { waitUntil: "domcontentloaded" });
 		await expect(owner.page.getByText("business_state: rented")).toBeVisible();
 		await expect(owner.page.getByText("Start move-out handover")).toBeVisible();

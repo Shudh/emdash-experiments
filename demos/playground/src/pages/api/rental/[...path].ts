@@ -26,7 +26,12 @@ import { publishAssetToMarketplace } from "../../../lib/domain/commands/publish-
 import { settleHandover } from "../../../lib/domain/commands/settle-handover.js";
 import { startHandover } from "../../../lib/domain/commands/start-handover.js";
 import { updateAssetConfig } from "../../../lib/domain/commands/update-asset-config.js";
-import { COLLECTIONS } from "../../../lib/domain/constants.js";
+import {
+	ASSET_BUSINESS_STATE,
+	CMS_STATUS,
+	COLLECTIONS,
+	VISIBILITY_STATE,
+} from "../../../lib/domain/constants.js";
 import { getAgreementPrintQuery } from "../../../lib/domain/queries/agreement-print.js";
 import { getHandoverSessionQuery } from "../../../lib/domain/queries/handover-session.js";
 import { listMarketplaceAssetsQuery } from "../../../lib/domain/queries/marketplace.js";
@@ -109,8 +114,21 @@ async function publicMarketplaceDetails(
 ) {
 	const asset = await store.get(COLLECTIONS.ASSETS, assetId);
 	if (!asset) throw new DomainError("ASSET_NOT_FOUND", "Asset not found", 404);
+	const isPublicMarketplaceAsset =
+		asString(asset.status) === CMS_STATUS.PUBLISHED &&
+		asString(asset.business_state) === ASSET_BUSINESS_STATE.LISTED &&
+		asString(asset.visibility_state) === VISIBILITY_STATE.MARKETPLACE;
+	const viewer = await viewerForAsset(store, user, asset);
+	const relationship = asString(viewer.relationship);
+	const canReadRestrictedDetail =
+		relationship === "owner" ||
+		relationship === "renter" ||
+		relationship === "interested_applicant";
+	if (!isPublicMarketplaceAsset && !canReadRestrictedDetail) {
+		throw new DomainError("ASSET_NOT_FOUND", "Asset not found", 404);
+	}
 	return {
-		asset: await withViewer(store, user, asset),
+		asset: { ...asset, viewer },
 		ownerConditions: {
 			version: asset.conditions_version,
 			hash: asset.conditions_hash,

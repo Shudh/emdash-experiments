@@ -26,7 +26,12 @@ import { publishAssetToMarketplace } from "../../../../../../demos/playground/sr
 import { settleHandover } from "../../../../../../demos/playground/src/lib/domain/commands/settle-handover.js";
 import { startHandover } from "../../../../../../demos/playground/src/lib/domain/commands/start-handover.js";
 import { updateAssetConfig } from "../../../../../../demos/playground/src/lib/domain/commands/update-asset-config.js";
-import { COLLECTIONS } from "../../../../../../demos/playground/src/lib/domain/constants.js";
+import {
+	ASSET_BUSINESS_STATE,
+	CMS_STATUS,
+	COLLECTIONS,
+	VISIBILITY_STATE,
+} from "../../../../../../demos/playground/src/lib/domain/constants.js";
 import { MemoryDomainStore } from "../../../../../../demos/playground/src/lib/domain/db.js";
 import { getAgreementPrintQuery } from "../../../../../../demos/playground/src/lib/domain/queries/agreement-print.js";
 import { getHandoverSessionQuery } from "../../../../../../demos/playground/src/lib/domain/queries/handover-session.js";
@@ -129,8 +134,21 @@ async function publicMarketplaceDetails(
 ): Promise<unknown> {
 	const asset = await domainStore.get(COLLECTIONS.ASSETS, assetId);
 	if (!asset) throw new DomainError("ASSET_NOT_FOUND", "Asset not found", 404);
+	const isPublicMarketplaceAsset =
+		asString(asset.status) === CMS_STATUS.PUBLISHED &&
+		asString(asset.business_state) === ASSET_BUSINESS_STATE.LISTED &&
+		asString(asset.visibility_state) === VISIBILITY_STATE.MARKETPLACE;
+	const viewer = await viewerForAsset(domainStore, user, asset);
+	const relationship = asString(viewer.relationship);
+	const canReadRestrictedDetail =
+		relationship === "owner" ||
+		relationship === "renter" ||
+		relationship === "interested_applicant";
+	if (!isPublicMarketplaceAsset && !canReadRestrictedDetail) {
+		throw new DomainError("ASSET_NOT_FOUND", "Asset not found", 404);
+	}
 	return {
-		asset: await withViewer(domainStore, user, asset),
+		asset: { ...asset, viewer },
 		ownerConditions: {
 			version: asset.conditions_version,
 			hash: asset.conditions_hash,
