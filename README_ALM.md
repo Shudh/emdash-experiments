@@ -133,7 +133,66 @@ demos/playground/tests/domain/routes.test.ts
 
 ---
 
-## 4. Domain collections / tables represented
+## 4. Local runtime and database map
+
+Persistent local auth users live in the local EmDash SQLite database:
+
+```text
+.local/rental-sandbox/test.db
+```
+
+The synced local-user map lives here:
+
+```text
+.local/rental-sandbox/users.json
+```
+
+Current local meaning:
+
+- `.local/rental-sandbox/test.db` is the persistent local EmDash auth/runtime DB used by the rental sandbox.
+- `.local/rental-sandbox/users.json` records the already-created owner and tenant user IDs/emails so local tests can login without recreating passkeys.
+- The e2e fixture `/api/rental` route is intentionally resettable and uses `MemoryDomainStore` for rental domain state only.
+- The permanent playground `/api/rental` route at `demos/playground/src/pages/api/rental/[...path].ts` uses `_domain-route-utils.ts`: it prefers `locals.emdash.domainStore`, otherwise uses `KyselyDomainStore` over the EmDash DB.
+- The permanent playground reset route is guarded and does not reset persistent rental data.
+
+Local users:
+
+```text
+owner_manual_created_1@example.com
+tenant_manual_created_1@example.com
+```
+
+Creation/sync script:
+
+```bash
+node scripts/create-rental-local-users.mjs
+```
+
+Sandbox start script:
+
+```bash
+bash scripts/run-rental-local-sandbox.sh
+```
+
+Do not delete:
+
+```text
+.local/rental-sandbox/test.db
+.local/rental-sandbox/users.json
+```
+
+To verify users are registered without recreating invites, run:
+
+```bash
+node scripts/create-rental-local-users.mjs
+scripts/verify-alm-frontend.sh
+```
+
+The user creation script checks existing records first. If `users.json` already contains registered owner and tenant entries, do not rerun invite creation manually.
+
+---
+
+## 5. Domain collections / tables represented
 
 The ALM/rental model uses these major collections:
 
@@ -174,7 +233,7 @@ audit trail
 
 ---
 
-## 5. State model
+## 6. State model
 
 The design separates CMS workflow state from business workflow state.
 
@@ -230,9 +289,9 @@ visibility_state = private
 
 ---
 
-## 6. Core relationships
+## 7. Core relationships
 
-### 6.1 User owns asset
+### 7.1 User owns asset
 
 A user owns an asset through:
 

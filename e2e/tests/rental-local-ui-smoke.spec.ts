@@ -32,6 +32,16 @@ async function loginAs(browser: Browser, email: string): Promise<LocalActor> {
 	return { context, page };
 }
 
+async function loginAsDevAdmin(browser: Browser): Promise<LocalActor> {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	const page = await context.newPage();
+	await page.goto("/_emdash/api/setup/dev-bypass?redirect=/_emdash/admin/", {
+		waitUntil: "domcontentloaded",
+	});
+	await expect(page).toHaveURL(/\/_emdash\/admin\/?/);
+	return { context, page };
+}
+
 async function resetRentalStore(): Promise<void> {
 	const response = await fetch(`${BASE_URL}/api/rental/reset`, {
 		method: "POST",
@@ -58,7 +68,15 @@ test("local persistent users complete the thin Astro rental UI flow", async ({ b
 		await owner.page.getByRole("button", { name: "Create asset" }).click();
 		await expect(owner.page).toHaveURL(/\/marketplace\/assets\/[^/]+$/);
 		await expect(owner.page.getByRole("heading", { name: title })).toBeVisible();
+		await expect(owner.page.getByText("status: published")).toBeVisible();
+		await expect(owner.page.getByText("listed", { exact: true })).toBeVisible();
+		await expect(owner.page.getByText("marketplace", { exact: true })).toBeVisible();
+		await expect(owner.page.getByText("This is your asset")).toBeVisible();
+		await expect(owner.page.getByRole("button", { name: "Express interest" })).toHaveCount(0);
 		const assetUrl = owner.page.url();
+		await owner.page.goto("/owner", { waitUntil: "domcontentloaded" });
+		await expect(owner.page.getByRole("button", { name: "Already published" })).toBeVisible();
+		await owner.page.goto(assetUrl, { waitUntil: "domcontentloaded" });
 
 		await tenant.page.goto("/marketplace", { waitUntil: "domcontentloaded" });
 		await expect(tenant.page.getByRole("heading", { name: "Published assets" })).toBeVisible();
@@ -71,13 +89,24 @@ test("local persistent users complete the thin Astro rental UI flow", async ({ b
 		await tenant.page.getByLabel("Message").fill("Interested after accepting owner conditions.");
 		await tenant.page.getByLabel("I accept the current owner conditions.").check();
 		await tenant.page.getByRole("button", { name: "Express interest" }).click();
-		await expect(tenant.page).toHaveURL(/\/marketplace$/);
+		await expect(tenant.page).toHaveURL(/\/interests\/[^/]+$/);
+		const interestUrl = tenant.page.url();
+		await expect(tenant.page.getByText("submitted", { exact: true })).toBeVisible();
+
+		await tenant.page.goto(assetUrl, { waitUntil: "domcontentloaded" });
+		await expect(tenant.page.getByText("Interest submitted")).toBeVisible();
+		await expect(tenant.page.getByRole("button", { name: "Express interest" })).toHaveCount(0);
 
 		await owner.page.goto("/owner", { waitUntil: "domcontentloaded" });
 		await expect(owner.page.getByRole("heading", { name: "Submitted interest inbox" })).toBeVisible();
+		await expect(
+			owner.page.getByRole("link", { name: new RegExp(`${title}.*Tenant Manual Created 1`) }),
+		).toBeVisible();
+		await expect(owner.page.getByText("Official email: tenant_manual_created_1@company.example.com")).toBeVisible();
+		await expect(owner.page.getByText("Employer: Manual Company")).toBeVisible();
+		await expect(owner.page.getByText("Offer: 59000")).toBeVisible();
 		await owner.page.getByRole("link", { name: /Tenant Manual Created 1/ }).click();
-		await expect(owner.page).toHaveURL(/\/interests\/[^/]+$/);
-		const interestUrl = owner.page.url();
+		await expect(owner.page).toHaveURL(interestUrl);
 		await owner.page.getByLabel("Question").fill("Please upload company ID and salary slip.");
 		await owner.page.getByRole("button", { name: "Ask question" }).click();
 		await expect(
@@ -85,6 +114,10 @@ test("local persistent users complete the thin Astro rental UI flow", async ({ b
 		).toBeVisible();
 
 		await tenant.page.goto(interestUrl, { waitUntil: "domcontentloaded" });
+		await expect(
+			tenant.page.getByRole("article").getByText("Please upload company ID and salary slip."),
+		).toBeVisible();
+		await expect(tenant.page.getByRole("button", { name: "Ask question" })).toHaveCount(0);
 		await tenant.page.getByLabel("Answer").fill("Company ID and salary slip shared.");
 		await tenant.page.getByRole("button", { name: "Answer" }).click();
 		await expect(
@@ -92,9 +125,32 @@ test("local persistent users complete the thin Astro rental UI flow", async ({ b
 		).toBeVisible();
 
 		await owner.page.goto(interestUrl, { waitUntil: "domcontentloaded" });
+		await expect(
+			owner.page.getByRole("article").getByText("Company ID and salary slip shared."),
+		).toBeVisible();
+		await expect(owner.page.getByRole("button", { name: "Answer" })).toHaveCount(0);
 		await owner.page.getByRole("button", { name: "Accept final terms" }).click();
 		await expect(owner.page).toHaveURL(/\/owner$/);
-		await expect(owner.page.getByText("booked")).toBeVisible();
+		await expect(owner.page.getByText("business_state: booked")).toBeVisible();
+		await expect(owner.page.getByText("visibility_state: restricted")).toBeVisible();
+		await expect(owner.page.getByText("Start move-in handover")).toBeVisible();
+
+		await tenant.page.goto(interestUrl, { waitUntil: "domcontentloaded" });
+		await expect(tenant.page.getByText("Agreement accepted")).toBeVisible();
+
+		const anonymous = await browser.newContext({ baseURL: BASE_URL });
+		const anonymousPage = await anonymous.newPage();
+		await anonymousPage.goto("/marketplace", { waitUntil: "domcontentloaded" });
+		await expect(anonymousPage.getByText(title)).toHaveCount(0);
+		await anonymous.close();
+
+		await owner.page.goto("/_emdash/admin/", { waitUntil: "domcontentloaded" });
+		await expect(owner.page).not.toHaveURL(/\/_emdash\/admin\/?$/);
+		await owner.page.goto("/marketplace", { waitUntil: "domcontentloaded" });
+		await expect(owner.page.getByRole("heading", { name: "Published assets" })).toBeVisible();
+
+		const devAdmin = await loginAsDevAdmin(browser);
+		await devAdmin.context.close();
 	} finally {
 		await owner.context.close();
 		await tenant.context.close();

@@ -59,5 +59,7 @@ echo "Open: http://localhost:4444"
 
 EMDASH_TEST_DB="file:$DB_PATH" \
 EMDASH_MARKETPLACE_URL="http://127.0.0.1:4445" \
+ALM_ADMIN_SAFETY="${ALM_ADMIN_SAFETY:-1}" \
+ALM_SUPERADMIN_EMAILS="${ALM_SUPERADMIN_EMAILS:-dev@emdash.local}" \
 DEBUG="${DEBUG:-1}" \
 pnpm --dir e2e/fixture exec astro dev --port 4444

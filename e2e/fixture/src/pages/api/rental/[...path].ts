@@ -13,6 +13,7 @@ import {
 import {
 	requireAgreementParticipant,
 	requireHandoverParticipant,
+	requireInterestParticipant,
 } from "../../../../../../demos/playground/src/lib/domain/auth.js";
 import { acceptFinalTerms } from "../../../../../../demos/playground/src/lib/domain/commands/accept-final-terms.js";
 import { acceptHandover } from "../../../../../../demos/playground/src/lib/domain/commands/accept-handover.js";
@@ -43,7 +44,7 @@ import type {
 	DomainStore,
 	UserContext,
 } from "../../../../../../demos/playground/src/lib/domain/types.js";
-import { DomainError } from "../../../../../../demos/playground/src/lib/domain/types.js";
+import { DomainError, asString } from "../../../../../../demos/playground/src/lib/domain/types.js";
 
 export const prerender = false;
 
@@ -82,6 +83,15 @@ function userFrom(locals: { user?: UserLike | null }): UserContext {
 	};
 }
 
+function optionalUserFrom(locals: { user?: UserLike | null }): UserContext | null {
+	try {
+		return userFrom(locals);
+	} catch (error) {
+		if (error instanceof DomainError && error.code === "UNAUTHORIZED") return null;
+		throw error;
+	}
+}
+
 async function readJson(request: Request): Promise<unknown> {
 	const text = await request.text();
 	if (!text.trim()) return {};
@@ -114,18 +124,78 @@ function fail(error: unknown): Response {
 
 async function publicMarketplaceDetails(
 	domainStore: DomainStore,
+	user: UserContext | null,
 	assetId: string,
 ): Promise<unknown> {
 	const asset = await domainStore.get(COLLECTIONS.ASSETS, assetId);
 	if (!asset) throw new DomainError("ASSET_NOT_FOUND", "Asset not found", 404);
 	return {
-		asset,
+		asset: await withViewer(domainStore, user, asset),
 		ownerConditions: {
 			version: asset.conditions_version,
 			hash: asset.conditions_hash,
 			spec: asset.owner_conditions_spec,
 		},
 	};
+}
+
+async function viewerForAsset(
+	domainStore: DomainStore,
+	user: UserContext | null,
+	asset: Record<string, unknown> & { id: string },
+): Promise<Record<string, unknown>> {
+	if (!user) return { relationship: "anonymous", canExpressInterest: false };
+	if (asString(asset.owner_user_id) === user.id) {
+		return { relationship: "owner", canExpressInterest: false, message: "This is your asset" };
+	}
+	if (asString(asset.active_renter_user_id) === user.id) {
+		return { relationship: "renter", canExpressInterest: false };
+	}
+	const interest = await domainStore.findOne(COLLECTIONS.ASSET_INTERESTS, {
+		asset_id: asset.id,
+		interested_user_id: user.id,
+	});
+	if (interest) {
+		return {
+			relationship: "interested_applicant",
+			canExpressInterest: false,
+			interestId: interest.id,
+			interestState: interest.interest_state,
+		};
+	}
+	return { relationship: "logged_in", canExpressInterest: true };
+}
+
+async function withViewer(
+	domainStore: DomainStore,
+	user: UserContext | null,
+	asset: Record<string, unknown> & { id: string },
+) {
+	return { ...asset, viewer: await viewerForAsset(domainStore, user, asset) };
+}
+
+async function enrichInterests(domainStore: DomainStore, interests: Array<Record<string, unknown>>) {
+	return Promise.all(
+		interests.map(async (interest) => {
+			const asset =
+				typeof interest.asset_id === "string"
+					? await domainStore.get(COLLECTIONS.ASSETS, interest.asset_id)
+					: null;
+			return {
+				...interest,
+				asset_title: asset?.title ?? null,
+				asset_location_label: asset?.location_label ?? null,
+				asset,
+			};
+		}),
+	);
+}
+
+function viewerRoleForInterest(user: UserContext, interest: Record<string, unknown> | undefined): string {
+	if (!interest) return "unknown";
+	if (asString(interest.owner_user_id) === user.id) return "owner";
+	if (asString(interest.interested_user_id) === user.id) return "renter";
+	return "unrelated";
 }
 
 export const ALL: APIRoute = async ({ request, locals, params }) => {
@@ -137,7 +207,13 @@ export const ALL: APIRoute = async ({ request, locals, params }) => {
 		if (request.method === "POST" && path === "reset") return ok({ reset: !!resetStore() });
 
 		if (request.method === "GET" && path === "marketplace/assets") {
-			return ok({ items: await listMarketplaceAssetsQuery(domainStore) });
+			const user = optionalUserFrom(locals);
+			const items = await Promise.all(
+				(await listMarketplaceAssetsQuery(domainStore)).map((asset) =>
+					withViewer(domainStore, user, asset),
+				),
+			);
+			return ok({ items });
 		}
 		if (
 			request.method === "GET" &&
@@ -145,7 +221,7 @@ export const ALL: APIRoute = async ({ request, locals, params }) => {
 			parts[1] === "assets" &&
 			parts[2]
 		) {
-			return ok(await publicMarketplaceDetails(domainStore, parts[2]));
+			return ok(await publicMarketplaceDetails(domainStore, optionalUserFrom(locals), parts[2]));
 		}
 
 		const user = userFrom(locals);
@@ -155,14 +231,18 @@ export const ALL: APIRoute = async ({ request, locals, params }) => {
 			return ok(await addAsset(domainStore, user, parseAddAssetRequest(body)), 201);
 		}
 		if (request.method === "GET" && path === "owner/dashboard") {
-			return ok({
-				assets: await listOwnerAssetsQuery(domainStore, user.id),
-				inbox: await listOwnerInterestsQuery(domainStore, user.id),
-			});
+			const [assets, inbox] = await Promise.all([
+				listOwnerAssetsQuery(domainStore, user.id),
+				listOwnerInterestsQuery(domainStore, user.id),
+			]);
+			return ok({ assets, inbox: await enrichInterests(domainStore, inbox) });
 		}
 		if (request.method === "GET" && path === "renter/dashboard") {
 			return ok({
-				interests: await listRenterInterestsQuery(domainStore, user.id),
+				interests: await enrichInterests(
+					domainStore,
+					await listRenterInterestsQuery(domainStore, user.id),
+				),
 				access: await listRenterAssetAccessQuery(domainStore, user.id),
 			});
 		}
@@ -187,7 +267,12 @@ export const ALL: APIRoute = async ({ request, locals, params }) => {
 			);
 		}
 		if (request.method === "GET" && parts[0] === "negotiations" && parts[1]) {
-			return ok(await getNegotiationThreadQuery(domainStore, parts[1]));
+			await requireInterestParticipant(domainStore, user, parts[1]);
+			const thread = await getNegotiationThreadQuery(domainStore, parts[1]);
+			return ok({
+				...thread,
+				viewerRole: viewerRoleForInterest(user, thread?.interest as Record<string, unknown> | undefined),
+			});
 		}
 		if (request.method === "POST" && parts[0] === "negotiations" && parts[1]) {
 			if (parts[2] === "add-round")

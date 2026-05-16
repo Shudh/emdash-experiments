@@ -7,7 +7,10 @@ export const prerender = false;
 async function loadAssets() {
 	try {
 		const response = await fetch(new URL("/api/rental/marketplace/assets", Astro.url), {
-			headers: { Accept: "application/json" },
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
 		});
 		const payload = await response.json() as { data?: { items?: Array<Record<string, unknown>> } };
 		return response.ok ? payload.data?.items ?? [] : [];

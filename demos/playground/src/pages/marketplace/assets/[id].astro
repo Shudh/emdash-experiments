@@ -12,7 +12,10 @@ async function loadDetails() {
 	if (!assetId) return null;
 	try {
 		const response = await fetch(new URL(`/api/rental/marketplace/assets/${assetId}`, Astro.url), {
-			headers: { Accept: "application/json" },
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
 		});
 		const payload = await response.json() as {
 			data?: {
@@ -29,7 +32,13 @@ async function loadDetails() {
 const details = await loadDetails();
 const asset = details?.asset;
 const ownerConditions = details?.ownerConditions;
-const user = Astro.locals.user;
+const viewer = asset?.viewer && typeof asset.viewer === "object"
+	? asset.viewer as Record<string, unknown>
+	: {};
+const relationship = String(viewer.relationship ?? "anonymous");
+const interestId = typeof viewer.interestId === "string" ? viewer.interestId : "";
+const interestState = String(viewer.interestState ?? "");
+const canExpressInterest = viewer.canExpressInterest === true;
 const price =
 	asset && typeof asset.public_price === "number"
 		? new Intl.NumberFormat("en-IN", {
@@ -52,19 +61,34 @@ const price =
 							<p class="detail-price">{price}</p>
 							<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
 							<div class="rental-badges">
+								<span class="rental-badge">status: {String(asset.status ?? "draft")}</span>
 								<span class="rental-badge">{String(asset.business_state ?? "listed")}</span>
 								<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
 							</div>
 						</article>
 						<div class="detail-side">
 							<ConditionBox conditions={ownerConditions} />
-							{user ? (
+							{relationship === "owner" ? (
+								<div class="rental-panel">
+									<h2>This is your asset</h2>
+									<p class="rental-muted">Owners can review the public listing without submitting interest.</p>
+									<a class="rental-button" href="/owner">Open owner dashboard</a>
+								</div>
+							) : relationship === "interested_applicant" ? (
+								<div class="rental-panel">
+									<h2>Interest submitted</h2>
+									<p class="rental-muted">
+										Your current interest state is {interestState || "submitted"}.
+									</p>
+									{interestId && <a class="rental-button" href={`/interests/${interestId}`}>Open negotiation thread</a>}
+								</div>
+							) : canExpressInterest ? (
 								<ActionForm
 									title="Express interest"
 									description="Accept the current owner conditions before submitting interest."
 									action={`/api/rental/marketplace/assets/${asset.id}/express-interest`}
 									submitLabel="Express interest"
-									successRedirect="/marketplace"
+									successRedirect="/interests/:id"
 								>
 									<input type="hidden" name="acceptedConditionsVersion" value={String(ownerConditions?.version ?? "")} data-number="true" />
 									<input type="hidden" name="acceptedConditionsHash" value={String(ownerConditions?.hash ?? "")} />

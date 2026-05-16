@@ -26,6 +26,12 @@ const conditionSummary = Object.entries(condition)
 	.slice(0, 2)
 	.map(([key, value]) => `${key}: ${String(value)}`)
 	.join(", ");
+const viewer = asset.viewer && typeof asset.viewer === "object"
+	? asset.viewer as Record<string, unknown>
+	: {};
+const relationship = String(viewer.relationship ?? "");
+const interestId = typeof viewer.interestId === "string" ? viewer.interestId : "";
+const interestState = String(viewer.interestState ?? "");
 ---
 
 <article class="rental-card asset-card">
@@ -47,7 +53,19 @@ const conditionSummary = Object.entries(condition)
 					))
 				}
 				{asset.business_state && <span class="rental-badge">{String(asset.business_state)}</span>}
+				{asset.status && <span class="rental-badge">status: {String(asset.status)}</span>}
+				{asset.visibility_state && <span class="rental-badge">visibility: {String(asset.visibility_state)}</span>}
 			</div>
+			{
+				relationship === "owner" ? (
+					<p class="asset-relationship">This is your asset.</p>
+				) : relationship === "interested_applicant" ? (
+					<p class="asset-relationship">
+						Interest submitted{interestState ? `: ${interestState}` : ""}.{" "}
+						{interestId && <span>Open the negotiation thread from your dashboard.</span>}
+					</p>
+				) : null
+			}
 			{conditionSummary && <p class="asset-condition">{conditionSummary}</p>}
 		</div>
 	</a>
@@ -101,5 +119,11 @@ const conditionSummary = Object.entries(condition)
 		margin: 0;
 		color: var(--r-muted);
 		font-size: 0.92rem;
+	}
+
+	.asset-relationship {
+		margin: 0;
+		color: var(--r-brand-strong);
+		font-weight: 800;
 	}
 </style>

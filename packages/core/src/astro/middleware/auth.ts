@@ -53,6 +53,7 @@ declare global {
 // Role level constants (matching @emdash-cms/auth)
 const ROLE_ADMIN = 50;
 const MCP_ENDPOINT_PATH = "/_emdash/api/mcp";
+const DEFAULT_ALM_SUPERADMIN_EMAIL = "dev@emdash.local";
 
 function isUnsafeMethod(method: string): boolean {
 	return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
@@ -83,6 +84,40 @@ function mcpUnauthorizedResponse(
 			},
 		},
 	);
+}
+
+function almAdminGuardEnabled(): boolean {
+	const env = typeof process !== "undefined" && process.env ? process.env : {};
+	return (
+		env.ALM_ADMIN_SAFETY === "1" ||
+		typeof env.ALM_SUPERADMIN_EMAILS === "string"
+	);
+}
+
+function almSuperadminEmails(): Set<string> {
+	const env = typeof process !== "undefined" && process.env ? process.env : {};
+	return new Set(
+		[DEFAULT_ALM_SUPERADMIN_EMAIL, ...(env.ALM_SUPERADMIN_EMAILS ?? "").split(",")]
+			.map((email) => email.trim().toLowerCase())
+			.filter(Boolean),
+	);
+}
+
+function canAccessAlmAdmin(user: User): boolean {
+	if (user.role >= ROLE_ADMIN) return true;
+	const email = user.email?.toLowerCase();
+	return !!email && almSuperadminEmails().has(email);
+}
+
+function almAdminRedirectIfNeeded(
+	context: Parameters<Parameters<typeof defineMiddleware>[0]>[0],
+	user: User,
+	isApiRoute: boolean,
+): Response | null {
+	if (isApiRoute || !almAdminGuardEnabled()) return null;
+	if (!context.url.pathname.startsWith("/_emdash/admin")) return null;
+	if (canAccessAlmAdmin(user)) return null;
+	return context.redirect("/");
 }
 
 /**
@@ -567,6 +602,9 @@ async function handleExternalAuth(
 		// Set user in locals
 		locals.user = user;
 
+		const almRedirect = almAdminRedirectIfNeeded(context, user, _isApiRoute);
+		if (almRedirect) return almRedirect;
+
 		// Persist to session so public pages can identify the user
 		// (external auth headers are only verified on /_emdash routes)
 		const { session } = context;
@@ -688,6 +726,8 @@ async function handlePasskeyAuth(
 
 		// Set user in locals for use by routes
 		locals.user = user;
+		const almRedirect = almAdminRedirectIfNeeded(context, user, isApiRoute);
+		if (almRedirect) return almRedirect;
 	} catch (error) {
 		console.error("Auth middleware error:", error);
 		// On error, redirect to login

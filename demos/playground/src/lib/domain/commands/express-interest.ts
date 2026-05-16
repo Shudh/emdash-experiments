@@ -21,6 +21,9 @@ export async function expressInterest(
 ) {
 	return store.transaction(async (tx) => {
 		const asset = await getAssetOrThrow(tx, assetId);
+		if (asString(asset.owner_user_id) === user.id) {
+			throw new DomainError("OWNER_CANNOT_EXPRESS_INTEREST", "Owners cannot express interest in their own asset", 403);
+		}
 		if (
 			asset.status !== CMS_STATUS.PUBLISHED ||
 			asset.visibility_state !== VISIBILITY_STATE.MARKETPLACE
@@ -40,6 +43,17 @@ export async function expressInterest(
 		]);
 		if (!rentableStates.has(fromState)) {
 			throw new DomainError("ASSET_NOT_AVAILABLE", "Asset is not accepting interests", 409);
+		}
+		const existingInterest = await tx.findOne(COLLECTIONS.ASSET_INTERESTS, {
+			asset_id: assetId,
+			interested_user_id: user.id,
+		});
+		if (existingInterest) {
+			throw new DomainError(
+				"INTEREST_ALREADY_SUBMITTED",
+				"Interest already submitted for this asset",
+				409,
+			);
 		}
 
 		const conditionsVersion = asNumber(asset.conditions_version, 1);

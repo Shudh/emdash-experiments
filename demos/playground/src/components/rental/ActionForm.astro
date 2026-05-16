@@ -21,6 +21,8 @@ const { title, description, action, submitLabel, successRedirect } = Astro.props
 </form>
 
 <script>
+	const REDIRECT_TOKEN_PATTERN = /:([A-Za-z0-9_]+)/g;
+
 	function setNested(target: Record<string, any>, path: string, value: unknown) {
 		const parts = path.split(".");
 		let cursor = target;
@@ -82,7 +84,7 @@ const { title, description, action, submitLabel, successRedirect } = Astro.props
 				if (!response.ok) throw new Error(payload?.error?.message ?? "Request failed");
 				const redirect = form.dataset.success;
 				if (redirect) {
-					location.href = redirect;
+					location.href = applyRedirectTemplate(redirect, payload);
 					return;
 				}
 				if (status) status.textContent = "Saved.";
@@ -94,6 +96,32 @@ const { title, description, action, submitLabel, successRedirect } = Astro.props
 			} finally {
 				if (submit) submit.disabled = false;
 			}
+		});
+	}
+
+	function findPayloadValue(source: unknown, key: string): string | undefined {
+		if (!source || typeof source !== "object") return undefined;
+		if (Array.isArray(source)) {
+			for (const item of source) {
+				const value = findPayloadValue(item, key);
+				if (value !== undefined) return value;
+			}
+			return undefined;
+		}
+		const record = source as Record<string, unknown>;
+		const direct = record[key];
+		if (typeof direct === "string" || typeof direct === "number") return String(direct);
+		for (const value of Object.values(record)) {
+			const nested = findPayloadValue(value, key);
+			if (nested !== undefined) return nested;
+		}
+		return undefined;
+	}
+
+	function applyRedirectTemplate(template: string, payload: unknown) {
+		return template.replace(REDIRECT_TOKEN_PATTERN, (_match, key: string) => {
+			const value = findPayloadValue(payload, key);
+			return value ? encodeURIComponent(value) : "";
 		});
 	}
 </script>

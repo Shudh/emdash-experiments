@@ -10,6 +10,7 @@ import { MemoryDomainStore } from "../../src/lib/domain/db.js";
 import type { DomainStore, UserContext } from "../../src/lib/domain/types.js";
 import { POST as expressInterestPost } from "../../src/pages/api/marketplace/assets/[id]/express-interest.js";
 import { POST as addRoundPost } from "../../src/pages/api/negotiations/[interestId]/add-round.js";
+import { ALL as rentalBridgeAll } from "../../src/pages/api/rental/[...path].js";
 import { POST as updateConfigPost } from "../../src/pages/api/owner/assets/[id]/config.js";
 import { POST as publishPost } from "../../src/pages/api/owner/assets/[id]/publish-to-marketplace.js";
 import { POST as addAssetPost } from "../../src/pages/api/owner/assets/add.js";
@@ -18,13 +19,23 @@ const owner: UserContext = { id: "route_owner", email: "owner@example.com", role
 const renter: UserContext = { id: "route_renter", email: "renter@example.com", role: "author" };
 
 type RouteContext = Parameters<typeof addAssetPost>[0];
+type RentalBridgeContext = Parameters<typeof rentalBridgeAll>[0];
 
-function jsonRequest(body: unknown): Request {
-	return new Request("http://localhost/api", {
+function jsonRequest(body: unknown, url = "http://localhost/api"): Request {
+	return new Request(url, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(body),
 	});
+}
+
+function routeRequest(method: string, path: string, body?: unknown): Request {
+	const init: RequestInit = {
+		method,
+		headers: { Accept: "application/json", "Content-Type": "application/json" },
+	};
+	if (method !== "GET" && body !== undefined) init.body = JSON.stringify(body);
+	return new Request(`http://localhost/api/rental/${path}`, init);
 }
 
 function context(
@@ -38,6 +49,21 @@ function context(
 		locals: { user, emdash: { domainStore: store } },
 		params,
 	} as unknown as RouteContext;
+}
+
+function bridgeContext(
+	store: DomainStore,
+	user: UserContext | null,
+	method: string,
+	path: string,
+	body?: unknown,
+): RentalBridgeContext {
+	return {
+		request: routeRequest(method, path, body),
+		url: new URL(`http://localhost/api/rental/${path}`),
+		locals: { user, emdash: { domainStore: store } },
+		params: { path },
+	} as unknown as RentalBridgeContext;
 }
 
 async function bodyOf(response: Response) {
@@ -108,6 +134,21 @@ describe("rental API route auth and validation", () => {
 		const store = new MemoryDomainStore();
 		const asset = await createPublishedAsset(store);
 
+		const ownerApply = await expressInterestPost(
+			context(
+				store,
+				owner,
+				{
+					name: "Owner",
+					acceptedConditionsVersion: Number(asset.conditions_version),
+					acceptedConditionsHash: String(asset.conditions_hash),
+				},
+				{ id: asset.id },
+			),
+		);
+		expect(ownerApply.status).toBe(403);
+		expect((await bodyOf(ownerApply)).error?.code).toBe("OWNER_CANNOT_EXPRESS_INTEREST");
+
 		const missing = await expressInterestPost(
 			context(store, renter, { name: "Renter" }, { id: asset.id }),
 		);
@@ -141,6 +182,21 @@ describe("rental API route auth and validation", () => {
 		expect((await bodyOf(accepted)).data.interest.accepted_conditions_snapshot).toEqual(
 			asset.owner_conditions_spec,
 		);
+
+		const duplicate = await expressInterestPost(
+			context(
+				store,
+				renter,
+				{
+					name: "Renter",
+					acceptedConditionsVersion: Number(asset.conditions_version),
+					acceptedConditionsHash: String(asset.conditions_hash),
+				},
+				{ id: asset.id },
+			),
+		);
+		expect(duplicate.status).toBe(409);
+		expect((await bodyOf(duplicate)).error?.code).toBe("INTEREST_ALREADY_SUBMITTED");
 	});
 
 	test("negotiation actor_role is derived from relationship, not request JSON", async () => {
@@ -179,5 +235,47 @@ describe("rental API route auth and validation", () => {
 		expect(body.data.round.actor_user_id).toBe(owner.id);
 		expect(body.data.round.actor_role).toBe("owner");
 		expect(body.data.round.status).toBe(CMS_STATUS.PUBLISHED);
+	});
+
+	test("permanent /api/rental bridge exposes marketplace relationship metadata", async () => {
+		const store = new MemoryDomainStore();
+		const addResponse = await rentalBridgeAll(
+			bridgeContext(store, owner, "POST", "owner/assets/add", {
+				assetKind: "flat",
+				title: "Permanent Bridge Flat",
+				ownerConditionsSpec: { depositPolicy: "Two months deposit." },
+			}),
+		);
+		expect(addResponse.status).toBe(201);
+		const assetId = (await bodyOf(addResponse)).data.asset.id as string;
+
+		await rentalBridgeAll(
+			bridgeContext(store, owner, "POST", `owner/assets/${assetId}/config`, {
+				configSpec: { bedrooms: 2 },
+				conditionSpec: { walls: "fresh" },
+				items: [{ itemKind: "fixture", itemLabel: "Door", ownerDeclaredState: "good" }],
+			}),
+		);
+		const publishResponse = await rentalBridgeAll(
+			bridgeContext(store, owner, "POST", `owner/assets/${assetId}/publish-to-marketplace`, {}),
+		);
+		expect(publishResponse.status).toBe(200);
+
+		const ownerDetail = await rentalBridgeAll(
+			bridgeContext(store, owner, "GET", `marketplace/assets/${assetId}`),
+		);
+		expect(ownerDetail.status).toBe(200);
+		expect((await bodyOf(ownerDetail)).data.asset.viewer.relationship).toBe("owner");
+
+		const renterDetail = await rentalBridgeAll(
+			bridgeContext(store, renter, "GET", `marketplace/assets/${assetId}`),
+		);
+		const renterBody = await bodyOf(renterDetail);
+		expect(renterBody.data.asset.viewer.canExpressInterest).toBe(true);
+
+		const resetResponse = await rentalBridgeAll(
+			bridgeContext(store, owner, "POST", "reset", {}),
+		);
+		expect(resetResponse.status).toBe(403);
 	});
 });
