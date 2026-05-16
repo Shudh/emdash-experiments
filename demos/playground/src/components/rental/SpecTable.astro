@@ -7,6 +7,25 @@ interface Props {
 
 const { title, spec, empty = "No details yet." } = Astro.props;
 const rows = spec && typeof spec === "object" ? Object.entries(spec) : [];
+const CAMEL_BOUNDARY_PATTERN = /([a-z])([A-Z])/g;
+
+function labelFor(key: string) {
+	return key.replaceAll("_", " ").replaceAll(CAMEL_BOUNDARY_PATTERN, "$1 $2");
+}
+
+function renderValue(value: unknown): string {
+	if (Array.isArray(value)) {
+		return value.length ? value.map((item) => renderValue(item)).join(", ") : "None";
+	}
+	if (value && typeof value === "object") {
+		return Object.entries(value as Record<string, unknown>)
+			.map(([key, entry]) => `${labelFor(key)}: ${renderValue(entry)}`)
+			.join("; ");
+	}
+	if (value === null || value === undefined || value === "") return "Not set";
+	if (typeof value === "boolean") return value ? "Yes" : "No";
+	return String(value);
+}
 ---
 
 <section class="spec-table">
@@ -16,8 +35,8 @@ const rows = spec && typeof spec === "object" ? Object.entries(spec) : [];
 			<dl>
 				{rows.map(([key, value]) => (
 					<div>
-						<dt>{key.replaceAll("_", " ")}</dt>
-						<dd>{typeof value === "object" ? JSON.stringify(value) : String(value)}</dd>
+						<dt>{labelFor(key)}</dt>
+						<dd>{renderValue(value)}</dd>
 					</div>
 				))}
 			</dl>
@@ -59,5 +78,12 @@ const rows = spec && typeof spec === "object" ? Object.entries(spec) : [];
 
 	.spec-table dd {
 		margin: 0;
+		overflow-wrap: anywhere;
+	}
+
+	@media (max-width: 620px) {
+		.spec-table div {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

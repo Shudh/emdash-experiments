@@ -11,8 +11,8 @@ export const prerender = false;
 				<p class="rental-kicker">Owner asset</p>
 				<h1>Create a marketplace-ready asset</h1>
 				<p class="rental-muted">
-					The form creates the asset, stores specs and owner conditions, adds one config item,
-					and can publish to marketplace.
+					Create the property, structured owner conditions, and the inventory that will later
+					drive move-in, move-out, and deposit checks.
 				</p>
 			</div>
 			<form class="rental-panel create-form" id="asset-form">
@@ -58,25 +58,41 @@ export const prerender = false;
 						<textarea id="depositPolicy" name="depositPolicy" required>Two months deposit covers chargeable damage.</textarea>
 					</div>
 					<div class="rental-field">
-						<label for="documentsRequired">Documents required</label>
-						<textarea id="documentsRequired" name="documentsRequired">company_id
-salary_slip</textarea>
-					</div>
-					<div class="rental-field">
-						<label for="itemLabel">Granular config item</label>
-						<input id="itemLabel" name="itemLabel" value="Geyser" />
-					</div>
-					<div class="rental-field">
-						<label for="ownerDeclaredState">Item state</label>
-						<input id="ownerDeclaredState" name="ownerDeclaredState" value="working" />
-					</div>
-					<div class="rental-field">
 						<label>
 							<input name="publish" type="checkbox" checked />
 							Publish to marketplace
 						</label>
 					</div>
 				</div>
+				<section class="form-section" aria-labelledby="documents-heading">
+					<div class="section-head">
+						<div>
+							<p class="rental-kicker">Documents</p>
+							<h2 id="documents-heading">Document requirements</h2>
+						</div>
+						<button class="rental-button secondary" type="button" id="add-document">Add document</button>
+					</div>
+					<div class="document-editor" id="document-editor"></div>
+				</section>
+				<section class="form-section" aria-labelledby="inventory-heading">
+					<div class="section-head">
+						<div>
+							<p class="rental-kicker">Inventory</p>
+							<h2 id="inventory-heading">Asset config items</h2>
+						</div>
+						<div class="section-actions">
+							<button class="rental-button secondary" type="button" id="add-starter-inventory">
+								Add starter flat inventory
+							</button>
+							<button class="rental-button secondary" type="button" id="add-inventory-row">Add row</button>
+						</div>
+					</div>
+					<div class="inventory-editor" id="inventory-editor"></div>
+					<p class="rental-muted">
+						Media uploads are not duplicated here. Use existing EmDash media references or notes as
+						placeholders until signed document/photo upload is wired to the media library.
+					</p>
+				</section>
 				<button class="rental-button" type="submit">Create asset</button>
 				<p class="rental-status" id="asset-status"></p>
 			</form>
@@ -87,12 +103,144 @@ salary_slip</textarea>
 <script>
 	const form = document.querySelector<HTMLFormElement>("#asset-form");
 	const status = document.querySelector<HTMLElement>("#asset-status");
+	const inventoryEditor = document.querySelector<HTMLElement>("#inventory-editor");
+	const documentEditor = document.querySelector<HTMLElement>("#document-editor");
+	const addInventoryRowButton = document.querySelector<HTMLButtonElement>("#add-inventory-row");
+	const addStarterInventoryButton = document.querySelector<HTMLButtonElement>("#add-starter-inventory");
+	const addDocumentButton = document.querySelector<HTMLButtonElement>("#add-document");
+	const DOCUMENT_KEY_PATTERN = /[^a-z0-9]+/g;
+	const EDGE_UNDERSCORE_PATTERN = /^_|_$/g;
 
-	function lines(value: FormDataEntryValue | null) {
-		return String(value ?? "")
-			.split("\n")
-			.map((line) => line.trim())
-			.filter(Boolean);
+	type InventoryItem = {
+		itemLabel: string;
+		itemKind: string;
+		itemGroup: string;
+		quantity: string;
+		ownerDeclaredState: string;
+		conditionDetails: string;
+		evidenceNote: string;
+		notes: string;
+	};
+
+	type DocumentRequirement = {
+		key: string;
+		label: string;
+		required: boolean;
+		attachmentRequired: boolean;
+		description: string;
+		acceptedFileTypes: string;
+	};
+
+	const starterInventory: InventoryItem[] = [
+		{ itemLabel: "Geyser", itemKind: "appliance", itemGroup: "bathroom", quantity: "1", ownerDeclaredState: "working", conditionDetails: "Heats water, no leakage.", evidenceNote: "", notes: "" },
+		{ itemLabel: "Fridge", itemKind: "appliance", itemGroup: "kitchen", quantity: "1", ownerDeclaredState: "working", conditionDetails: "Silent, cooling is ok.", evidenceNote: "", notes: "" },
+		{ itemLabel: "Washing machine", itemKind: "appliance", itemGroup: "utility", quantity: "1", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "RO purifier", itemKind: "appliance", itemGroup: "kitchen", quantity: "1", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Fans", itemKind: "fixture", itemGroup: "all rooms", quantity: "4", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Lights", itemKind: "fixture", itemGroup: "all rooms", quantity: "8", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Curtains", itemKind: "furnishing", itemGroup: "bedrooms", quantity: "4", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Wardrobe", itemKind: "furniture", itemGroup: "bedroom", quantity: "2", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Sofa", itemKind: "furniture", itemGroup: "living room", quantity: "1", ownerDeclaredState: "worn", conditionDetails: "Minor fabric marks.", evidenceNote: "", notes: "" },
+		{ itemLabel: "Dining table", itemKind: "furniture", itemGroup: "dining", quantity: "1", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Bed", itemKind: "furniture", itemGroup: "bedroom", quantity: "2", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Mattress", itemKind: "furnishing", itemGroup: "bedroom", quantity: "2", ownerDeclaredState: "good", conditionDetails: "", evidenceNote: "", notes: "" },
+		{ itemLabel: "Keys", itemKind: "access", itemGroup: "main door", quantity: "2", ownerDeclaredState: "handed over", conditionDetails: "Two physical keys.", evidenceNote: "", notes: "" },
+		{ itemLabel: "Remote controls", itemKind: "accessory", itemGroup: "living room", quantity: "2", ownerDeclaredState: "working", conditionDetails: "", evidenceNote: "", notes: "" },
+	];
+
+	const defaultDocuments: DocumentRequirement[] = [
+		{ key: "company_id", label: "Company ID", required: true, attachmentRequired: true, description: "Upload company-issued ID card.", acceptedFileTypes: "image/pdf placeholder" },
+		{ key: "salary_slip", label: "Latest salary slip", required: true, attachmentRequired: true, description: "Latest salary slip or employer certificate.", acceptedFileTypes: "image/pdf placeholder" },
+	];
+
+	function input(name: string, label: string, value = "", type = "text") {
+		return `<label>${label}<input name="${name}" type="${type}" value="${value.replaceAll('"', "&quot;")}" /></label>`;
+	}
+
+	function textarea(name: string, label: string, value = "") {
+		return `<label>${label}<textarea name="${name}">${value}</textarea></label>`;
+	}
+
+	function addInventoryRow(item: Partial<InventoryItem> = {}) {
+		if (!inventoryEditor) return;
+		const row = document.createElement("article");
+		row.className = "inventory-row";
+		row.innerHTML = `
+			${input("itemLabel", "Item label", item.itemLabel ?? "")}
+			${input("itemKind", "Item kind", item.itemKind ?? "fixture")}
+			${input("itemGroup", "Room / group", item.itemGroup ?? "")}
+			${input("quantity", "Quantity", item.quantity ?? "1", "number")}
+			${input("ownerDeclaredState", "Owner declared state", item.ownerDeclaredState ?? "working")}
+			${textarea("conditionDetails", "Condition details", item.conditionDetails ?? "")}
+			${input("evidenceNote", "Evidence/media reference placeholder", item.evidenceNote ?? "")}
+			${textarea("notes", "Notes", item.notes ?? "")}
+			<button class="rental-button secondary remove-row" type="button">Delete row</button>
+		`;
+		row.querySelector(".remove-row")?.addEventListener("click", () => row.remove());
+		inventoryEditor.append(row);
+	}
+
+	function addDocumentRow(documentRequirement: Partial<DocumentRequirement> = {}) {
+		if (!documentEditor) return;
+		const row = document.createElement("article");
+		row.className = "document-row-editor";
+		row.innerHTML = `
+			${input("key", "Document key", documentRequirement.key ?? "")}
+			${input("label", "Document name", documentRequirement.label ?? "")}
+			<label>Required
+				<select name="required">
+					<option value="true" ${documentRequirement.required === false ? "" : "selected"}>Yes</option>
+					<option value="false" ${documentRequirement.required === false ? "selected" : ""}>No</option>
+				</select>
+			</label>
+			<label>Attachment required
+				<select name="attachmentRequired">
+					<option value="true" ${documentRequirement.attachmentRequired === false ? "" : "selected"}>Yes</option>
+					<option value="false" ${documentRequirement.attachmentRequired === false ? "selected" : ""}>No</option>
+				</select>
+			</label>
+			${textarea("description", "Description", documentRequirement.description ?? "")}
+			${input("acceptedFileTypes", "Accepted file types placeholder", documentRequirement.acceptedFileTypes ?? "image/pdf placeholder")}
+			<button class="rental-button secondary remove-row" type="button">Delete row</button>
+		`;
+		row.querySelector(".remove-row")?.addEventListener("click", () => row.remove());
+		documentEditor.append(row);
+	}
+
+	function collectInventoryRows() {
+		return Array.from(document.querySelectorAll<HTMLElement>(".inventory-row"), (row) => {
+			const scoped = (name: string) => (row.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)?.value ?? "").trim();
+			return {
+				itemKind: scoped("itemKind") || "fixture",
+				itemGroup: scoped("itemGroup") || undefined,
+				itemLabel: scoped("itemLabel"),
+				ownerDeclaredState: scoped("ownerDeclaredState") || "working",
+				mediaRefs: scoped("evidenceNote") ? [{ kind: "emdash_media_reference_or_note", value: scoped("evidenceNote") }] : [],
+				itemSpec: {
+					quantity: Number(scoped("quantity") || "1"),
+					room: scoped("itemGroup") || undefined,
+					conditionDetails: scoped("conditionDetails") || undefined,
+					evidenceNote: scoped("evidenceNote") || undefined,
+					notes: scoped("notes") || undefined,
+				},
+			};
+		}).filter((item) => item.itemLabel);
+	}
+
+	function collectDocumentRows() {
+		return Array.from(document.querySelectorAll<HTMLElement>(".document-row-editor"), (row) => {
+			const scoped = (name: string) => (row.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`[name="${name}"]`)?.value ?? "").trim();
+			const label = scoped("label");
+			const key = scoped("key") || label.toLowerCase().replaceAll(DOCUMENT_KEY_PATTERN, "_").replaceAll(EDGE_UNDERSCORE_PATTERN, "");
+			return {
+				key,
+				label: label || key,
+				required: scoped("required") !== "false",
+				attachmentRequired: scoped("attachmentRequired") !== "false",
+				description: scoped("description"),
+				acceptedFileTypes: scoped("acceptedFileTypes"),
+			};
+		}).filter((documentRequirement) => documentRequirement.key);
 	}
 
 	async function postJson(url: string, body: Record<string, unknown>) {
@@ -125,7 +273,7 @@ salary_slip</textarea>
 				currency: "INR",
 				ownerConditionsSpec: {
 					depositPolicy: data.get("depositPolicy"),
-					documentsRequired: lines(data.get("documentsRequired")),
+					documentsRequired: collectDocumentRows(),
 				},
 			});
 			const assetId = addData.asset.id;
@@ -141,15 +289,9 @@ salary_slip</textarea>
 				},
 				ownerConditionsSpec: {
 					depositPolicy: data.get("depositPolicy"),
-					documentsRequired: lines(data.get("documentsRequired")),
+					documentsRequired: collectDocumentRows(),
 				},
-				items: [
-					{
-						itemKind: "fixture",
-						itemLabel: data.get("itemLabel"),
-						ownerDeclaredState: data.get("ownerDeclaredState"),
-					},
-				],
+				items: collectInventoryRows(),
 			});
 			if (data.get("publish")) {
 				await postJson(`/api/rental/owner/assets/${assetId}/publish-to-marketplace`, {});
@@ -162,6 +304,23 @@ salary_slip</textarea>
 			}
 		}
 	});
+
+	addInventoryRow({
+		itemLabel: "Geyser",
+		itemKind: "appliance",
+		itemGroup: "bathroom",
+		quantity: "1",
+		ownerDeclaredState: "working",
+		conditionDetails: "Heats water, no leakage.",
+	});
+	defaultDocuments.forEach(addDocumentRow);
+
+	addInventoryRowButton?.addEventListener("click", () => addInventoryRow());
+	addStarterInventoryButton?.addEventListener("click", () => {
+		inventoryEditor?.replaceChildren();
+		starterInventory.forEach(addInventoryRow);
+	});
+	addDocumentButton?.addEventListener("click", () => addDocumentRow());
 </script>
 
 <style>
@@ -181,8 +340,90 @@ salary_slip</textarea>
 		gap: 16px;
 	}
 
+	.form-section {
+		display: grid;
+		gap: 14px;
+		border-top: 1px solid var(--r-border);
+		padding-top: 18px;
+	}
+
+	.section-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.section-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+
+	.inventory-editor,
+	.document-editor {
+		display: grid;
+		gap: 12px;
+	}
+
+	.inventory-row,
+	.document-row-editor {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(130px, 1fr));
+		gap: 10px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 12px;
+		background: var(--r-bg);
+	}
+
+	.inventory-row label,
+	.document-row-editor label {
+		display: grid;
+		gap: 6px;
+		color: var(--r-muted);
+		font-size: 0.84rem;
+		font-weight: 750;
+	}
+
+	.inventory-row input,
+	.inventory-row textarea,
+	.document-row-editor input,
+	.document-row-editor textarea,
+	.document-row-editor select {
+		width: 100%;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 9px 10px;
+		background: var(--r-panel);
+		color: var(--r-text);
+	}
+
+	.inventory-row textarea,
+	.document-row-editor textarea {
+		min-height: 80px;
+		resize: vertical;
+	}
+
+	.remove-row {
+		align-self: end;
+	}
+
 	@media (max-width: 900px) {
 		.create-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.inventory-row,
+		.document-row-editor {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	@media (max-width: 560px) {
+		.inventory-row,
+		.document-row-editor {
 			grid-template-columns: 1fr;
 		}
 	}

@@ -8,7 +8,7 @@ This document records what was added for the ALM/rental workflow, what is now te
 
 ## 1. Current status
 
-The ALM/rental backend is now at a real working checkpoint.
+The ALM/rental backend is now at a real working checkpoint, and the thin Astro UI is a controlled-beta workflow over that backend. The UI remains intentionally server-first and uses the existing domain commands, queries, and permanent `/api/rental` bridge.
 
 The following local checks passed on the local Ubuntu machine in:
 
@@ -81,6 +81,10 @@ The workflow now follows these product rules:
 20. Damage/deposit/repair disputes use negotiation rounds with `round_phase = "return"`.
 21. Settlement closes handover and moves the asset to maintenance/private.
 22. Agreement snapshot remains unchanged after move-out settlement.
+23. Asset inventory is stored in `asset_config_items`, not a separate UI table.
+24. Move-in and move-out item rows come from `handover_item_checks`.
+25. Request cards, document requests, payment confirmations, concessions, and return disputes are represented as structured `negotiation_rounds.terms_spec`.
+26. Settlement persists agreed repair cost back to handover checks so deduction/refund totals are auditable.
 
 ---
 
@@ -154,6 +158,7 @@ Current local meaning:
 - The e2e fixture `/api/rental` route is intentionally resettable and uses `MemoryDomainStore` for rental domain state only.
 - The permanent playground `/api/rental` route at `demos/playground/src/pages/api/rental/[...path].ts` uses `_domain-route-utils.ts`: it prefers `locals.emdash.domainStore`, otherwise uses `KyselyDomainStore` over the EmDash DB.
 - The permanent playground reset route is guarded and does not reset persistent rental data.
+- The permanent playground API uses the real EmDash DB through `KyselyDomainStore` when no explicit `domainStore` is present. It does not use the fixture-only `MemoryDomainStore`.
 
 Local users:
 
@@ -230,6 +235,27 @@ maintenance/private state
 relist cycle foundation
 audit trail
 ```
+
+### Inventory, cards, handover, and media
+
+- `asset_config_items` is the source of truth for rental inventory/config line items.
+- `asset_config_items.item_spec` stores quantity, room/group details, condition details, notes, evidence placeholders, and future media metadata.
+- `asset_config_items.media_refs` is the existing place to store EmDash media references for item evidence.
+- `owner_conditions_spec.documentsRequired` now supports structured rows with label, key, required flag, attachment-required flag, and description. Older string-array document lists still render as chips/rows.
+- `negotiation_rounds.terms_spec.card` stores owner request/quiz/payment cards.
+- `negotiation_rounds.terms_spec.cardAnswer` stores tenant answers.
+- `handover_item_checks.check_spec.sourceItemSpec` preserves the source inventory details copied from `asset_config_items`.
+- `agreement_versions.printable_snapshot` remains immutable and is the printable/exportable agreement source.
+
+EmDash media was inspected. Existing upload support lives at:
+
+```text
+POST /_emdash/api/media
+POST /_emdash/api/media/upload-url
+GET  /_emdash/api/media/file/:key
+```
+
+The ALM UI does not create a second upload subsystem. Signed agreement PDFs, item photos, document uploads, booking screenshots, and damage evidence are currently placeholders/media references and should be wired to EmDash media in a follow-up.
 
 ---
 
@@ -564,12 +590,8 @@ Correct URLs:
 /api/setup/dev-logout-local
 ```
 
-Incorrect URLs that caused 404 traps:
-
-```text
-/_emdash/api/setup/dev-login-as
-/_emdash/api/setup/dev-logout-local
-```
+Incorrect URLs that caused 404 traps are the admin-prefixed setup helper variants under
+the EmDash-owned route space. Do not use an `/_emdash` prefix for these helper URLs.
 
 Do not put custom fixture helper routes under:
 
@@ -685,12 +707,7 @@ The script must remain sync-first:
 
 ### 14.1 Do not put custom routes under `/_emdash`
 
-Bad:
-
-```text
-e2e/fixture/src/pages/_emdash/api/setup/dev-login-as.ts
-e2e/fixture/src/pages/_emdash/api/setup/dev-logout-local.ts
-```
+Bad: placing fixture setup helpers below the EmDash-owned admin route tree.
 
 Good:
 

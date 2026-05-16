@@ -37,6 +37,7 @@ async function loadDashboard() {
 }
 
 const dashboard = await loadDashboard();
+const pendingInboxCount = dashboard.inbox.filter((interest) => String(interest.interest_state ?? "") === "submitted").length;
 ---
 
 <RentalBase title="Owner dashboard" description="Owner rental dashboard">
@@ -59,7 +60,10 @@ const dashboard = await loadDashboard();
 				) : (
 					<div class="dashboard-grid">
 						<section class="rental-panel inbox-panel">
-							<h2>Submitted interest inbox</h2>
+							<div class="inbox-head">
+								<h2>Submitted interest inbox</h2>
+								<span class="rental-badge">{pendingInboxCount} pending interests</span>
+							</div>
 							<div class="inbox-list">
 								{dashboard.inbox.length ? (
 									dashboard.inbox.map((interest) => (
@@ -69,7 +73,11 @@ const dashboard = await loadDashboard();
 											<span>Official email: {String(interest.official_email ?? "pending")}</span>
 											<span>Employer: {String(interest.employer_name ?? "pending")}</span>
 											<span>Offer: {String(interest.offered_price ?? "pending")}</span>
-											<span class="rental-badge">{String(interest.interest_state ?? "submitted")}</span>
+											<div class="rental-badges">
+												<span class="rental-badge">{String(interest.interest_state ?? "submitted")}</span>
+												<span class="rental-badge">{String(interest.pending_request_count ?? 0)} pending requests</span>
+											</div>
+											<span class="rental-button secondary">View details</span>
 										</a>
 									))
 								) : (
@@ -83,7 +91,7 @@ const dashboard = await loadDashboard();
 								{dashboard.assets.length ? (
 									dashboard.assets.map((asset) => (
 										<div class="asset-management">
-											<AssetCard asset={asset} href={`/marketplace/assets/${asset.id}`} />
+											<AssetCard asset={{ ...asset, viewer: { relationship: "owner" } }} href={`/marketplace/assets/${asset.id}`} />
 											<div class="rental-panel asset-state-actions">
 												<div class="rental-badges">
 													<span class="rental-badge">status: {String(asset.status ?? "draft")}</span>
@@ -113,6 +121,11 @@ const dashboard = await loadDashboard();
 														>
 															<input type="hidden" name="handoverKind" value="move_out" />
 														</ActionForm>
+													) : asset.business_state === "maintenance" ? (
+														<div class="state-action-copy">
+															<p class="rental-muted">Maintenance/private. Relist and return-to-draft are backend-supported follow-up actions for this UI.</p>
+															<span class="rental-badge">Delete not implemented</span>
+														</div>
 													) : (
 														<p class="rental-muted">State actions appear when the backend allows a transition. Delete is not implemented.</p>
 													)
@@ -158,6 +171,14 @@ const dashboard = await loadDashboard();
 		gap: 10px;
 	}
 
+	.inbox-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
 	.inbox-item {
 		display: grid;
 		gap: 5px;
@@ -176,7 +197,8 @@ const dashboard = await loadDashboard();
 	}
 
 	.asset-management,
-	.asset-state-actions {
+	.asset-state-actions,
+	.state-action-copy {
 		display: grid;
 		gap: 12px;
 	}

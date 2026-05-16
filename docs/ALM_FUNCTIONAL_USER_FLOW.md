@@ -17,15 +17,17 @@ An owner can own many assets. A tenant can rent many assets and can submit inter
 ## Owner Flow
 
 1. Login as an owner.
-2. Create an asset with kind, title, location, public price, config spec, physical condition spec, owner rental conditions, and granular config items.
-3. Publish the asset to the marketplace.
-4. Confirm the asset shows `status = published`, `business_state = listed`, and `visibility_state = marketplace`.
-5. Use the owner dashboard to see owned asset state and the submitted interest inbox.
-6. Open an interest thread, ask questions, request documents, counter, reject, or accept final terms.
-7. Accepting final terms creates a frozen agreement, marks the asset booked/restricted, and removes it from the public marketplace.
-8. Start move-in handover, review item checks, and wait for renter acceptance.
-9. For return, start move-out handover, claim damage, negotiate dispute and settlement, and close the handover.
-10. Relist, draft, or maintenance transitions only appear when the backend supports them. Delete is not implemented.
+2. Create an asset with kind, title, location, public price, config spec, physical condition spec, owner rental conditions, structured document requirements, and inventory rows.
+3. Use the flat starter inventory or add rows manually for appliances, furniture, keys, remotes, and fixtures. These rows are stored in `asset_config_items` with details in `item_spec`.
+4. Publish the asset to the marketplace.
+5. Confirm the asset shows `status = published`, `business_state = listed`, and `visibility_state = marketplace`.
+6. Use the owner dashboard to see owned asset state, pending inbox count, renter details, offered rent, and View details actions.
+7. Open an interest thread and create request cards for questions, documents, MCQs, booking confirmation, or payment/reference proof.
+8. Counter, reject, or accept final terms through append-only negotiation rounds.
+9. Accepting final terms creates a frozen agreement, marks the asset booked/restricted, and removes it from the public marketplace.
+10. Start move-in handover. The checklist is copied from `asset_config_items` into `handover_item_checks`.
+11. For return, start move-out handover, claim damage item by item, negotiate dispute and settlement, and close the handover.
+12. Relist, draft, or maintenance transitions only appear when the backend supports them. Delete is not implemented.
 
 ## Tenant Flow
 
@@ -36,9 +38,35 @@ An owner can own many assets. A tenant can rent many assets and can submit inter
 5. Submit interest with renter details, employer, official email, offer, and message.
 6. Land on the negotiation thread confirmation instead of the empty application form.
 7. Reopening the asset shows the submitted interest state and a link to the thread, not a second application form.
-8. Read owner questions or document requests and answer, offer, or counter.
-9. After final terms are accepted, see the accepted agreement state on the thread.
-10. Accept move-in handover, dispute move-out damage if needed, and accept settlement when agreed.
+8. Wait for owner review until request cards exist. The tenant should not see answer forms before there is a pending request.
+9. Read owner request cards and answer with text, selected options, or attachment/reference notes.
+10. Make rent concession offers or counters through normal negotiation rounds.
+11. After final terms are accepted, see the accepted agreement state, frozen terms, and next booking/payment or move-in step.
+12. Accept move-in handover, dispute move-out damage if needed, and accept settlement when agreed.
+
+## Inventory, Documents, and Cards
+
+The UI treats property inventory as first-class rental configuration. Inventory rows use the existing `asset_config_items` backend shape:
+
+- `item_kind`
+- `item_group`
+- `item_label`
+- `owner_declared_state`
+- `media_refs`
+- `item_spec.quantity`
+- `item_spec.conditionDetails`
+- `item_spec.notes`
+- `item_spec.evidenceNote`
+
+Owner document requirements live in `owner_conditions_spec.documentsRequired`. Older array-style document requirements still render as chips or rows and are not shown as raw JSON.
+
+Owner/tenant back-and-forth uses `negotiation_rounds`:
+
+- request card: `terms_spec.card`
+- tenant answer: `terms_spec.cardAnswer`
+- rent offer/counter: normal round fields such as `price`, `deposit_amount`, `minimum_months`, and `message`
+
+Agreement print/export must use `agreement_versions.printable_snapshot`. The UI exposes printable agreement data conceptually but signed PDF upload/share remains a follow-up using EmDash media.
 
 ## Admin Safety
 

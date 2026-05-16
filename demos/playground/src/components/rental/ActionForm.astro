@@ -10,7 +10,7 @@ interface Props {
 const { title, description, action, submitLabel, successRedirect } = Astro.props;
 ---
 
-<form class="rental-panel rental-action-form" data-rental-form action={action} data-success={successRedirect}>
+<form class="rental-panel rental-action-form" data-rental-form action={action} data-success={successRedirect} method="post">
 	<h2>{title}</h2>
 	{description && <p class="rental-muted">{description}</p>}
 	<div class="rental-form-grid">
@@ -98,6 +98,7 @@ const { title, description, action, submitLabel, successRedirect } = Astro.props
 			}
 		});
 	}
+	(window as unknown as { __rentalFormsReady?: boolean }).__rentalFormsReady = true;
 
 	function findPayloadValue(source: unknown, key: string): string | undefined {
 		if (!source || typeof source !== "object") return undefined;

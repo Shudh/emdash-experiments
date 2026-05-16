@@ -32,53 +32,67 @@ const viewer = asset.viewer && typeof asset.viewer === "object"
 const relationship = String(viewer.relationship ?? "");
 const interestId = typeof viewer.interestId === "string" ? viewer.interestId : "";
 const interestState = String(viewer.interestState ?? "");
+const canExpressInterest = viewer.canExpressInterest === true;
+const isUnavailable =
+	asset.business_state && !["listed", "interest_received", "negotiating"].includes(String(asset.business_state));
 ---
 
 <article class="rental-card asset-card">
-	<a href={href}>
-		<div class="asset-visual" aria-hidden="true">
-			<span>{kind.slice(0, 2).toUpperCase()}</span>
+	<div class="asset-visual" aria-hidden="true">
+		<span>{kind.slice(0, 2).toUpperCase()}</span>
+	</div>
+	<div class="asset-body">
+		<div>
+			<p class="rental-kicker">{kind}</p>
+			<h2><a href={href}>{title}</a></h2>
+			<p class="rental-muted">{location}</p>
 		</div>
-		<div class="asset-body">
-			<div>
-				<p class="rental-kicker">{kind}</p>
-				<h2>{title}</h2>
-				<p class="rental-muted">{location}</p>
-			</div>
-			<div class="asset-price">{price}</div>
-			<div class="rental-badges">
-				{
-					Object.entries(config).slice(0, 3).map(([key, value]) => (
-						<span class="rental-badge">{key}: {String(value)}</span>
-					))
-				}
-				{asset.business_state && <span class="rental-badge">{String(asset.business_state)}</span>}
-				{asset.status && <span class="rental-badge">status: {String(asset.status)}</span>}
-				{asset.visibility_state && <span class="rental-badge">visibility: {String(asset.visibility_state)}</span>}
-			</div>
+		<div class="asset-price">{price}</div>
+		<div class="rental-badges">
+			{
+				Object.entries(config).slice(0, 3).map(([key, value]) => (
+					<span class="rental-badge">{key}: {String(value)}</span>
+				))
+			}
+			{asset.business_state && <span class="rental-badge">{String(asset.business_state)}</span>}
+			{asset.status && <span class="rental-badge">status: {String(asset.status)}</span>}
+			{asset.visibility_state && <span class="rental-badge">visibility: {String(asset.visibility_state)}</span>}
+		</div>
+		{
+			relationship === "owner" ? (
+				<p class="asset-relationship">This is your asset.</p>
+			) : relationship === "interested_applicant" ? (
+				<p class="asset-relationship">
+					Interest submitted{interestState ? `: ${interestState}` : ""}.
+				</p>
+			) : isUnavailable ? (
+				<p class="asset-relationship">Booked or unavailable.</p>
+			) : null
+		}
+		{conditionSummary && <p class="asset-condition">{conditionSummary}</p>}
+		<div class="asset-actions">
+			<a class="rental-button secondary" href={href}>View details</a>
 			{
 				relationship === "owner" ? (
-					<p class="asset-relationship">This is your asset.</p>
-				) : relationship === "interested_applicant" ? (
-					<p class="asset-relationship">
-						Interest submitted{interestState ? `: ${interestState}` : ""}.{" "}
-						{interestId && <span>Open the negotiation thread from your dashboard.</span>}
-					</p>
-				) : null
+					<a class="rental-button secondary" href="/owner">Dashboard</a>
+				) : interestId ? (
+					<a class="rental-button" href={`/interests/${interestId}`}>Go to application</a>
+				) : canExpressInterest ? (
+					<a class="rental-button" href={href}>Express interest</a>
+				) : relationship === "anonymous" ? (
+					<a class="rental-button" href="/_emdash/admin/login">Login to express interest</a>
+				) : (
+					<span class="rental-badge">Interest unavailable</span>
+				)
 			}
-			{conditionSummary && <p class="asset-condition">{conditionSummary}</p>}
 		</div>
-	</a>
+	</div>
 </article>
 
 <style>
 	.asset-card {
 		overflow: hidden;
-	}
-
-	.asset-card a {
 		display: grid;
-		height: 100%;
 	}
 
 	.asset-visual {
@@ -125,5 +139,11 @@ const interestState = String(viewer.interestState ?? "");
 		margin: 0;
 		color: var(--r-brand-strong);
 		font-weight: 800;
+	}
+
+	.asset-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
 	}
 </style>

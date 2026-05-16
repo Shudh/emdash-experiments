@@ -6,6 +6,31 @@ interface Props {
 }
 
 const { title, rounds = [], empty = "No messages yet." } = Astro.props;
+const LIST_SPLIT_PATTERN = /\r?\n|,/;
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: {};
+}
+
+function terms(round: Record<string, unknown>) {
+	return objectValue(round.terms_spec ?? round.termsSpec);
+}
+
+function card(round: Record<string, unknown>) {
+	return objectValue(terms(round).card);
+}
+
+function answer(round: Record<string, unknown>) {
+	return objectValue(terms(round).cardAnswer);
+}
+
+function asList(value: unknown): string[] {
+	if (Array.isArray(value)) return value.map((entry) => String(entry)).filter(Boolean);
+	if (typeof value === "string" && value.trim()) return value.split(LIST_SPLIT_PATTERN).map((entry) => entry.trim()).filter(Boolean);
+	return [];
+}
 ---
 
 <section class="thread-panel rental-panel">
@@ -21,6 +46,50 @@ const { title, rounds = [], empty = "No messages yet." } = Astro.props;
 							{round.round_state && <span>{String(round.round_state)}</span>}
 						</div>
 						{round.message && <p>{String(round.message)}</p>}
+						{
+							Object.keys(card(round)).length ? (
+								<div class="request-card">
+									<div class="request-card-head">
+										<strong>{String(card(round).prompt ?? "Request")}</strong>
+										<span class="rental-badge">{String(card(round).cardType ?? "free_text")}</span>
+									</div>
+									<div class="rental-badges">
+										{card(round).attachmentRequired ? (
+											<span class="rental-badge">attachment/reference required</span>
+										) : (
+											<span class="rental-badge">no attachment required</span>
+										)}
+										<span class="rental-badge">{String(card(round).cardState ?? "pending")}</span>
+										{card(round).cardId && <span class="rental-badge">{String(card(round).cardId)}</span>}
+									</div>
+									{asList(card(round).options).length ? (
+										<ul class="request-options">
+											{asList(card(round).options).map((option) => (
+												<li>{option}</li>
+											))}
+										</ul>
+									) : null}
+								</div>
+							) : null
+						}
+						{
+							Object.keys(answer(round)).length ? (
+								<div class="answer-card">
+									<strong>Answer for {String(answer(round).cardId ?? "request")}</strong>
+									{answer(round).answerText && <p>{String(answer(round).answerText)}</p>}
+									{asList(answer(round).selectedOptions).length ? (
+										<div class="rental-badges">
+											{asList(answer(round).selectedOptions).map((option) => (
+												<span class="rental-badge">{option}</span>
+											))}
+										</div>
+									) : null}
+									{answer(round).attachmentNote && (
+										<p class="rental-muted">Reference: {String(answer(round).attachmentNote)}</p>
+									)}
+								</div>
+							) : null
+						}
 						<div class="rental-badges">
 							{round.price && <span class="rental-badge">price {String(round.price)}</span>}
 							{round.deposit_amount && (
@@ -60,6 +129,7 @@ const { title, rounds = [], empty = "No messages yet." } = Astro.props;
 		border-radius: var(--r-radius);
 		padding: 14px;
 		background: var(--r-bg);
+		overflow-wrap: anywhere;
 	}
 
 	.thread-round p {
@@ -74,5 +144,40 @@ const { title, rounds = [], empty = "No messages yet." } = Astro.props;
 		font-size: 0.82rem;
 		font-weight: 750;
 		text-transform: capitalize;
+	}
+
+	.request-card,
+	.answer-card {
+		display: grid;
+		gap: 10px;
+		margin: 12px 0;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 12px;
+		background: var(--r-panel);
+	}
+
+	.request-card-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+
+	.request-options {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.request-options li {
+		border: 1px solid var(--r-border);
+		border-radius: 999px;
+		padding: 4px 9px;
+		background: var(--r-panel-soft);
 	}
 </style>

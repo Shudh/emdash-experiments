@@ -28,7 +28,23 @@ const session = await loadHandover();
 const handover = session?.handover as Record<string, unknown> | undefined;
 const checks = (session?.checks as Array<Record<string, unknown>> | undefined) ?? [];
 const rounds = (session?.rounds as Array<Record<string, unknown>> | undefined) ?? [];
-const firstCheck = checks[0];
+const currentUser = Astro.locals.user as { id?: string; userId?: string; sub?: string } | undefined;
+const currentUserId = currentUser?.id ?? currentUser?.userId ?? currentUser?.sub ?? "";
+const derivedViewerRole =
+	currentUserId && String(handover?.owner_user_id ?? "") === currentUserId
+		? "owner"
+		: currentUserId && String(handover?.renter_user_id ?? "") === currentUserId
+			? "renter"
+			: "unknown";
+const viewerRole = String(session?.viewerRole && session.viewerRole !== "unknown" ? session.viewerRole : derivedViewerRole);
+const isOwner = viewerRole === "owner";
+const isRenter = viewerRole === "renter";
+const isMoveIn = String(handover?.handover_kind ?? "") === "move_in";
+const isOpen = ["open", "renter_reviewing", "disputed"].includes(String(handover?.handover_state ?? ""));
+const totalEstimated = checks.reduce((sum, check) => sum + Number(check.estimated_repair_cost ?? 0), 0);
+const totalAgreed = checks.reduce((sum, check) => sum + Number(check.agreed_repair_cost ?? 0), 0);
+const securityDeposit = Number((handover?.summary_spec as Record<string, unknown> | undefined)?.securityDepositHeld ?? 0);
+const refundDue = Math.max(0, securityDeposit - totalAgreed);
 ---
 
 <RentalBase title="Handover" description="Move-in and return handover">
@@ -43,48 +59,87 @@ const firstCheck = checks[0];
 							<div class="rental-badges">
 								<span class="rental-badge">{String(handover?.handover_state ?? "open")}</span>
 								<span class="rental-badge">{String(handover?.asset_id ?? "asset")}</span>
+								<span class="rental-badge">role: {viewerRole}</span>
+							</div>
+							<div class="settlement-summary">
+								<strong>Settlement totals</strong>
+								<span>Estimated damage: {totalEstimated}</span>
+								<span>Agreed damage: {totalAgreed}</span>
+								<span>Security deposit held: {securityDeposit || "not set"}</span>
+								<span>Refund due: {securityDeposit ? refundDue : "pending deposit data"}</span>
 							</div>
 						</aside>
 						<div class="handover-main">
 							<HandoverChecklist checks={checks} />
 							<ThreadPanel title="Return negotiation" rounds={rounds} />
 							<div class="action-grid">
-								<ActionForm title="Damage claim" action={`/api/rental/handover/${handoverId}/claim-damage`} submitLabel="Claim damage" successRedirect={`/handover/${handoverId}`}>
-									<input type="hidden" name="handoverItemCheckId" value={String(firstCheck?.id ?? "")} />
-									<div class="rental-field">
-										<label for="ownerClaimedState">Owner claimed state</label>
-										<input id="ownerClaimedState" name="ownerClaimedState" value="damaged" />
-									</div>
-									<div class="rental-field">
-										<label for="estimatedRepairCost">Estimated repair cost</label>
-										<input id="estimatedRepairCost" name="estimatedRepairCost" type="number" data-number="true" />
-									</div>
-									<div class="rental-field full">
-										<label for="damage-message">Message</label>
-										<textarea id="damage-message" name="message">Damage found during return.</textarea>
-									</div>
-								</ActionForm>
-								<ActionForm title="Return dispute thread" action={`/api/rental/handover/${handoverId}/add-round`} submitLabel="Add return round" successRedirect={`/handover/${handoverId}`}>
-									<input type="hidden" name="roundPhase" value="return" />
-									<input type="hidden" name="roundKind" value="answer" />
-									<input type="hidden" name="roundState" value="answered" />
-									<div class="rental-field full">
-										<label for="return-message">Message</label>
-										<textarea id="return-message" name="message">Disputing charge.</textarea>
-									</div>
-								</ActionForm>
-								<ActionForm title="Settlement action" action={`/api/rental/handover/${handoverId}/settle`} submitLabel="Settle handover" successRedirect="/owner">
-									<div class="rental-field">
-										<label for="settlement-cost">Agreed repair cost</label>
-										<input id="settlement-cost" name="settlementSpec.agreedRepairCost" type="number" data-number="true" />
-									</div>
-									<div class="rental-field">
-										<label>
-											<input name="settlementSpec.renterAccepted" type="checkbox" checked />
-											Renter accepted
-										</label>
-									</div>
-								</ActionForm>
+								{
+									isRenter && isMoveIn && isOpen ? (
+										<ActionForm title="Accept move-in handover" action={`/api/rental/handover/${handoverId}/accept`} submitLabel="Accept move-in handover" successRedirect="/owner">
+											<div class="rental-field full">
+												<label for="move-in-note">Tenant remark</label>
+												<input id="move-in-note" name="summarySpec.tenantRemark" value="Accepted move-in inventory." />
+											</div>
+										</ActionForm>
+									) : null
+								}
+								{
+									isOwner && !isMoveIn ? (
+										<ActionForm title="Damage claim" action={`/api/rental/handover/${handoverId}/claim-damage`} submitLabel="Claim damage" successRedirect={`/handover/${handoverId}`}>
+											<div class="rental-field full">
+												<label for="handoverItemCheckId">Item</label>
+												<select id="handoverItemCheckId" name="handoverItemCheckId" required>
+													{checks.map((check) => (
+														<option value={String(check.id)}>{String(check.item_label ?? check.id)}</option>
+													))}
+												</select>
+											</div>
+											<div class="rental-field">
+												<label for="ownerClaimedState">Owner claimed state</label>
+												<input id="ownerClaimedState" name="ownerClaimedState" value="damaged" />
+											</div>
+											<div class="rental-field">
+												<label for="estimatedRepairCost">Estimated repair cost</label>
+												<input id="estimatedRepairCost" name="estimatedRepairCost" type="number" data-number="true" />
+											</div>
+											<div class="rental-field full">
+												<label for="damage-message">Message</label>
+												<textarea id="damage-message" name="message">Damage found during return.</textarea>
+											</div>
+										</ActionForm>
+									) : null
+								}
+								{
+									!isMoveIn ? (
+										<>
+											<ActionForm title="Return dispute thread" action={`/api/rental/handover/${handoverId}/add-round`} submitLabel="Add return round" successRedirect={`/handover/${handoverId}`}>
+												<input type="hidden" name="roundPhase" value="return" />
+												<input type="hidden" name="roundKind" value={isOwner ? "settlement_offer" : "answer"} />
+												<input type="hidden" name="roundState" value={isOwner ? "countered" : "answered"} />
+												<div class="rental-field full">
+													<label for="return-message">Message</label>
+													<textarea id="return-message" name="message">{isOwner ? "Settle at a lower repair cost." : "Disputing charge."}</textarea>
+												</div>
+											</ActionForm>
+											<ActionForm title="Settlement action" action={`/api/rental/handover/${handoverId}/settle`} submitLabel="Settle handover" successRedirect="/owner">
+												<div class="rental-field">
+													<label for="settlement-cost">Agreed repair cost</label>
+													<input id="settlement-cost" name="settlementSpec.agreedRepairCost" type="number" data-number="true" />
+												</div>
+												<div class="rental-field">
+													<label for="security-deposit-held">Security deposit held</label>
+													<input id="security-deposit-held" name="settlementSpec.securityDepositHeld" type="number" data-number="true" />
+												</div>
+												<div class="rental-field">
+													<label>
+														<input name="settlementSpec.renterAccepted" type="checkbox" checked />
+														Renter accepted
+													</label>
+												</div>
+											</ActionForm>
+										</>
+									) : null
+								}
 							</div>
 						</div>
 					</>
@@ -115,6 +170,15 @@ const firstCheck = checks[0];
 
 	.action-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.settlement-summary {
+		display: grid;
+		gap: 6px;
+		margin-top: 16px;
+		border-top: 1px solid var(--r-border);
+		padding-top: 14px;
+		color: var(--r-muted);
 	}
 
 	@media (max-width: 980px) {

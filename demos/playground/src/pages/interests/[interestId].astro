@@ -32,6 +32,35 @@ const viewerRole = String(thread?.viewerRole ?? "unknown");
 const isOwner = viewerRole === "owner";
 const isRenter = viewerRole === "renter";
 const agreementId = typeof asset?.active_agreement_id === "string" ? asset.active_agreement_id : "";
+const hasAgreement = Boolean(agreementId);
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: {};
+}
+
+function terms(round: Record<string, unknown>) {
+	return objectValue(round.terms_spec ?? round.termsSpec);
+}
+
+function card(round: Record<string, unknown>) {
+	return objectValue(terms(round).card);
+}
+
+function cardAnswer(round: Record<string, unknown>) {
+	return objectValue(terms(round).cardAnswer);
+}
+
+const answeredCardIds = new Set(
+	rounds.map((round) => String(cardAnswer(round).cardId ?? "")).filter(Boolean),
+);
+const requestCards = rounds.filter((round) => Object.keys(card(round)).length);
+const pendingCards = requestCards.filter((round) => {
+	const cardId = String(card(round).cardId ?? "");
+	return cardId && !answeredCardIds.has(cardId);
+});
+const canShowRenterNegotiation = isRenter && !hasAgreement && (rounds.length > 0 || pendingCards.length > 0);
 ---
 
 <RentalBase title="Negotiation" description="Shared rental negotiation">
@@ -54,7 +83,9 @@ const agreementId = typeof asset?.active_agreement_id === "string" ? asset.activ
 								agreementId && (
 									<div class="agreement-result">
 										<strong>Agreement accepted</strong>
-										<span>Final terms are frozen in agreement {agreementId}.</span>
+										<span title={agreementId}>Final terms are frozen in agreement {agreementId}.</span>
+										<span>Next step: booking amount confirmation or move-in handover.</span>
+										<span class="rental-muted">Printable agreement data is available from the immutable agreement snapshot. Signed PDF upload/share is a follow-up using EmDash media.</span>
 									</div>
 								)
 							}
@@ -68,25 +99,105 @@ const agreementId = typeof asset?.active_agreement_id === "string" ? asset.activ
 						</aside>
 						<div class="thread-column">
 							<ThreadPanel title="Pre-agreement thread" rounds={rounds} />
+							{
+								isRenter && !rounds.length && !hasAgreement ? (
+									<div class="rental-panel wait-panel">
+										<h2>Interest sent to owner</h2>
+										<p class="rental-muted">
+											Interest sent to owner / owner AI agent. Please await review and document requests.
+										</p>
+										<span class="rental-badge">No pending requests yet</span>
+									</div>
+								) : null
+							}
+							{
+								isRenter && pendingCards.length ? (
+									<section class="rental-panel pending-panel">
+										<div class="pending-head">
+											<h2>Pending requests</h2>
+											<span class="rental-badge">{pendingCards.length} pending</span>
+										</div>
+										<div class="pending-list">
+											{pendingCards.map((round) => {
+												const requestCard = card(round);
+												const cardId = String(requestCard.cardId ?? "");
+												return (
+													<ActionForm title={String(requestCard.prompt ?? "Owner request")} action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Answer" successRedirect={`/interests/${interestId}`}>
+														<input type="hidden" name="roundPhase" value="pre_agreement" />
+														<input type="hidden" name="roundKind" value="answer" />
+														<input type="hidden" name="roundState" value="answered" />
+														<input type="hidden" name="termsSpec.cardAnswer.cardId" value={cardId} />
+														<input type="hidden" name="termsSpec.cardAnswer.cardState" value="answered" />
+														<div class="rental-field full">
+															<label for={`answer-${cardId}`}>Answer</label>
+															<textarea id={`answer-${cardId}`} name="termsSpec.cardAnswer.answerText" required>I will provide this.</textarea>
+														</div>
+														<div class="rental-field full">
+															<label for={`options-${cardId}`}>Selected options</label>
+															<textarea id={`options-${cardId}`} name="termsSpec.cardAnswer.selectedOptions" data-lines="true">Yes</textarea>
+														</div>
+														<div class="rental-field full">
+															<label for={`attachment-${cardId}`}>Attachment/reference note</label>
+															<input id={`attachment-${cardId}`} name="termsSpec.cardAnswer.attachmentNote" placeholder="UPI reference, document note, or EmDash media reference" />
+														</div>
+														<input type="hidden" name="message" value={`Answered request: ${String(requestCard.prompt ?? cardId)}`} />
+													</ActionForm>
+												);
+											})}
+										</div>
+									</section>
+								) : null
+							}
+							{
+								hasAgreement ? (
+									<section class="rental-panel next-step-panel">
+										<h2>Booking and handover next steps</h2>
+										<p class="rental-muted">Owner can request booking payment confirmation as a request card. Tenant can answer with reference text or an EmDash media reference placeholder.</p>
+									</section>
+								) : null
+							}
 							<div class="action-grid">
 								{
-									isOwner && (
+									isOwner && !hasAgreement && (
 										<>
-											<ActionForm title="Owner asks question" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Ask question" successRedirect={`/interests/${interestId}`}>
+											<ActionForm title="Create request card" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Ask question" successRedirect={`/interests/${interestId}`}>
 												<input type="hidden" name="roundPhase" value="pre_agreement" />
 												<input type="hidden" name="roundKind" value="question" />
+												<input type="hidden" name="roundState" value="proposed" />
+												<input type="hidden" name="termsSpec.card.cardId" value={`card_${Date.now()}`} />
+												<input type="hidden" name="termsSpec.card.cardState" value="pending" />
 												<div class="rental-field full">
 													<label for="owner-question">Question</label>
-													<textarea id="owner-question" name="message" required>Please upload company ID and salary slip.</textarea>
+													<textarea id="owner-question" name="termsSpec.card.prompt" required>Please upload company ID and salary slip.</textarea>
 												</div>
-											</ActionForm>
-											<ActionForm title="Owner request document" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Request document" successRedirect={`/interests/${interestId}`}>
-												<input type="hidden" name="roundPhase" value="pre_agreement" />
-												<input type="hidden" name="roundKind" value="document_request" />
 												<div class="rental-field full">
-													<label for="document-request">Request</label>
-													<textarea id="document-request" name="message">Please provide salary proof.</textarea>
+													<label for="card-type">Request type</label>
+													<select id="card-type" name="termsSpec.card.cardType">
+														<option value="document_upload">Document upload</option>
+														<option value="free_text">Free text</option>
+														<option value="free_text_with_attachment">Free text with attachment</option>
+														<option value="mcq_single">MCQ single</option>
+														<option value="mcq_single_with_attachment">MCQ single with attachment</option>
+														<option value="mcq_multi">MCQ multi</option>
+														<option value="mcq_multi_with_attachment">MCQ multi with attachment</option>
+														<option value="payment_confirmation">Payment confirmation</option>
+														<option value="owner_action_request">Owner action request</option>
+													</select>
 												</div>
+												<div class="rental-field full">
+													<label for="card-options">Options</label>
+													<textarea id="card-options" name="termsSpec.card.options" data-lines="true">Yes
+No
+Need discussion</textarea>
+												</div>
+												<div class="rental-field">
+													<label>
+														<input name="termsSpec.card.attachmentRequired" type="checkbox" checked />
+														Attachment/reference required
+													</label>
+												</div>
+												<input type="hidden" name="termsSpec.card.attachmentKind" value="document_or_reference" />
+												<input type="hidden" name="message" value="Owner created a request card." />
 											</ActionForm>
 											<ActionForm title="Owner reject" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Reject" successRedirect={`/interests/${interestId}`}>
 												<input type="hidden" name="roundPhase" value="pre_agreement" />
@@ -125,18 +236,9 @@ const agreementId = typeof asset?.active_agreement_id === "string" ? asset.activ
 									)
 								}
 								{
-									isRenter && (
+									canShowRenterNegotiation && (
 										<>
-											<ActionForm title="Renter answer" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Answer" successRedirect={`/interests/${interestId}`}>
-												<input type="hidden" name="roundPhase" value="pre_agreement" />
-												<input type="hidden" name="roundKind" value="answer" />
-												<input type="hidden" name="roundState" value="answered" />
-												<div class="rental-field full">
-													<label for="renter-answer">Answer</label>
-													<textarea id="renter-answer" name="message" required>Company ID and salary slip shared.</textarea>
-												</div>
-											</ActionForm>
-											<ActionForm title="Renter offer" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Offer" successRedirect={`/interests/${interestId}`}>
+											<ActionForm title="Rent concession offer" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Offer" successRedirect={`/interests/${interestId}`}>
 												<input type="hidden" name="roundPhase" value="pre_agreement" />
 												<input type="hidden" name="roundKind" value="offer" />
 												<input type="hidden" name="roundState" value="offered" />
@@ -150,7 +252,7 @@ const agreementId = typeof asset?.active_agreement_id === "string" ? asset.activ
 												</div>
 												<div class="rental-field full">
 													<label for="offer-message">Message</label>
-													<textarea id="offer-message" name="message">Offer submitted.</textarea>
+													<textarea id="offer-message" name="message">I can move in quickly if rent is reduced.</textarea>
 												</div>
 											</ActionForm>
 											<ActionForm title="Renter counter final terms" action={`/api/rental/negotiations/${interestId}/add-round`} submitLabel="Counter final terms" successRedirect={`/interests/${interestId}`}>
@@ -207,6 +309,23 @@ const agreementId = typeof asset?.active_agreement_id === "string" ? asset.activ
 		padding: 12px;
 		background: var(--r-panel-soft);
 		color: var(--r-brand-strong);
+		overflow-wrap: anywhere;
+	}
+
+	.wait-panel,
+	.pending-panel,
+	.next-step-panel,
+	.pending-list {
+		display: grid;
+		gap: 14px;
+	}
+
+	.pending-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
 	}
 
 	@media (max-width: 980px) {

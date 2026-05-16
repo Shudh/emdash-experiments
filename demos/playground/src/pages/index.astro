@@ -1,5 +1,37 @@
 ---
 import RentalBase from "../layouts/RentalBase.astro";
+
+export const prerender = false;
+
+const user = Astro.locals.user as { email?: string | null } | undefined;
+const cookie = Astro.request.headers.get("cookie") ?? "";
+
+async function rentalGet(path: string) {
+	try {
+		const response = await fetch(new URL(path, Astro.url), {
+			headers: cookie ? { Cookie: cookie } : {},
+		});
+		if (!response.ok) return null;
+		const payload = await response.json();
+		return payload?.data ?? null;
+	} catch {
+		return null;
+	}
+}
+
+const [ownerDashboard, renterDashboard] = user
+	? await Promise.all([rentalGet("/api/rental/owner/dashboard"), rentalGet("/api/rental/renter/dashboard")])
+	: [null, null];
+const ownedAssets = Array.isArray(ownerDashboard?.assets) ? ownerDashboard.assets : [];
+const ownerInbox = Array.isArray(ownerDashboard?.inbox) ? ownerDashboard.inbox : [];
+const renterInterests = Array.isArray(renterDashboard?.interests) ? renterDashboard.interests : [];
+const renterAccess = Array.isArray(renterDashboard?.access) ? renterDashboard.access : [];
+const pendingOwnerInbox = ownerInbox.filter((interest) => String(interest.interest_state ?? "") === "submitted").length;
+const pendingTenantRequests = renterInterests.reduce(
+	(total, interest) => total + Number(interest.pending_request_count ?? 0),
+	0,
+);
+const handoverTasks = ownedAssets.filter((asset) => asset.active_handover_id).length;
 ---
 
 <RentalBase
@@ -10,30 +42,77 @@ import RentalBase from "../layouts/RentalBase.astro";
 		<div class="rental-shell hero-grid">
 			<div class="hero-copy">
 				<p class="rental-kicker">Asset lifecycle management</p>
-				<h1>Rent assets with conditions, negotiation, and handover built in.</h1>
+				<h1>{user ? "Rental launchpad" : "Rent assets with conditions, negotiation, and handover built in."}</h1>
 				<p>
-					Owners publish flats, vehicles, and equipment with explicit terms. Renters accept
-					current conditions before interest, then both sides negotiate on a shared thread.
+					{
+						user
+							? "Jump to marketplace, assets, applications, handovers, and pending work from one place."
+							: "Owners publish flats, vehicles, and equipment with explicit terms. Renters accept current conditions before interest, then both sides negotiate on a shared thread."
+					}
 				</p>
 				<div class="hero-actions">
-					<a class="rental-button" href="/owner/assets/new">List a property</a>
 					<a class="rental-button secondary" href="/marketplace">View marketplace</a>
-					<a class="rental-button secondary" href="/marketplace">Continue as tenant</a>
+					{
+						user ? (
+							<>
+								<a class="rental-button" href="/owner">Dashboard</a>
+								<a class="rental-button secondary" href="/owner/assets/new">Add new property</a>
+							</>
+						) : (
+							<>
+								<a class="rental-button" href="/_emdash/admin/login">Login / register</a>
+								<a class="rental-button secondary" href="/marketplace">Continue as tenant</a>
+							</>
+						)
+					}
 				</div>
 			</div>
-			<div class="hero-product rental-panel">
-				<div class="product-row">
-					<span>Owner terms</span>
-					<strong>accepted before interest</strong>
-				</div>
-				<div class="product-row">
-					<span>Negotiation</span>
-					<strong>append-only rounds</strong>
-				</div>
-				<div class="product-row">
-					<span>Handover</span>
-					<strong>item checks and disputes</strong>
-				</div>
+			<div class="hero-product rental-panel launchpad">
+				{
+					user ? (
+						<>
+							<a class="launch-card" href="/owner">
+								<span>My assets</span>
+								<strong>{ownedAssets.length}</strong>
+							</a>
+							<a class="launch-card" href="/owner">
+								<span>Pending inbox</span>
+								<strong>{pendingOwnerInbox}</strong>
+							</a>
+							<a class="launch-card" href={renterInterests[0]?.id ? `/interests/${renterInterests[0].id}` : "/marketplace"}>
+								<span>My applications</span>
+								<strong>{renterInterests.length}</strong>
+							</a>
+							<a class="launch-card" href="/owner">
+								<span>My handovers</span>
+								<strong>{handoverTasks}</strong>
+							</a>
+							<div class="launch-card">
+								<span>Pending requests</span>
+								<strong>{pendingTenantRequests}</strong>
+							</div>
+							<div class="launch-card">
+								<span>Agreements / access</span>
+								<strong>{renterAccess.length}</strong>
+							</div>
+						</>
+					) : (
+						<>
+							<div class="product-row">
+								<span>Marketplace</span>
+								<strong>browse without login</strong>
+							</div>
+							<div class="product-row">
+								<span>Owner terms</span>
+								<strong>accepted before interest</strong>
+							</div>
+							<div class="product-row">
+								<span>Handover</span>
+								<strong>item checks and disputes</strong>
+							</div>
+						</>
+					)
+				}
 			</div>
 		</div>
 	</section>
@@ -207,6 +286,30 @@ import RentalBase from "../layouts/RentalBase.astro";
 		color: var(--r-muted);
 	}
 
+	.launchpad {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		min-height: auto;
+	}
+
+	.launch-card {
+		display: grid;
+		gap: 8px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 14px;
+		background: var(--r-bg);
+	}
+
+	.launch-card span {
+		color: var(--r-muted);
+		font-weight: 750;
+	}
+
+	.launch-card strong {
+		font-size: 1.8rem;
+		color: var(--r-brand-strong);
+	}
+
 	.subtle {
 		background: rgba(243, 240, 232, 0.56);
 	}
@@ -289,7 +392,8 @@ import RentalBase from "../layouts/RentalBase.astro";
 		}
 
 		.steps,
-		.pricing-grid {
+		.pricing-grid,
+		.launchpad {
 			grid-template-columns: 1fr;
 		}
 

@@ -72,14 +72,19 @@ const price =
 								<div class="rental-panel">
 									<h2>This is your asset</h2>
 									<p class="rental-muted">Owners can review the public listing without submitting interest.</p>
-									<a class="rental-button" href="/owner">Open owner dashboard</a>
+									<div class="owner-detail-actions">
+										<a class="rental-button" href="/owner">Dashboard</a>
+										<a class="rental-button secondary" href="/owner">Manage asset</a>
+										<a class="rental-button secondary" href="/owner">View inbox</a>
+									</div>
 								</div>
 							) : relationship === "interested_applicant" ? (
 								<div class="rental-panel">
 									<h2>Interest submitted</h2>
 									<p class="rental-muted">
-										Your current interest state is {interestState || "submitted"}.
+										Interest sent to owner / owner AI agent. Please await review and document requests.
 									</p>
+									<span class="rental-badge">Current state: {interestState || "submitted"}</span>
 									{interestId && <a class="rental-button" href={`/interests/${interestId}`}>Open negotiation thread</a>}
 								</div>
 							) : canExpressInterest ? (
@@ -123,7 +128,7 @@ const price =
 								<div class="rental-panel">
 									<h2>Login required</h2>
 									<p class="rental-muted">Create or login to a renter account before expressing interest.</p>
-									<a class="rental-button" href="/">Login or register</a>
+									<a class="rental-button" href="/_emdash/admin/login">Login or register</a>
 								</div>
 							)}
 						</div>
@@ -184,6 +189,12 @@ const price =
 		align-items: center;
 		gap: 10px;
 		color: var(--r-text);
+	}
+
+	.owner-detail-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
 	}
 
 	@media (max-width: 900px) {

@@ -15,6 +15,29 @@ import { assertAllowedAssetTransition } from "../transitions.js";
 import type { DomainStore, UserContext } from "../types.js";
 import { asString } from "../types.js";
 
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: {};
+}
+
+function settlementForCheck(
+	settlementSpec: unknown,
+	checkId: string,
+): Record<string, unknown> | null {
+	const spec = objectValue(settlementSpec);
+	const itemSettlements = Array.isArray(spec.itemSettlements) ? spec.itemSettlements : [];
+	const match = itemSettlements.find(
+		(entry) => objectValue(entry).handoverItemCheckId === checkId || objectValue(entry).checkId === checkId,
+	);
+	return match ? objectValue(match) : null;
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+	const numberValue = typeof value === "number" ? value : Number(value);
+	return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
 export async function settleHandover(
 	store: DomainStore,
 	user: UserContext,
@@ -30,8 +53,13 @@ export async function settleHandover(
 		const checks = await listHandoverChecks(tx, handoverId);
 		for (const check of checks) {
 			if (check.dispute_state === DISPUTE_STATE.DISPUTED) {
+				const itemSettlement = settlementForCheck(input.settlementSpec, asString(check.id));
+				const agreedRepairCost =
+					numberOrUndefined(itemSettlement?.agreedRepairCost) ??
+					numberOrUndefined(objectValue(input.settlementSpec).agreedRepairCost);
 				await tx.update(COLLECTIONS.HANDOVER_ITEM_CHECKS, check.id, {
 					dispute_state: DISPUTE_STATE.SETTLEMENT_AGREED,
+					...(agreedRepairCost !== undefined ? { agreed_repair_cost: agreedRepairCost } : {}),
 				});
 			}
 		}

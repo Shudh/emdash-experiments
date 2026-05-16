@@ -41,6 +41,11 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 
 			* {
 				box-sizing: border-box;
+				min-width: 0;
+			}
+
+			html {
+				overflow-x: hidden;
 			}
 
 			body {
@@ -51,6 +56,7 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 					var(--r-bg);
 				color: var(--r-text);
 				-webkit-font-smoothing: antialiased;
+				overflow-x: hidden;
 			}
 
 			a {
@@ -102,6 +108,7 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 
 			p {
 				line-height: 1.65;
+				overflow-wrap: anywhere;
 			}
 
 			.rental-grid {
@@ -116,6 +123,7 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 				border-radius: var(--r-radius);
 				background: color-mix(in srgb, var(--r-panel) 94%, transparent);
 				box-shadow: var(--r-shadow);
+				overflow-wrap: anywhere;
 			}
 
 			.rental-panel {
@@ -135,6 +143,7 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 			.rental-badge {
 				display: inline-flex;
 				align-items: center;
+				max-width: 100%;
 				border: 1px solid var(--r-border);
 				border-radius: 999px;
 				padding: 5px 10px;
@@ -142,12 +151,15 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 				color: var(--r-muted);
 				font-size: 0.82rem;
 				font-weight: 650;
+				overflow-wrap: anywhere;
+				white-space: normal;
 			}
 
 			.rental-button {
 				display: inline-flex;
 				align-items: center;
 				justify-content: center;
+				max-width: 100%;
 				border: 1px solid transparent;
 				border-radius: var(--r-radius);
 				padding: 10px 14px;
@@ -155,6 +167,8 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 				color: white;
 				font-weight: 800;
 				cursor: pointer;
+				text-align: center;
+				white-space: normal;
 			}
 
 			.rental-button:hover {
@@ -201,6 +215,7 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 				padding: 10px 12px;
 				background: var(--r-panel);
 				color: var(--r-text);
+				min-width: 0;
 			}
 
 			.rental-field textarea {
@@ -219,6 +234,10 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 			}
 
 			@media (max-width: 760px) {
+				.rental-shell {
+					padding-inline: 14px;
+				}
+
 				.rental-section {
 					padding: 36px 0;
 				}
@@ -229,6 +248,16 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 
 				.rental-form-grid {
 					grid-template-columns: 1fr;
+				}
+			}
+
+			@media (max-width: 380px) {
+				.rental-shell {
+					padding-inline: 10px;
+				}
+
+				.rental-panel {
+					padding: 16px;
 				}
 			}
 		</style>
@@ -287,6 +316,7 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 				color: var(--r-muted);
 				font-size: 0.92rem;
 				font-weight: 650;
+				overflow-wrap: anywhere;
 			}
 
 			.rental-footer {

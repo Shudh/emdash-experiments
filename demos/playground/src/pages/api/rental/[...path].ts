@@ -126,14 +126,50 @@ async function enrichInterests(store: DomainStore, interests: DomainRow[]) {
 				typeof interest.asset_id === "string"
 					? await store.get(COLLECTIONS.ASSETS, interest.asset_id)
 					: null;
+			const rounds = await store.list(
+				COLLECTIONS.NEGOTIATION_ROUNDS,
+				{ interest_id: interest.id },
+				{ orderBy: "created_at", direction: "asc", limit: 200 },
+			);
 			return {
 				...interest,
 				asset_title: asset?.title ?? null,
 				asset_location_label: asset?.location_label ?? null,
 				asset,
+				pending_request_count: countPendingRequestCards(rounds),
 			};
 		}),
 	);
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: {};
+}
+
+function roundTerms(round: DomainRow): Record<string, unknown> {
+	return objectValue(round.terms_spec);
+}
+
+function countPendingRequestCards(rounds: DomainRow[]): number {
+	const answered = new Set(
+		rounds
+			.map((round) => asString(objectValue(roundTerms(round).cardAnswer).cardId))
+			.filter(Boolean),
+	);
+	return rounds.filter((round) => {
+		const card = objectValue(roundTerms(round).card);
+		const cardId = asString(card.cardId);
+		return cardId && !answered.has(cardId) && asString(card.cardState) !== "answered";
+	}).length;
+}
+
+function viewerRoleForHandover(user: UserContext, handover: DomainRow | undefined): string {
+	if (!handover) return "unknown";
+	if (asString(handover.owner_user_id) === user.id) return "owner";
+	if (asString(handover.renter_user_id) === user.id) return "renter";
+	return "unrelated";
 }
 
 function viewerRoleForInterest(user: UserContext, interest: DomainRow | undefined): string {
@@ -226,6 +262,7 @@ export const ALL: APIRoute = async (context) => {
 			return jsonOk({
 				...thread,
 				viewerRole: viewerRoleForInterest(user, thread?.interest as DomainRow | undefined),
+				pendingRequestCount: countPendingRequestCards((thread?.rounds as DomainRow[] | undefined) ?? []),
 			});
 		}
 
@@ -277,7 +314,11 @@ export const ALL: APIRoute = async (context) => {
 
 		if (request.method === "GET" && parts[0] === "handover" && parts[1]) {
 			await requireHandoverParticipant(store, user, parts[1]);
-			return jsonOk(await getHandoverSessionQuery(store, parts[1]));
+			const session = await getHandoverSessionQuery(store, parts[1]);
+			return jsonOk({
+				...session,
+				viewerRole: viewerRoleForHandover(user, session?.handover as DomainRow | undefined),
+			});
 		}
 
 		return notFound();
