@@ -54,6 +54,21 @@ async function ensureFixtureDepsBuilt(): Promise<void> {
 	console.log("[pw] Fixture deps built.");
 }
 
+async function ensureRentalDbSchema(dbPath: string): Promise<void> {
+	console.log("[pw] Ensuring ALM rental DB schema...");
+
+	await execAsync(
+		process.execPath,
+		["--experimental-sqlite", resolve(ROOT, "scripts/ensure-rental-local-db.mjs"), dbPath],
+		{
+			cwd: ROOT,
+			timeout: 60_000,
+		},
+	);
+
+	console.log("[pw] ALM rental DB schema ready.");
+}
+
 async function waitForServer(url: string, timeoutMs: number): Promise<void> {
 	const start = Date.now();
 	while (Date.now() - start < timeoutMs) {
@@ -242,7 +257,7 @@ export default async function globalSetup(): Promise<void> {
 	const workDir = FIXTURE_DIR;
 	const tempDataDir = mkdtempSync(join(tmpdir(), "emdash-pw-"));
 	const dbPath = join(tempDataDir, "test.db");
-
+	// await ensureRentalDbSchema(dbPath);
 	const fixtureNodeModules = join(FIXTURE_DIR, "node_modules");
 
 	const baseUrl = `http://localhost:${PORT}`;
@@ -289,6 +304,8 @@ export default async function globalSetup(): Promise<void> {
 			const match = setCookie.match(COOKIE_VALUE_PATTERN);
 			if (match) sessionCookie = match[1]!;
 		}
+		// 4b. EmDash core is initialized now. Add ALM rental tables to the same DB.
+		await ensureRentalDbSchema(dbPath);
 
 		// 5. Seed test data
 		console.log("[pw] Seeding test data...");

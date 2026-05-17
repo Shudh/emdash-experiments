@@ -5,6 +5,7 @@ interface Props {
 }
 
 const { asset, href = `/marketplace/assets/${asset.id}` } = Astro.props;
+const loginHref = `/login?redirect=${encodeURIComponent(href)}`;
 const title = String(asset.title ?? asset.slug ?? "Untitled asset");
 const price =
 	typeof asset.public_price === "number"
@@ -80,8 +81,8 @@ const isUnavailable =
 				) : canExpressInterest ? (
 					<a class="rental-button" href={href}>Express interest</a>
 				) : relationship === "anonymous" ? (
-					<a class="rental-button" href="/_emdash/admin/login">Login to express interest</a>
-				) : (
+	<a class="rental-button" href={loginHref}>Login to express interest</a>
+) : (
 					<span class="rental-badge">Interest unavailable</span>
 				)
 			}

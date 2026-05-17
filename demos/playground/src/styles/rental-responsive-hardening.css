@@ -1,0 +1,206 @@
+.rental-shell,
+.rental-panel,
+.rental-card,
+.rental-grid,
+.rental-form-grid,
+.rental-section-header,
+.rental-badges,
+.rental-badge,
+.rental-button,
+.rental-field,
+.rental-action-form,
+.create-grid,
+.detail-grid,
+.negotiation-grid,
+.handover-grid,
+.action-grid,
+.inventory-editor,
+.document-editor,
+.inventory-row,
+.document-row-editor,
+.inbox-item,
+.product-row,
+.launch-card,
+.detail-side,
+.thread-column,
+.handover-main {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.rental-panel,
+.rental-card,
+.rental-badge,
+.rental-button,
+.rental-field,
+.inventory-row,
+.document-row-editor {
+	overflow-wrap: anywhere;
+}
+
+.rental-section-header {
+	flex-wrap: wrap;
+}
+
+.rental-badges {
+	align-items: center;
+}
+
+.rental-badge {
+	line-height: 1.25;
+	text-align: left;
+}
+
+.rental-button {
+	min-height: 44px;
+}
+
+.rental-form-grid {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)) !important;
+}
+
+.action-grid {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)) !important;
+}
+
+.rental-shell.create-grid {
+	grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.rental-shell.detail-grid {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 36rem), 1fr)) !important;
+}
+
+.rental-shell.negotiation-grid,
+.rental-shell.handover-grid {
+	grid-template-columns: minmax(min(100%, 20rem), 0.36fr) minmax(min(100%, 36rem), 1fr) !important;
+}
+
+.rental-panel.detail-main {
+	min-height: clamp(220px, 28vw, 300px) !important;
+	align-content: end;
+}
+
+.inventory-editor,
+.document-editor {
+	display: grid;
+	gap: 14px;
+}
+
+.inventory-row,
+.document-row-editor {
+	display: grid !important;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)) !important;
+	gap: clamp(10px, 2vw, 16px) !important;
+	border: 1px solid var(--r-border) !important;
+	border-radius: var(--r-radius) !important;
+	padding: clamp(12px, 2vw, 16px) !important;
+	background: var(--r-bg) !important;
+}
+
+.inventory-row > label,
+.document-row-editor > label {
+	display: grid !important;
+	gap: 6px !important;
+	color: var(--r-muted);
+	font-size: 0.84rem;
+	font-weight: 750;
+	line-height: 1.3;
+}
+
+.inventory-row input:not([type="checkbox"]):not([type="radio"]),
+.inventory-row select,
+.inventory-row textarea,
+.document-row-editor input:not([type="checkbox"]):not([type="radio"]),
+.document-row-editor select,
+.document-row-editor textarea {
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	border: 1px solid var(--r-border);
+	border-radius: var(--r-radius);
+	padding: 9px 10px;
+	background: var(--r-panel);
+	color: var(--r-text);
+	font: inherit;
+}
+
+.inventory-row textarea,
+.document-row-editor textarea {
+	min-height: 88px;
+	resize: vertical;
+}
+
+.inventory-row > .remove-row,
+.document-row-editor > .remove-row,
+.inventory-row > button,
+.document-row-editor > button {
+	align-self: end;
+	justify-self: start;
+	min-height: 42px;
+}
+
+.inventory-row > label:has(> textarea),
+.document-row-editor > label:has(> textarea) {
+	grid-column: 1 / -1;
+}
+
+.product-row,
+.owner-detail-actions,
+.section-actions,
+.rental-account {
+	flex-wrap: wrap;
+}
+
+@media (max-width: 1100px) {
+	.rental-shell.negotiation-grid,
+	.rental-shell.handover-grid {
+		grid-template-columns: minmax(0, 1fr) !important;
+	}
+}
+
+@media (max-width: 760px) {
+	.rental-shell.detail-grid,
+	.rental-shell.create-grid,
+	.rental-shell.negotiation-grid,
+	.rental-shell.handover-grid,
+	.action-grid,
+	.rental-form-grid,
+	.inventory-row,
+	.document-row-editor {
+		grid-template-columns: minmax(0, 1fr) !important;
+	}
+
+	.rental-section-header {
+		align-items: stretch;
+	}
+
+	.rental-section-header > .rental-button,
+	.section-actions,
+	.section-actions .rental-button {
+		width: 100%;
+	}
+
+	.rental-panel.detail-main {
+		min-height: auto !important;
+		align-content: start !important;
+	}
+}
+
+@media (max-width: 380px) {
+	.rental-button,
+	.rental-login-link,
+	.rental-link-button {
+		width: 100%;
+	}
+
+	.rental-nav nav {
+		width: 100%;
+	}
+
+	.rental-nav nav a {
+		min-height: 40px;
+		display: inline-flex;
+		align-items: center;
+	}
+}
