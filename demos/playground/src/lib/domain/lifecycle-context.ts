@@ -17,9 +17,16 @@ export async function loadAssetLifecycleContext(
 	const activeAgreement = activeAgreementId
 		? ((await store.get(COLLECTIONS.AGREEMENT_VERSIONS, activeAgreementId)) ?? undefined)
 		: undefined;
-	const activeHandover = activeHandoverId
+	const loadedHandover = activeHandoverId
 		? ((await store.get(COLLECTIONS.HANDOVER_SESSIONS, activeHandoverId)) ?? undefined)
 		: undefined;
+	const loadedHandoverState = asString(loadedHandover?.handover_state);
+	const activeHandover =
+		loadedHandover &&
+		loadedHandoverState !== HANDOVER_STATE.ACCEPTED &&
+		loadedHandoverState !== HANDOVER_STATE.CLOSED
+			? loadedHandover
+			: undefined;
 	const disputedCheckCount = activeHandover
 		? (
 				await store.list(COLLECTIONS.HANDOVER_ITEM_CHECKS, {

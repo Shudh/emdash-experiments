@@ -107,7 +107,9 @@ export async function handleRentalRoute(input: RentalRouteHandlerInput): Promise
 			return jsonOk({
 				assets: assets.map((asset) => ({
 					...asset,
-					availableActions: assetAvailableActions(asset, "owner"),
+					availableActions: assetAvailableActions(asset, "owner", {
+						allowLegacyRentedMoveOut: true,
+					}),
 				})),
 				inbox: await enrichInterests(input.store, inbox),
 			});
@@ -282,7 +284,9 @@ async function withViewer(
 	return {
 		...asset,
 		viewer: viewerFromRelationship(relationship),
-		availableActions: assetAvailableActions(asset, relationship.role),
+		availableActions: assetAvailableActions(asset, relationship.role, {
+			allowLegacyRentedMoveOut: true,
+		}),
 	};
 }
 

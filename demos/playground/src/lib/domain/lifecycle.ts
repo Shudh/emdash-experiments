@@ -18,6 +18,7 @@ export type AvailableAction = {
 export function assetAvailableActions(
 	asset: DomainRow,
 	relationship: AlmRelationshipRole,
+	options: { allowLegacyRentedMoveOut?: boolean } = {},
 ): AvailableAction[] {
 	const state = asString(asset.business_state);
 	const visibility = asString(asset.visibility_state);
@@ -38,6 +39,15 @@ export function assetAvailableActions(
 		});
 	}
 	if (state === ASSET_BUSINESS_STATE.RENTED) {
+		if (options.allowLegacyRentedMoveOut) {
+			actions.push({
+				id: "handover.start_move_out",
+				label: "Start move-out handover",
+				cardKind: "move_out_handover",
+			});
+		}
+	}
+	if (state === ASSET_BUSINESS_STATE.RETURN_PENDING) {
 		actions.push({
 			id: "handover.start_move_out",
 			label: "Start move-out handover",

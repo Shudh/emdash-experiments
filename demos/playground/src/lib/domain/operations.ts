@@ -1,7 +1,9 @@
 import type { AddNegotiationRoundRequest } from "./api-contracts.js";
-import { ROUND_KIND, ROUND_PHASE } from "./constants.js";
+import { ASSET_BUSINESS_STATE, HANDOVER_KIND, ROUND_KIND, ROUND_PHASE } from "./constants.js";
+import type { LifecycleContext } from "./lifecycle-context.js";
 import type { AlmRelationshipRole } from "./relationship.js";
-import { DomainError } from "./types.js";
+import type { DomainRow } from "./types.js";
+import { DomainError, asString } from "./types.js";
 
 export type OperationId =
 	| "asset.create"
@@ -73,20 +75,89 @@ const APPLICANT_OPERATIONS = new Set<OperationId>([
 	"agreement.tenant_sign",
 ]);
 
+export type OperationPolicyInput = {
+	operationId: OperationId;
+	relationship: AlmRelationshipRole;
+	asset?: DomainRow;
+	lifecycleContext?: LifecycleContext;
+	payload?: unknown;
+	allowLegacyRentedMoveOut?: boolean;
+};
+
 export function assertOperationAllowed(
-	operationId: OperationId,
-	relationship: AlmRelationshipRole,
+	operationOrInput: OperationId | OperationPolicyInput,
+	relationship?: AlmRelationshipRole,
 ): void {
+	const input =
+		typeof operationOrInput === "string"
+			? { operationId: operationOrInput, relationship }
+			: operationOrInput;
+	const operationId = input.operationId;
+	const resolvedRelationship = input.relationship;
+	if (!resolvedRelationship) {
+		throw new DomainError("OPERATION_NOT_ALLOWED", `${operationId} has no relationship`, 403);
+	}
 	const allowed =
-		(relationship === "owner" && OWNER_OPERATIONS.has(operationId)) ||
-		(relationship === "renter" && RENTER_OPERATIONS.has(operationId)) ||
-		(relationship === "applicant" && APPLICANT_OPERATIONS.has(operationId));
+		(resolvedRelationship === "owner" && OWNER_OPERATIONS.has(operationId)) ||
+		(resolvedRelationship === "renter" && RENTER_OPERATIONS.has(operationId)) ||
+		(resolvedRelationship === "applicant" && APPLICANT_OPERATIONS.has(operationId));
 	if (!allowed) {
 		throw new DomainError(
 			"OPERATION_NOT_ALLOWED",
-			`${operationId} is not allowed for ${relationship}`,
+			`${operationId} is not allowed for ${resolvedRelationship}`,
 			403,
 		);
+	}
+	assertLifecycleAllowed(input as OperationPolicyInput & { relationship: AlmRelationshipRole });
+}
+
+function assertLifecycleAllowed(input: OperationPolicyInput & { relationship: AlmRelationshipRole }) {
+	if (!input.asset) return;
+	const state = asString(input.asset.business_state);
+	if (input.operationId === "handover.start_move_in") {
+		if (state !== ASSET_BUSINESS_STATE.BOOKED) {
+			throw new DomainError(
+				"INVALID_ASSET_STATE",
+				"Move-in handover can only start after booking",
+				409,
+			);
+		}
+		if (input.lifecycleContext?.activeHandover) {
+			throw new DomainError("ACTIVE_HANDOVER_EXISTS", "Asset already has an active handover", 409);
+		}
+		return;
+	}
+	if (input.operationId === "handover.start_move_out") {
+		const legacyAllowed =
+			input.allowLegacyRentedMoveOut && state === ASSET_BUSINESS_STATE.RENTED;
+		if (state !== ASSET_BUSINESS_STATE.RETURN_PENDING && !legacyAllowed) {
+			throw new DomainError(
+				"INVALID_ASSET_STATE",
+				"Move-out handover requires return pending state",
+				409,
+			);
+		}
+		if (input.lifecycleContext?.activeHandover) {
+			throw new DomainError("ACTIVE_HANDOVER_EXISTS", "Asset already has an active handover", 409);
+		}
+		return;
+	}
+	if (input.operationId === "handover.tenant_accept_move_in") {
+		if (state !== ASSET_BUSINESS_STATE.BOOKED) {
+			throw new DomainError(
+				"INVALID_ASSET_STATE",
+				"Move-in handover can only be accepted while asset is booked",
+				409,
+			);
+		}
+		const handoverKind = asString(input.payload);
+		if (handoverKind && handoverKind !== HANDOVER_KIND.MOVE_IN) {
+			throw new DomainError(
+				"OPERATION_NOT_ALLOWED",
+				"Only move-in handovers can be accepted through this action",
+				403,
+			);
+		}
 	}
 }
 

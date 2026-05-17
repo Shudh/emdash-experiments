@@ -51,6 +51,25 @@ describe("ALM lifecycle action projection", () => {
 				}),
 				"owner",
 			).map((action) => action.id),
+		).not.toContain("handover.start_move_out");
+		expect(
+			assetAvailableActions(
+				row({
+					business_state: ASSET_BUSINESS_STATE.RENTED,
+					visibility_state: VISIBILITY_STATE.RESTRICTED,
+				}),
+				"owner",
+				{ allowLegacyRentedMoveOut: true },
+			).map((action) => action.id),
+		).toContain("handover.start_move_out");
+		expect(
+			assetAvailableActions(
+				row({
+					business_state: ASSET_BUSINESS_STATE.RETURN_PENDING,
+					visibility_state: VISIBILITY_STATE.RESTRICTED,
+				}),
+				"owner",
+			).map((action) => action.id),
 		).toContain("handover.start_move_out");
 		expect(
 			assetAvailableActions(

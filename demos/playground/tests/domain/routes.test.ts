@@ -4,15 +4,19 @@ import {
 	ASSET_BUSINESS_STATE,
 	CMS_STATUS,
 	COLLECTIONS,
+	HANDOVER_KIND,
 	ROUND_KIND,
 	ROUND_PHASE,
+	VISIBILITY_STATE,
 } from "../../src/lib/domain/constants.js";
 import { MemoryDomainStore } from "../../src/lib/domain/db.js";
 import type { DomainStore, UserContext } from "../../src/lib/domain/types.js";
 import { POST as expressInterestPost } from "../../src/pages/api/marketplace/assets/[id]/express-interest.js";
 import { POST as handoverAddRoundPost } from "../../src/pages/api/handover/[handoverId]/add-round.js";
+import { POST as handoverAcceptPost } from "../../src/pages/api/handover/[handoverId]/accept.js";
 import { POST as handoverClaimDamagePost } from "../../src/pages/api/handover/[handoverId]/claim-damage.js";
 import { POST as handoverSettlePost } from "../../src/pages/api/handover/[handoverId]/settle.js";
+import { POST as handoverStartPost } from "../../src/pages/api/handover/[assetId]/start.js";
 import { POST as addRoundPost } from "../../src/pages/api/negotiations/[interestId]/add-round.js";
 import { ALL as rentalBridgeAll } from "../../src/pages/api/rental/[...path].js";
 import { POST as updateConfigPost } from "../../src/pages/api/owner/assets/[id]/config.js";
@@ -370,6 +374,92 @@ describe("rental API route auth and validation", () => {
 		);
 		expect(ownerSettle.status).toBe(403);
 		expect((await bodyOf(ownerSettle)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+
+		const unrelatedSettle = await handoverSettlePost(
+			context(
+				store,
+				unrelated,
+				{
+					settlementSpec: { agreedRepairCost: 1000, renterAccepted: true },
+				},
+				{ handoverId: handover.id },
+			),
+		);
+		expect(unrelatedSettle.status).toBe(403);
+		expect((await bodyOf(unrelatedSettle)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+	});
+
+	test("handover start and accept enforce relationship and asset state", async () => {
+		const store = new MemoryDomainStore();
+		const asset = await createPublishedAsset(store);
+
+		const ownerListedMoveIn = await handoverStartPost(
+			context(
+				store,
+				owner,
+				{ handoverKind: HANDOVER_KIND.MOVE_IN },
+				{ assetId: asset.id },
+			),
+		);
+		expect(ownerListedMoveIn.status).toBe(409);
+		expect((await bodyOf(ownerListedMoveIn)).error?.code).toBe("INVALID_ASSET_STATE");
+
+		const bookedAsset = await store.update(COLLECTIONS.ASSETS, String(asset.id), {
+			business_state: ASSET_BUSINESS_STATE.BOOKED,
+			visibility_state: VISIBILITY_STATE.RESTRICTED,
+			active_agreement_id: "agreement_route",
+			active_renter_user_id: renter.id,
+		});
+
+		const renterMoveIn = await handoverStartPost(
+			context(
+				store,
+				renter,
+				{ handoverKind: HANDOVER_KIND.MOVE_IN },
+				{ assetId: bookedAsset.id },
+			),
+		);
+		expect(renterMoveIn.status).toBe(403);
+		expect((await bodyOf(renterMoveIn)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+
+		const ownerMoveIn = await handoverStartPost(
+			context(
+				store,
+				owner,
+				{ handoverKind: HANDOVER_KIND.MOVE_IN },
+				{ assetId: bookedAsset.id },
+			),
+		);
+		expect(ownerMoveIn.status).toBe(201);
+		const handover = (await bodyOf(ownerMoveIn)).data.handover as Record<string, unknown>;
+
+		const ownerAcceptMoveIn = await handoverAcceptPost(
+			context(store, owner, {}, { handoverId: handover.id }),
+		);
+		expect(ownerAcceptMoveIn.status).toBe(403);
+		expect((await bodyOf(ownerAcceptMoveIn)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+
+		const unrelatedAcceptMoveIn = await handoverAcceptPost(
+			context(store, unrelated, {}, { handoverId: handover.id }),
+		);
+		expect(unrelatedAcceptMoveIn.status).toBe(403);
+		expect((await bodyOf(unrelatedAcceptMoveIn)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+
+		const renterAcceptMoveIn = await handoverAcceptPost(
+			context(store, renter, {}, { handoverId: handover.id }),
+		);
+		expect(renterAcceptMoveIn.status).toBe(200);
+
+		const renterMoveOut = await handoverStartPost(
+			context(
+				store,
+				renter,
+				{ handoverKind: HANDOVER_KIND.MOVE_OUT },
+				{ assetId: bookedAsset.id },
+			),
+		);
+		expect(renterMoveOut.status).toBe(403);
+		expect((await bodyOf(renterMoveOut)).error?.code).toBe("OPERATION_NOT_ALLOWED");
 	});
 
 	test("rental mutation guard rejects missing CSRF header and foreign origins", async () => {

@@ -112,7 +112,7 @@ function hasAction(asset: Record<string, unknown>, actionId: string) {
 												{
 													asset.status === "published" && asset.business_state === "listed" && asset.visibility_state === "marketplace" ? (
 														<button class="rental-button secondary" disabled>Already published</button>
-													) : hasAction(asset, "handover.start_move_in") || (asset.active_agreement_id && asset.business_state === "booked") ? (
+													) : hasAction(asset, "handover.start_move_in") ? (
 														<ActionForm
 															title="Start move-in handover"
 															description="Open a move-in handover for the accepted agreement."
@@ -122,7 +122,7 @@ function hasAction(asset: Record<string, unknown>, actionId: string) {
 														>
 															<input type="hidden" name="handoverKind" value="move_in" />
 														</ActionForm>
-													) : hasAction(asset, "handover.start_move_out") || (asset.active_agreement_id && asset.business_state === "rented") ? (
+													) : hasAction(asset, "handover.start_move_out") ? (
 														<ActionForm
 															title="Start move-out handover"
 															description="Open the return handover for this active rental."

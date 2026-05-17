@@ -1,11 +1,35 @@
 import { describe, expect, test } from "vitest";
 
-import { ROUND_KIND, ROUND_PHASE } from "../../src/lib/domain/constants.js";
+import {
+	ASSET_BUSINESS_STATE,
+	CMS_STATUS,
+	ROUND_KIND,
+	ROUND_PHASE,
+} from "../../src/lib/domain/constants.js";
 import {
 	assertOperationAllowed,
 	resolveHandoverRoundOperation,
 	resolveNegotiationOperation,
 } from "../../src/lib/domain/operations.js";
+import type { DomainRow } from "../../src/lib/domain/types.js";
+
+function asset(state: string): DomainRow {
+	return {
+		id: "asset_1",
+		slug: "asset-1",
+		status: CMS_STATUS.PUBLISHED,
+		author_id: "owner",
+		created_at: "2026-01-01T00:00:00.000Z",
+		updated_at: "2026-01-01T00:00:00.000Z",
+		published_at: null,
+		scheduled_at: null,
+		deleted_at: null,
+		version: 1,
+		live_revision_id: null,
+		draft_revision_id: null,
+		business_state: state,
+	};
+}
 
 describe("ALM operation policy", () => {
 	test("maps valid owner and tenant negotiation rounds", () => {
@@ -74,5 +98,37 @@ describe("ALM operation policy", () => {
 		expect(() => assertOperationAllowed("handover.close_settlement", "owner")).toThrow(
 			"not allowed",
 		);
+	});
+
+	test("handover lifecycle operations are state-aware", () => {
+		expect(() =>
+			assertOperationAllowed({
+				operationId: "handover.start_move_in",
+				relationship: "owner",
+				asset: asset(ASSET_BUSINESS_STATE.BOOKED),
+			}),
+		).not.toThrow();
+		expect(() =>
+			assertOperationAllowed({
+				operationId: "handover.start_move_in",
+				relationship: "owner",
+				asset: asset(ASSET_BUSINESS_STATE.LISTED),
+			}),
+		).toThrow("Move-in handover can only start after booking");
+		expect(() =>
+			assertOperationAllowed({
+				operationId: "handover.start_move_out",
+				relationship: "owner",
+				asset: asset(ASSET_BUSINESS_STATE.RENTED),
+			}),
+		).toThrow("Move-out handover requires return pending state");
+		expect(() =>
+			assertOperationAllowed({
+				operationId: "handover.start_move_out",
+				relationship: "owner",
+				asset: asset(ASSET_BUSINESS_STATE.RENTED),
+				allowLegacyRentedMoveOut: true,
+			}),
+		).not.toThrow();
 	});
 });
