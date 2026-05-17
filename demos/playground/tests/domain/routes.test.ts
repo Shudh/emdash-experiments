@@ -3,12 +3,16 @@ import { describe, expect, test } from "vitest";
 import {
 	ASSET_BUSINESS_STATE,
 	CMS_STATUS,
+	COLLECTIONS,
 	ROUND_KIND,
 	ROUND_PHASE,
 } from "../../src/lib/domain/constants.js";
 import { MemoryDomainStore } from "../../src/lib/domain/db.js";
 import type { DomainStore, UserContext } from "../../src/lib/domain/types.js";
 import { POST as expressInterestPost } from "../../src/pages/api/marketplace/assets/[id]/express-interest.js";
+import { POST as handoverAddRoundPost } from "../../src/pages/api/handover/[handoverId]/add-round.js";
+import { POST as handoverClaimDamagePost } from "../../src/pages/api/handover/[handoverId]/claim-damage.js";
+import { POST as handoverSettlePost } from "../../src/pages/api/handover/[handoverId]/settle.js";
 import { POST as addRoundPost } from "../../src/pages/api/negotiations/[interestId]/add-round.js";
 import { ALL as rentalBridgeAll } from "../../src/pages/api/rental/[...path].js";
 import { POST as updateConfigPost } from "../../src/pages/api/owner/assets/[id]/config.js";
@@ -22,10 +26,19 @@ const unrelated: UserContext = { id: "route_unrelated", email: "other@example.co
 type RouteContext = Parameters<typeof addAssetPost>[0];
 type RentalBridgeContext = Parameters<typeof rentalBridgeAll>[0];
 
-function jsonRequest(body: unknown, url = "http://localhost/api"): Request {
+function rentalHeaders(extra?: HeadersInit): HeadersInit {
+	return {
+		"Content-Type": "application/json",
+		"X-EmDash-Request": "1",
+		Origin: "http://localhost",
+		...extra,
+	};
+}
+
+function jsonRequest(body: unknown, url = "http://localhost/api", headers?: HeadersInit): Request {
 	return new Request(url, {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: headers ?? rentalHeaders(),
 		body: JSON.stringify(body),
 	});
 }
@@ -33,7 +46,10 @@ function jsonRequest(body: unknown, url = "http://localhost/api"): Request {
 function routeRequest(method: string, path: string, body?: unknown): Request {
 	const init: RequestInit = {
 		method,
-		headers: { Accept: "application/json", "Content-Type": "application/json" },
+		headers:
+			method === "GET"
+				? { Accept: "application/json", "Content-Type": "application/json" }
+				: { Accept: "application/json", ...rentalHeaders() },
 	};
 	if (method !== "GET" && body !== undefined) init.body = JSON.stringify(body);
 	return new Request(`http://localhost/api/rental/${path}`, init);
@@ -44,9 +60,10 @@ function context(
 	user: UserContext | null,
 	body: unknown,
 	params = {},
+	request?: Request,
 ): RouteContext {
 	return {
-		request: jsonRequest(body),
+		request: request ?? jsonRequest(body),
 		locals: { user, emdash: { domainStore: store } },
 		params,
 	} as unknown as RouteContext;
@@ -95,6 +112,24 @@ async function createPublishedAsset(store: DomainStore) {
 	const publishResponse = await publishPost(context(store, owner, {}, { id: assetId }));
 	const publishBody = await bodyOf(publishResponse);
 	return publishBody.data.asset as Record<string, unknown>;
+}
+
+async function createInterest(store: DomainStore) {
+	const asset = await createPublishedAsset(store);
+	const response = await expressInterestPost(
+		context(
+			store,
+			renter,
+			{
+				name: "Renter",
+				acceptedConditionsVersion: Number(asset.conditions_version),
+				acceptedConditionsHash: String(asset.conditions_hash),
+			},
+			{ id: asset.id },
+		),
+	);
+	const body = await bodyOf(response);
+	return { asset, interest: body.data.interest as Record<string, unknown> };
 }
 
 describe("rental API route auth and validation", () => {
@@ -202,20 +237,7 @@ describe("rental API route auth and validation", () => {
 
 	test("negotiation actor_role is derived from relationship, not request JSON", async () => {
 		const store = new MemoryDomainStore();
-		const asset = await createPublishedAsset(store);
-		const interestResponse = await expressInterestPost(
-			context(
-				store,
-				renter,
-				{
-					name: "Renter",
-					acceptedConditionsVersion: Number(asset.conditions_version),
-					acceptedConditionsHash: String(asset.conditions_hash),
-				},
-				{ id: asset.id },
-			),
-		);
-		const interest = (await bodyOf(interestResponse)).data.interest;
+		const { interest } = await createInterest(store);
 
 		const roundResponse = await addRoundPost(
 			context(
@@ -236,6 +258,156 @@ describe("rental API route auth and validation", () => {
 		expect(body.data.round.actor_user_id).toBe(owner.id);
 		expect(body.data.round.actor_role).toBe("owner");
 		expect(body.data.round.status).toBe(CMS_STATUS.PUBLISHED);
+	});
+
+	test("operation policy rejects wrong negotiation actors", async () => {
+		const store = new MemoryDomainStore();
+		const { interest } = await createInterest(store);
+
+		const tenantQuestion = await addRoundPost(
+			context(
+				store,
+				renter,
+				{
+					roundPhase: ROUND_PHASE.PRE_AGREEMENT,
+					roundKind: ROUND_KIND.QUESTION,
+					message: "I should not create owner questions.",
+				},
+				{ interestId: interest.id },
+			),
+		);
+		expect(tenantQuestion.status).toBe(403);
+		expect((await bodyOf(tenantQuestion)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+
+		const ownerAnswer = await addRoundPost(
+			context(
+				store,
+				owner,
+				{
+					roundPhase: ROUND_PHASE.PRE_AGREEMENT,
+					roundKind: ROUND_KIND.ANSWER,
+					message: "I should not answer as tenant.",
+				},
+				{ interestId: interest.id },
+			),
+		);
+		expect(ownerAnswer.status).toBe(403);
+		expect((await bodyOf(ownerAnswer)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+
+		const unrelatedRound = await addRoundPost(
+			context(
+				store,
+				unrelated,
+				{
+					roundPhase: ROUND_PHASE.PRE_AGREEMENT,
+					roundKind: ROUND_KIND.OFFER,
+					message: "Unrelated offer.",
+				},
+				{ interestId: interest.id },
+			),
+		);
+		expect(unrelatedRound.status).toBe(403);
+		expect((await bodyOf(unrelatedRound)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+	});
+
+	test("operation policy rejects wrong handover actors", async () => {
+		const store = new MemoryDomainStore();
+		const asset = await createPublishedAsset(store);
+		const handover = await store.insert(COLLECTIONS.HANDOVER_SESSIONS, {
+			status: CMS_STATUS.PUBLISHED,
+			asset_id: asset.id,
+			owner_user_id: owner.id,
+			renter_user_id: renter.id,
+			handover_kind: "move_out",
+			handover_state: "disputed",
+		});
+		const check = await store.insert(COLLECTIONS.HANDOVER_ITEM_CHECKS, {
+			status: CMS_STATUS.PUBLISHED,
+			asset_id: asset.id,
+			handover_id: handover.id,
+			item_label: "Door",
+			dispute_state: "disputed",
+		});
+
+		const renterClaim = await handoverClaimDamagePost(
+			context(
+				store,
+				renter,
+				{
+					handoverItemCheckId: check.id,
+					ownerClaimedState: "damaged",
+				},
+				{ handoverId: handover.id },
+			),
+		);
+		expect(renterClaim.status).toBe(403);
+		expect((await bodyOf(renterClaim)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+
+		const ownerAnswer = await handoverAddRoundPost(
+			context(
+				store,
+				owner,
+				{
+					roundPhase: ROUND_PHASE.RETURN,
+					roundKind: ROUND_KIND.ANSWER,
+					message: "Owner cannot submit tenant damage response.",
+				},
+				{ handoverId: handover.id },
+			),
+		);
+		expect(ownerAnswer.status).toBe(403);
+		expect((await bodyOf(ownerAnswer)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+
+		const ownerSettle = await handoverSettlePost(
+			context(
+				store,
+				owner,
+				{
+					settlementSpec: { agreedRepairCost: 1000, renterAccepted: true },
+				},
+				{ handoverId: handover.id },
+			),
+		);
+		expect(ownerSettle.status).toBe(403);
+		expect((await bodyOf(ownerSettle)).error?.code).toBe("OPERATION_NOT_ALLOWED");
+	});
+
+	test("rental mutation guard rejects missing CSRF header and foreign origins", async () => {
+		const store = new MemoryDomainStore();
+		const noCsrf = await addAssetPost(
+			context(
+				store,
+				owner,
+				{ assetKind: "flat", title: "Missing CSRF" },
+				{},
+				jsonRequest(
+					{ assetKind: "flat", title: "Missing CSRF" },
+					"http://localhost/api",
+					{ "Content-Type": "application/json" },
+				),
+			),
+		);
+		expect(noCsrf.status).toBe(403);
+		expect((await bodyOf(noCsrf)).error?.code).toBe("CSRF_REJECTED");
+
+		const foreignOrigin = await addAssetPost(
+			context(
+				store,
+				owner,
+				{ assetKind: "flat", title: "Foreign Origin" },
+				{},
+				jsonRequest(
+					{ assetKind: "flat", title: "Foreign Origin" },
+					"http://localhost/api",
+					rentalHeaders({ Origin: "https://evil.example" }),
+				),
+			),
+		);
+		expect(foreignOrigin.status).toBe(403);
+		expect((await bodyOf(foreignOrigin)).error?.code).toBe("CSRF_REJECTED");
+
+		const marketplace = await rentalBridgeAll(bridgeContext(store, null, "GET", "marketplace/assets"));
+		expect(marketplace.status).toBe(200);
 	});
 
 	test("permanent /api/rental bridge exposes marketplace relationship metadata", async () => {

@@ -1,5 +1,4 @@
 import type { AddNegotiationRoundRequest } from "../api-contracts.js";
-import { requireInterestParticipant } from "../auth.js";
 import {
 	ASSET_BUSINESS_STATE,
 	CMS_STATUS,
@@ -9,11 +8,16 @@ import {
 	ROUND_STATE,
 } from "../constants.js";
 import { appendAssetEvent } from "../events.js";
+import {
+	assertOperationAllowed,
+	resolveNegotiationOperation,
+} from "../operations.js";
+import { resolveInterestRelationship } from "../relationship.js";
 import { getAssetOrThrow } from "../repositories/assets.js";
 import { getInterestOrThrow } from "../repositories/interests.js";
 import { assertAllowedAssetTransition } from "../transitions.js";
 import type { DomainStore, UserContext } from "../types.js";
-import { DomainError, asString } from "../types.js";
+import { asString } from "../types.js";
 
 export async function addNegotiationRound(
 	store: DomainStore,
@@ -21,12 +25,13 @@ export async function addNegotiationRound(
 	interestId: string,
 	input: AddNegotiationRoundRequest,
 ) {
-	await requireInterestParticipant(store, user, interestId);
+	const relationship = await resolveInterestRelationship(store, user, interestId);
+	const operationId = resolveNegotiationOperation(input, relationship.role);
+	assertOperationAllowed(operationId, relationship.role);
 	const interest = await getInterestOrThrow(store, interestId);
 	const ownerUserId = asString(interest.owner_user_id);
 	const renterUserId = asString(interest.interested_user_id);
-	const actorRole = user.id === ownerUserId ? "owner" : user.id === renterUserId ? "renter" : null;
-	if (!actorRole) throw new DomainError("FORBIDDEN", "Interest participant access required", 403);
+	const actorRole = relationship.role === "owner" ? "owner" : "renter";
 	const assetId = asString(interest.asset_id);
 	const asset = await getAssetOrThrow(store, assetId);
 	const fromState = asString(asset.business_state);

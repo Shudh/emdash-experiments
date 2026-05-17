@@ -7,16 +7,19 @@ import {
 	jsonError,
 	jsonOk,
 	requireParam,
+	withRentalMutationGuard,
 } from "../../../_domain-route-utils.js";
 
 export const prerender = false;
 
 export const POST: APIRoute = async (context) => {
 	try {
-		const store = getStore(context);
-		const user = getUser(context);
-		const assetId = requireParam(context, "id");
-		return jsonOk(await publishAssetToMarketplace(store, user, assetId));
+		return await withRentalMutationGuard(context, async () => {
+			const store = getStore(context);
+			const user = getUser(context);
+			const assetId = requireParam(context, "id");
+			return jsonOk(await publishAssetToMarketplace(store, user, assetId));
+		});
 	} catch (error) {
 		return jsonError(error);
 	}

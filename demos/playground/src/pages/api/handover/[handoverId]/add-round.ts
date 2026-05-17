@@ -9,17 +9,20 @@ import {
 	jsonOk,
 	readJson,
 	requireParam,
+	withRentalMutationGuard,
 } from "../../_domain-route-utils.js";
 
 export const prerender = false;
 
 export const POST: APIRoute = async (context) => {
 	try {
-		const store = getStore(context);
-		const user = getUser(context);
-		const handoverId = requireParam(context, "handoverId");
-		const body = parseAddNegotiationRoundRequest(await readJson(context.request));
-		return jsonOk(await addHandoverNegotiationRound(store, user, handoverId, body), 201);
+		return await withRentalMutationGuard(context, async () => {
+			const store = getStore(context);
+			const user = getUser(context);
+			const handoverId = requireParam(context, "handoverId");
+			const body = parseAddNegotiationRoundRequest(await readJson(context.request));
+			return jsonOk(await addHandoverNegotiationRound(store, user, handoverId, body), 201);
+		});
 	} catch (error) {
 		return jsonError(error);
 	}

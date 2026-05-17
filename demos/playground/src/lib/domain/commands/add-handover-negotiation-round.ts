@@ -1,9 +1,13 @@
 import type { AddNegotiationRoundRequest } from "../api-contracts.js";
-import { requireHandoverParticipant } from "../auth.js";
 import { CMS_STATUS, COLLECTIONS, ROUND_STATE } from "../constants.js";
+import {
+	assertOperationAllowed,
+	resolveHandoverRoundOperation,
+} from "../operations.js";
+import { resolveHandoverRelationship } from "../relationship.js";
 import { getHandoverOrThrow } from "../repositories/handover.js";
 import type { DomainStore, UserContext } from "../types.js";
-import { DomainError, asString } from "../types.js";
+import { asString } from "../types.js";
 
 export async function addHandoverNegotiationRound(
 	store: DomainStore,
@@ -11,12 +15,13 @@ export async function addHandoverNegotiationRound(
 	handoverId: string,
 	input: AddNegotiationRoundRequest,
 ) {
-	await requireHandoverParticipant(store, user, handoverId);
+	const relationship = await resolveHandoverRelationship(store, user, handoverId);
+	const operationId = resolveHandoverRoundOperation(input, relationship.role);
+	assertOperationAllowed(operationId, relationship.role);
 	const handover = await getHandoverOrThrow(store, handoverId);
 	const ownerUserId = asString(handover.owner_user_id);
 	const renterUserId = asString(handover.renter_user_id);
-	const actorRole = user.id === ownerUserId ? "owner" : user.id === renterUserId ? "renter" : null;
-	if (!actorRole) throw new DomainError("FORBIDDEN", "Handover participant access required", 403);
+	const actorRole = relationship.role === "owner" ? "owner" : "renter";
 	const round = await store.insert(COLLECTIONS.NEGOTIATION_ROUNDS, {
 		status: CMS_STATUS.PUBLISHED,
 		author_id: user.id,

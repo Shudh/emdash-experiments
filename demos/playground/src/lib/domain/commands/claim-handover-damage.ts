@@ -1,5 +1,4 @@
 import type { ClaimHandoverDamageRequest } from "../api-contracts.js";
-import { requireHandoverParticipant } from "../auth.js";
 import {
 	CMS_STATUS,
 	COLLECTIONS,
@@ -11,6 +10,8 @@ import {
 	ROUND_STATE,
 } from "../constants.js";
 import { appendAssetEvent } from "../events.js";
+import { assertOperationAllowed } from "../operations.js";
+import { resolveHandoverRelationship } from "../relationship.js";
 import { getHandoverOrThrow } from "../repositories/handover.js";
 import type { DomainStore, UserContext } from "../types.js";
 import { DomainError, asString } from "../types.js";
@@ -22,7 +23,8 @@ export async function claimHandoverDamage(
 	input: ClaimHandoverDamageRequest,
 ) {
 	return store.transaction(async (tx) => {
-		await requireHandoverParticipant(tx, user, handoverId);
+		const relationship = await resolveHandoverRelationship(tx, user, handoverId);
+		assertOperationAllowed("handover.owner_claim_damage", relationship.role);
 		const handover = await getHandoverOrThrow(tx, handoverId);
 		const check = await tx.get(COLLECTIONS.HANDOVER_ITEM_CHECKS, input.handoverItemCheckId);
 		if (!check)
@@ -53,7 +55,7 @@ export async function claimHandoverDamage(
 			owner_user_id: asString(handover.owner_user_id),
 			renter_user_id: asString(handover.renter_user_id),
 			actor_user_id: user.id,
-			actor_role: asString(handover.owner_user_id) === user.id ? "owner" : "renter",
+			actor_role: "owner",
 			round_phase: ROUND_PHASE.RETURN,
 			round_kind: ROUND_KIND.DAMAGE_CLAIM,
 			round_state: ROUND_STATE.PROPOSED,
