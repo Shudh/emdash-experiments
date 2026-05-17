@@ -1,10 +1,18 @@
 import type { StartHandoverRequest } from "../api-contracts.js";
-import { requireAssetParticipant } from "../auth.js";
-import { CMS_STATUS, COLLECTIONS, EVENT_KIND, HANDOVER_STATE } from "../constants.js";
+import {
+	CMS_STATUS,
+	COLLECTIONS,
+	EVENT_KIND,
+	HANDOVER_KIND,
+	HANDOVER_STATE,
+} from "../constants.js";
 import { appendAssetEvent } from "../events.js";
+import { loadAssetLifecycleContext } from "../lifecycle-context.js";
+import { assertOperationAllowed } from "../operations.js";
+import { resolveAssetRelationship } from "../relationship.js";
 import { getAssetOrThrow } from "../repositories/assets.js";
 import type { DomainStore, UserContext } from "../types.js";
-import { asNumber, asString } from "../types.js";
+import { DomainError, asNumber, asString } from "../types.js";
 
 export async function startHandover(
 	store: DomainStore,
@@ -13,8 +21,17 @@ export async function startHandover(
 	input: StartHandoverRequest,
 ) {
 	return store.transaction(async (tx) => {
-		await requireAssetParticipant(tx, user, assetId);
+		const relationship = await resolveAssetRelationship(tx, user, assetId);
 		const asset = await getAssetOrThrow(tx, assetId);
+		const operationId = operationForHandoverKind(input.handoverKind);
+		assertOperationAllowed({
+			operationId,
+			relationship: relationship.role,
+			asset,
+			lifecycleContext: await loadAssetLifecycleContext(tx, asset),
+			payload: input,
+			allowLegacyRentedMoveOut: true,
+		});
 		const agreementId = asString(asset.active_agreement_id);
 		const renterUserId = asString(asset.active_renter_user_id);
 		const ownerUserId = asString(asset.owner_user_id);
@@ -87,4 +104,10 @@ export async function startHandover(
 		});
 		return { handover, checks };
 	});
+}
+
+function operationForHandoverKind(handoverKind: string) {
+	if (handoverKind === HANDOVER_KIND.MOVE_IN) return "handover.start_move_in" as const;
+	if (handoverKind === HANDOVER_KIND.MOVE_OUT) return "handover.start_move_out" as const;
+	throw new DomainError("UNSUPPORTED_HANDOVER_KIND", "Unsupported handover kind", 400);
 }

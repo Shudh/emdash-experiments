@@ -1,4 +1,5 @@
 ---
+import "../styles/rental-responsive-hardening.css";
 export const prerender = false;
 
 interface Props {
@@ -9,6 +10,12 @@ interface Props {
 const { title = "ALM Rentals", description = "Thin rental workflow over EmDash" } = Astro.props;
 const fullTitle = title === "ALM Rentals" ? title : `${title} - ALM Rentals`;
 const user = Astro.locals.user as { email?: string | null } | undefined;
+const currentPath = Astro.url.pathname + Astro.url.search;
+const safeCurrentPath =
+	currentPath.startsWith("/") && !currentPath.startsWith("//") && !currentPath.startsWith("/_emdash")
+		? currentPath
+		: "/";
+const loginHref = `/login?redirect=${encodeURIComponent(safeCurrentPath)}`;
 ---
 
 <!doctype html>
@@ -264,16 +271,28 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 	</head>
 	<body>
 		<header class="rental-topbar">
-			<div class="rental-shell rental-nav">
-				<a href="/" class="rental-brand">ALM Rentals</a>
-				<nav aria-label="Rental navigation">
-					<a href="/marketplace">Marketplace</a>
-					<a href="/owner">Owner</a>
-					<a href="/owner/assets/new">List asset</a>
-				</nav>
-				<span class="rental-user">{user?.email ?? "Public"}</span>
-			</div>
-		</header>
+	<div class="rental-shell rental-nav">
+		<a href="/" class="rental-brand">ALM Rentals</a>
+		<nav aria-label="Rental navigation">
+			<a href="/marketplace">Marketplace</a>
+			<a href="/owner">Owner</a>
+			<a href="/owner/assets/new">List asset</a>
+		</nav>
+
+		{
+			user?.email ? (
+				<div class="rental-account">
+					<span class="rental-user">{user.email}</span>
+					<button class="rental-link-button" type="button" data-rental-logout>
+	Logout
+</button>
+				</div>
+			) : (
+				<a class="rental-login-link" href={loginHref}>Login / register</a>
+			)
+		}
+	</div>
+</header>
 		<main>
 			<slot />
 		</main>
@@ -282,6 +301,41 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 				<span>Backend-owned workflow. Astro-owned pages.</span>
 			</div>
 		</footer>
+		<script is:inline>
+	const logoutButton = document.querySelector("[data-rental-logout]");
+
+	if (logoutButton) {
+		logoutButton.addEventListener("click", async () => {
+			logoutButton.setAttribute("disabled", "disabled");
+			logoutButton.textContent = "Logging out...";
+
+			try {
+				const response = await fetch("/_emdash/api/auth/logout", {
+					method: "POST",
+					credentials: "same-origin",
+					headers: {
+						"X-EmDash-Request": "1",
+					},
+				});
+
+				if (!response.ok) {
+					const payload = await response.json().catch(() => ({}));
+					const message =
+						payload && payload.error && payload.error.message
+							? payload.error.message
+							: "Logout failed.";
+					throw new Error(message);
+				}
+
+				window.location.assign("/login");
+			} catch (error) {
+				logoutButton.removeAttribute("disabled");
+				logoutButton.textContent = "Logout";
+				alert(error instanceof Error ? error.message : "Logout failed.");
+			}
+		});
+	}
+</script>
 		<style>
 			.rental-topbar {
 				position: sticky;
@@ -312,7 +366,9 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 			}
 
 			.rental-nav nav a,
-			.rental-user {
+			.rental-user,
+			 .rental-login-link,
+            .rental-link-button {
 				color: var(--r-muted);
 				font-size: 0.92rem;
 				font-weight: 650;
@@ -337,6 +393,38 @@ const user = Astro.locals.user as { email?: string | null } | undefined;
 					margin-left: 0;
 				}
 			}
+
+			.rental-account {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.rental-logout-form {
+	margin: 0;
+}
+
+.rental-login-link,
+.rental-link-button {
+	border: 1px solid var(--r-border);
+	border-radius: var(--r-radius);
+	padding: 8px 12px;
+	background: var(--r-panel);
+	color: var(--r-brand-strong);
+	font-size: 0.92rem;
+	font-weight: 800;
+	text-decoration: none;
+}
+
+.rental-link-button {
+	cursor: pointer;
+}
+
+.rental-link-button:hover,
+.rental-login-link:hover {
+	border-color: var(--r-brand);
+}
 		</style>
 	</body>
 </html>

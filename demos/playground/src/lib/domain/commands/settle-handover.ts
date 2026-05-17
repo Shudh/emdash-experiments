@@ -1,5 +1,4 @@
 import type { SettleHandoverRequest } from "../api-contracts.js";
-import { requireHandoverParticipant } from "../auth.js";
 import {
 	ASSET_BUSINESS_STATE,
 	COLLECTIONS,
@@ -9,6 +8,8 @@ import {
 	VISIBILITY_STATE,
 } from "../constants.js";
 import { appendAssetEvent } from "../events.js";
+import { assertOperationAllowed } from "../operations.js";
+import { resolveHandoverRelationship } from "../relationship.js";
 import { getAssetOrThrow } from "../repositories/assets.js";
 import { getHandoverOrThrow, listHandoverChecks } from "../repositories/handover.js";
 import { assertAllowedAssetTransition } from "../transitions.js";
@@ -45,7 +46,8 @@ export async function settleHandover(
 	input: SettleHandoverRequest,
 ) {
 	return store.transaction(async (tx) => {
-		await requireHandoverParticipant(tx, user, handoverId);
+		const relationship = await resolveHandoverRelationship(tx, user, handoverId);
+		assertOperationAllowed("handover.close_settlement", relationship.role);
 		const handover = await getHandoverOrThrow(tx, handoverId);
 		const asset = await getAssetOrThrow(tx, asString(handover.asset_id));
 		const fromState = asString(asset.business_state);

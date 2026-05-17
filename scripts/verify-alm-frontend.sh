@@ -48,6 +48,8 @@ pnpm exec tsc -p demos/playground/tsconfig.test.json --noEmit
 packages/blocks/node_modules/.bin/vitest run demos/playground/tests/domain
 pnpm exec playwright test -c playwright.rental-local.config.ts e2e/tests/rental-local-existing-users.spec.ts --project=chromium --headed
 pnpm exec playwright test -c playwright.rental-local.config.ts e2e/tests/rental-local-ui-smoke.spec.ts --project=chromium --headed
+pnpm --filter emdash typecheck
+node scripts/verify-alm-prod-schema.mjs --db .local/rental-sandbox/test.db
 COMMANDS
 
 if [[ "$RUN_TESTS" == "1" ]]; then
@@ -55,4 +57,6 @@ if [[ "$RUN_TESTS" == "1" ]]; then
   packages/blocks/node_modules/.bin/vitest run demos/playground/tests/domain
   pnpm exec playwright test -c playwright.rental-local.config.ts e2e/tests/rental-local-existing-users.spec.ts --project=chromium --headed
   pnpm exec playwright test -c playwright.rental-local.config.ts e2e/tests/rental-local-ui-smoke.spec.ts --project=chromium --headed
+  pnpm --filter emdash typecheck
+  node scripts/verify-alm-prod-schema.mjs --db .local/rental-sandbox/test.db
 fi

@@ -3,16 +3,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { expect, test } from "../fixtures";
+import {
+	anonymousPostAt,
+	createPublishedFlatViaApi,
+	rentalRequestAt,
+	RENTAL_JSON_HEADERS,
+	uniqueRentalTitle,
+	type ApiBody,
+} from "../rental-flow-utils.js";
 import { addVirtualWebAuthnAuthenticator } from "../fixtures/virtual-authenticator";
 
 const ADMIN_URL_PATTERN = /\/_emdash\/admin/;
 const ADMIN_DASHBOARD_URL_PATTERN = /\/_emdash\/admin\/?$/;
 const URL_IN_TEXT_REGEX = /https?:\/\/[^\s]+/;
 const SERVER_INFO_PATH = join(tmpdir(), "emdash-pw-server.json");
-const RENTAL_HEADERS = { "Content-Type": "application/json", "X-EmDash-Request": "1" };
 
 type ServerInfo = { baseUrl: string; token: string; sessionCookie: string };
-type ApiBody<T> = { ok?: boolean; data?: T; error?: { code: string; message: string } };
 
 type RentalUser = {
 	id: string;
@@ -36,6 +42,7 @@ async function currentUserFromCookies(cookie: string): Promise<Response> {
 
 async function createInviteViaApi(email: string, role = 30): Promise<string> {
 	const { baseUrl, token, sessionCookie } = getServerInfo();
+
 	await fetch(`${baseUrl}/_emdash/api/dev/emails`, {
 		method: "DELETE",
 		headers: { "X-EmDash-Request": "1", Cookie: sessionCookie },
@@ -44,28 +51,37 @@ async function createInviteViaApi(email: string, role = 30): Promise<string> {
 	const createRes = await fetch(`${baseUrl}/_emdash/api/auth/invite`, {
 		method: "POST",
 		headers: {
-			"Content-Type": "application/json",
-			"X-EmDash-Request": "1",
+			...RENTAL_JSON_HEADERS,
 			Authorization: `Bearer ${token}`,
 		},
 		body: JSON.stringify({ email, role }),
 	});
-	if (!createRes.ok)
+
+	if (!createRes.ok) {
 		throw new Error(`Invite creation failed: ${createRes.status} ${await createRes.text()}`);
+	}
+
 	const createBody = (await createRes.json()) as { data?: { inviteUrl?: string } };
+
 	if (createBody.data?.inviteUrl) return createBody.data.inviteUrl;
 
 	const emailsRes = await fetch(`${baseUrl}/_emdash/api/dev/emails`, {
 		headers: { Authorization: `Bearer ${token}` },
 	});
-	if (!emailsRes.ok)
+
+	if (!emailsRes.ok) {
 		throw new Error(`Dev emails failed: ${emailsRes.status} ${await emailsRes.text()}`);
+	}
+
 	const emailsBody = (await emailsRes.json()) as {
 		data?: { items?: Array<{ message: { text: string } }> };
 	};
+
 	const latestEmail = emailsBody.data?.items?.[0];
 	const match = latestEmail?.message.text.match(URL_IN_TEXT_REGEX);
+
 	if (!match) throw new Error("Invite email did not contain an invite URL");
+
 	return match[0];
 }
 
@@ -79,6 +95,7 @@ async function registerInvitedUser(
 	const inviteUrl = await createInviteViaApi(email, 30);
 	const inviteToken = new URL(inviteUrl).searchParams.get("token")!;
 	const removeAuth = await addVirtualWebAuthnAuthenticator(page);
+
 	try {
 		await page.goto(`/_emdash/admin/invite/accept?token=${inviteToken}`);
 		await page.waitForSelector("astro-island:not([ssr])", { timeout: 60_000 });
@@ -86,27 +103,31 @@ async function registerInvitedUser(
 		await page.getByRole("button", { name: "Create Account" }).click();
 		await expect(page).toHaveURL(ADMIN_URL_PATTERN, { timeout: 60_000 });
 
-		// Invite registration creates the passkey-backed user. Log out any transient
-		// post-registration session and then sign in with that same virtual
-		// authenticator so subsequent API calls use an explicit real session cookie.
 		await page.evaluate(async () => {
 			await fetch("/_emdash/api/auth/logout", {
 				method: "POST",
 				headers: { "X-EmDash-Request": "1" },
 			});
 		});
+
 		await page.goto("/_emdash/admin/login", { waitUntil: "domcontentloaded" }).catch((error) => {
 			if (!(error instanceof Error) || !error.message.includes("ERR_ABORTED")) throw error;
 		});
+
 		await page.waitForSelector("astro-island:not([ssr])", { timeout: 60_000 });
+
 		if (!ADMIN_DASHBOARD_URL_PATTERN.test(page.url())) {
 			await page.getByRole("button", { name: /Sign in with Passkey/i }).click();
 			await expect(page).toHaveURL(ADMIN_DASHBOARD_URL_PATTERN, { timeout: 60_000 });
 		}
+
 		const cookie = await cookieHeader(context);
 		const me = await currentUserFromCookies(cookie);
+
 		expect(me.status).toBe(200);
+
 		const meBody = (await me.json()) as { data: { id: string; email: string; role: number } };
+
 		return {
 			id: meBody.data.id,
 			email: meBody.data.email,
@@ -119,38 +140,6 @@ async function registerInvitedUser(
 	}
 }
 
-async function rentalRequest<T>(
-	user: RentalUser,
-	method: string,
-	path: string,
-	body?: unknown,
-): Promise<{ status: number; body: ApiBody<T> }> {
-	const response =
-		method === "GET"
-			? await fetch(`${getServerInfo().baseUrl}${path}`, {
-					method,
-					headers: { Cookie: user.cookie },
-				})
-			: await fetch(`${getServerInfo().baseUrl}${path}`, {
-					method,
-					headers: { ...RENTAL_HEADERS, Cookie: user.cookie },
-					body: JSON.stringify(body ?? {}),
-				});
-	return { status: response.status, body: (await response.json()) as ApiBody<T> };
-}
-
-async function anonymousPost(
-	path: string,
-	body: unknown,
-): Promise<{ status: number; body: ApiBody<unknown> }> {
-	const response = await fetch(`${getServerInfo().baseUrl}${path}`, {
-		method: "POST",
-		headers: RENTAL_HEADERS,
-		body: JSON.stringify(body),
-	});
-	return { status: response.status, body: (await response.json()) as ApiBody<unknown> };
-}
-
 test.describe("rental SaaS flow with real EmDash sessions", () => {
 	test.describe.configure({ mode: "serial" });
 
@@ -158,13 +147,11 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 		browser,
 	}) => {
 		test.setTimeout(180_000);
-		const reset = await fetch(`${getServerInfo().baseUrl}/api/rental/reset`, {
-			method: "POST",
-			headers: { "X-EmDash-Request": "1" },
-		});
-		expect(reset.status).toBe(200);
 
+		const { baseUrl } = getServerInfo();
 		const unique = Date.now();
+		const title = uniqueRentalTitle("Habitat Mayflower SaaS Flow");
+
 		const owner = await registerInvitedUser(
 			browser,
 			`rental-owner-${unique}@example.com`,
@@ -184,48 +171,41 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 		try {
 			expect(String(owner.role)).not.toBe("owner");
 
-			const add = await rentalRequest<any>(owner, "POST", "/api/rental/owner/assets/add", {
-				assetKind: "flat",
-				title: "Session-backed rental flat",
+			const created = await createPublishedFlatViaApi(owner, {
+				baseUrl,
+				title,
 				locationLabel: "Indiranagar",
 				publicPrice: 60000,
 				ownerConditionsSpec: {
 					depositPolicy: "Two months deposit covers chargeable damage.",
 					documentsRequired: ["company_id", "salary_slip"],
 				},
-			});
-			expect(add.status).toBe(201);
-			const asset = add.body.data.asset;
-			expect(asset.owner_user_id).toBe(owner.id);
-			expect(asset.author_id).toBe(owner.id);
-
-			await rentalRequest(owner, "POST", `/api/rental/owner/assets/${asset.id}/config`, {
-				publicPrice: 60000,
-				minimumMonths: 11,
 				configSpec: { bedrooms: 2, furnishing: "semi_furnished" },
 				conditionSpec: { walls: "freshly_painted" },
 				items: [{ itemKind: "appliance", itemLabel: "Geyser", ownerDeclaredState: "working" }],
 			});
-			const published = await rentalRequest<any>(
-				owner,
-				"POST",
-				`/api/rental/owner/assets/${asset.id}/publish-to-marketplace`,
-			);
-			expect(published.status).toBe(200);
 
-			const publicList = await fetch(`${getServerInfo().baseUrl}/api/rental/marketplace/assets`);
-			expect(publicList.status).toBe(200);
-			const publicListBody = (await publicList.json()) as ApiBody<{ items: any[] }>;
-			expect(publicListBody.data?.items.some((item) => item.id === asset.id)).toBe(true);
+			const asset = created.asset;
+			const ownerConditions = created.ownerConditions;
 
-			const publicDetails = await fetch(
-				`${getServerInfo().baseUrl}/api/rental/marketplace/assets/${asset.id}`,
-			);
+			expect(asset.owner_user_id).toBe(owner.id);
+			expect(asset.author_id).toBe(owner.id);
+
+			const publicDetails = await fetch(`${baseUrl}/api/rental/marketplace/assets/${asset.id}`);
 			expect(publicDetails.status).toBe(200);
-			const detailsBody = (await publicDetails.json()) as ApiBody<any>;
-			expect(detailsBody.data.ownerConditions.spec.depositPolicy).toContain("deposit");
 
-			const anonInterest = await anonymousPost(
+			const detailsBody = (await publicDetails.json()) as ApiBody<{
+				ownerConditions: {
+					version: number;
+					hash: string;
+					spec: Record<string, unknown>;
+				};
+			}>;
+
+			expect(detailsBody.data?.ownerConditions.spec.depositPolicy).toContain("deposit");
+
+			const anonInterest = await anonymousPostAt(
+				baseUrl,
 				`/api/rental/marketplace/assets/${asset.id}/express-interest`,
 				{
 					name: "Anonymous",
@@ -233,7 +213,8 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 			);
 			expect(anonInterest.status).toBe(401);
 
-			const missingConditions = await rentalRequest(
+			const missingConditions = await rentalRequestAt(
+				baseUrl,
 				renter,
 				"POST",
 				`/api/rental/marketplace/assets/${asset.id}/express-interest`,
@@ -241,33 +222,41 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 			);
 			expect(missingConditions.status).toBe(422);
 
-			const acceptedInterest = await rentalRequest<any>(
-				renter,
-				"POST",
-				`/api/rental/marketplace/assets/${asset.id}/express-interest`,
-				{
-					name: "Rental Renter",
-					officialEmail: renter.email,
-					employerName: "SaaS Corp",
-					offeredPrice: 58000,
-					interestSpec: { salaryBand: "25L", companyInfo: "Series B SaaS" },
-					acceptedConditionsVersion: detailsBody.data.ownerConditions.version,
-					acceptedConditionsHash: detailsBody.data.ownerConditions.hash,
-				},
-			);
-			expect(acceptedInterest.status).toBe(201);
-			const interest = acceptedInterest.body.data.interest;
-			expect(interest.interested_user_id).toBe(renter.id);
-			expect(interest.accepted_conditions_snapshot).toEqual(detailsBody.data.ownerConditions.spec);
+			const acceptedInterest = await rentalRequestAt<{
+				interest: Record<string, unknown>;
+			}>(baseUrl, renter, "POST", `/api/rental/marketplace/assets/${asset.id}/express-interest`, {
+				name: "Rental Renter",
+				officialEmail: renter.email,
+				employerName: "SaaS Corp",
+				offeredPrice: 58000,
+				interestSpec: { salaryBand: "25L", companyInfo: "Series B SaaS" },
+				acceptedConditionsVersion: ownerConditions.version,
+				acceptedConditionsHash: ownerConditions.hash,
+			});
 
-			await rentalRequest(owner, "POST", `/api/rental/owner/assets/${asset.id}/config`, {
+			expect(acceptedInterest.status).toBe(201);
+
+			const interest = acceptedInterest.body.data?.interest;
+
+			if (!interest) {
+				throw new Error(`No interest returned: ${JSON.stringify(acceptedInterest.body)}`);
+			}
+
+			expect(interest.interested_user_id).toBe(renter.id);
+			expect(interest.accepted_conditions_snapshot).toEqual(ownerConditions.spec);
+
+			await rentalRequestAt(baseUrl, owner, "POST", `/api/rental/owner/assets/${asset.id}/config`, {
 				items: [],
 				ownerConditionsSpec: { depositPolicy: "Updated for later renters only." },
 			});
+
 			expect(interest.accepted_conditions_snapshot.depositPolicy).toContain("Two months");
 
-			const inbox = await rentalRequest<any>(owner, "GET", "/api/rental/owner/dashboard");
-			expect(inbox.body.data.inbox).toEqual(
+			const inbox = await rentalRequestAt<{
+				inbox: Array<Record<string, unknown>>;
+			}>(baseUrl, owner, "GET", "/api/rental/owner/dashboard");
+
+			expect(inbox.body.data?.inbox).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({
 						asset_id: asset.id,
@@ -279,58 +268,59 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 				]),
 			);
 
-			await rentalRequest(owner, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
+			await rentalRequestAt(baseUrl, owner, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
 				roundPhase: "pre_agreement",
 				roundKind: "question",
 				actorRole: "renter",
 				message: "Please upload company ID.",
 			});
-			await rentalRequest(renter, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
+
+			await rentalRequestAt(baseUrl, renter, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
 				roundPhase: "pre_agreement",
 				roundKind: "answer",
 				roundState: "answered",
 				message: "Company ID uploaded.",
 				termsSpec: { document: "company_id" },
 			});
-			await rentalRequest(renter, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
+
+			await rentalRequestAt(baseUrl, renter, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
 				roundPhase: "pre_agreement",
 				roundKind: "offer",
 				price: 59000,
 				message: "Can close at 59k.",
 			});
-			await rentalRequest(owner, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
+
+			await rentalRequestAt(baseUrl, owner, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
 				roundPhase: "pre_agreement",
 				roundKind: "rejection",
 				roundState: "rejected",
 				message: "Rejecting 59k without full deposit.",
 			});
-			await rentalRequest(owner, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
+
+			await rentalRequestAt(baseUrl, owner, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
 				roundPhase: "pre_agreement",
 				roundKind: "counter",
 				price: 60000,
 				message: "Counter at listed rent with deep cleaning.",
 			});
-			const acceptance = await rentalRequest<any>(
-				renter,
-				"POST",
-				`/api/rental/negotiations/${interest.id}/add-round`,
-				{
-					roundPhase: "pre_agreement",
-					roundKind: "acceptance",
-					roundState: "accepted",
-					price: 60000,
-					minimumMonths: 11,
-					depositAmount: 120000,
-					message: "Accepted final terms.",
-				},
-			);
 
-			const thread = await rentalRequest<any>(
-				owner,
-				"GET",
-				`/api/rental/negotiations/${interest.id}`,
-			);
-			expect(thread.body.data.rounds.map((round) => round.actor_user_id)).toEqual([
+			const acceptance = await rentalRequestAt<{
+				round: Record<string, unknown>;
+			}>(baseUrl, renter, "POST", `/api/rental/negotiations/${interest.id}/add-round`, {
+				roundPhase: "pre_agreement",
+				roundKind: "acceptance",
+				roundState: "accepted",
+				price: 60000,
+				minimumMonths: 11,
+				depositAmount: 120000,
+				message: "Accepted final terms.",
+			});
+
+			const thread = await rentalRequestAt<{
+				rounds: Array<Record<string, unknown>>;
+			}>(baseUrl, owner, "GET", `/api/rental/negotiations/${interest.id}`);
+
+			expect(thread.body.data?.rounds.map((round) => round.actor_user_id)).toEqual([
 				owner.id,
 				renter.id,
 				renter.id,
@@ -338,7 +328,8 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 				owner.id,
 				renter.id,
 			]);
-			expect(thread.body.data.rounds.map((round) => round.actor_role)).toEqual([
+
+			expect(thread.body.data?.rounds.map((round) => round.actor_role)).toEqual([
 				"owner",
 				"renter",
 				"renter",
@@ -347,74 +338,79 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 				"renter",
 			]);
 
-			const agreementResult = await rentalRequest<any>(
-				owner,
-				"POST",
-				`/api/rental/negotiations/${interest.id}/accept-final-terms`,
-				{
-					acceptedRoundId: acceptance.body.data.round.id,
-					agreementKind: "flat_rental",
-					effectiveFrom: "2026-07-01",
-				},
-			);
+			const agreementResult = await rentalRequestAt<{
+				agreement: Record<string, unknown>;
+				asset: Record<string, unknown>;
+			}>(baseUrl, owner, "POST", `/api/rental/negotiations/${interest.id}/accept-final-terms`, {
+				acceptedRoundId: acceptance.body.data?.round.id,
+				agreementKind: "flat_rental",
+				effectiveFrom: "2026-07-01",
+			});
+
 			expect(agreementResult.status).toBe(201);
-			const agreement = agreementResult.body.data.agreement;
+
+			const agreement = agreementResult.body.data?.agreement;
+
+			if (!agreement) {
+				throw new Error(`No agreement returned: ${JSON.stringify(agreementResult.body)}`);
+			}
+
 			expect(agreement.printable_snapshot.owner_conditions.spec.depositPolicy).toContain("Updated");
 			expect(
 				agreement.printable_snapshot.renter_accepted_conditions.snapshot.depositPolicy,
 			).toContain("Two months");
-			expect(agreementResult.body.data.asset.visibility_state).toBe("restricted");
+			expect(agreementResult.body.data?.asset.visibility_state).toBe("restricted");
 
-			const afterAgreementList = await fetch(
-				`${getServerInfo().baseUrl}/api/rental/marketplace/assets`,
-			);
+			const afterAgreementList = await fetch(`${baseUrl}/api/rental/marketplace/assets`);
 			const afterAgreementBody = (await afterAgreementList.json()) as ApiBody<{ items: any[] }>;
 			expect(afterAgreementBody.data?.items.some((item) => item.id === asset.id)).toBe(false);
 
-			const renterAgreement = await rentalRequest<any>(
-				renter,
-				"GET",
-				`/api/rental/agreements/${agreement.id}`,
-			);
+			const renterAgreement = await rentalRequestAt<{
+				agreement: Record<string, unknown>;
+			}>(baseUrl, renter, "GET", `/api/rental/agreements/${agreement.id}`);
+
 			expect(renterAgreement.status).toBe(200);
-			const unrelatedAgreement = await rentalRequest<any>(
+
+			const unrelatedAgreement = await rentalRequestAt(
+				baseUrl,
 				unrelated,
 				"GET",
 				`/api/rental/agreements/${agreement.id}`,
 			);
-			expect(unrelatedAgreement.status).toBe(403);
-			const snapshotBeforeReturn = JSON.stringify(
-				renterAgreement.body.data.agreement.printable_snapshot,
-			);
 
-			const moveIn = await rentalRequest<any>(
-				owner,
-				"POST",
-				`/api/rental/handover/${asset.id}/start`,
-				{
-					handoverKind: "move_in",
-					summarySpec: { keys: 2 },
-				},
-			);
-			await rentalRequest(
+			expect(unrelatedAgreement.status).toBe(403);
+
+			const snapshotBeforeReturn = JSON.stringify(renterAgreement.body.data?.agreement.printable_snapshot);
+
+			const moveIn = await rentalRequestAt<{
+				handover: Record<string, unknown>;
+			}>(baseUrl, owner, "POST", `/api/rental/handover/${asset.id}/start`, {
+				handoverKind: "move_in",
+				summarySpec: { keys: 2 },
+			});
+
+			await rentalRequestAt(
+				baseUrl,
 				renter,
 				"POST",
-				`/api/rental/handover/${moveIn.body.data.handover.id}/accept`,
+				`/api/rental/handover/${moveIn.body.data?.handover.id}/accept`,
 			);
-			const moveOut = await rentalRequest<any>(
+
+			const moveOut = await rentalRequestAt<{
+				handover: Record<string, unknown>;
+				checks: Array<Record<string, unknown>>;
+			}>(baseUrl, owner, "POST", `/api/rental/handover/${asset.id}/start`, {
+				handoverKind: "move_out",
+				baselineHandoverId: moveIn.body.data?.handover.id,
+			});
+
+			const checkId = moveOut.body.data?.checks[0].id;
+
+			await rentalRequestAt(
+				baseUrl,
 				owner,
 				"POST",
-				`/api/rental/handover/${asset.id}/start`,
-				{
-					handoverKind: "move_out",
-					baselineHandoverId: moveIn.body.data.handover.id,
-				},
-			);
-			const checkId = moveOut.body.data.checks[0].id;
-			await rentalRequest(
-				owner,
-				"POST",
-				`/api/rental/handover/${moveOut.body.data.handover.id}/claim-damage`,
+				`/api/rental/handover/${moveOut.body.data?.handover.id}/claim-damage`,
 				{
 					handoverItemCheckId: checkId,
 					ownerClaimedState: "damaged",
@@ -422,10 +418,12 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 					message: "Geyser damaged during stay.",
 				},
 			);
-			await rentalRequest(
+
+			await rentalRequestAt(
+				baseUrl,
 				renter,
 				"POST",
-				`/api/rental/handover/${moveOut.body.data.handover.id}/add-round`,
+				`/api/rental/handover/${moveOut.body.data?.handover.id}/add-round`,
 				{
 					roundPhase: "return",
 					roundKind: "answer",
@@ -433,10 +431,12 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 					message: "Disputing charge; issue pre-existed.",
 				},
 			);
-			await rentalRequest(
+
+			await rentalRequestAt(
+				baseUrl,
 				owner,
 				"POST",
-				`/api/rental/handover/${moveOut.body.data.handover.id}/add-round`,
+				`/api/rental/handover/${moveOut.body.data?.handover.id}/add-round`,
 				{
 					roundPhase: "return",
 					roundKind: "settlement_offer",
@@ -445,10 +445,12 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 					depositAmount: 2500,
 				},
 			);
-			await rentalRequest(
+
+			await rentalRequestAt(
+				baseUrl,
 				renter,
 				"POST",
-				`/api/rental/handover/${moveOut.body.data.handover.id}/add-round`,
+				`/api/rental/handover/${moveOut.body.data?.handover.id}/add-round`,
 				{
 					roundPhase: "return",
 					roundKind: "acceptance",
@@ -456,34 +458,33 @@ test.describe("rental SaaS flow with real EmDash sessions", () => {
 					message: "Accepted settlement.",
 				},
 			);
-			const settled = await rentalRequest<any>(
-				renter,
-				"POST",
-				`/api/rental/handover/${moveOut.body.data.handover.id}/settle`,
-				{
-					settlementSpec: { agreedRepairCost: 2500, renterAccepted: true },
-				},
-			);
-			expect(settled.body.data.handover.handover_state).toBe("closed");
-			expect(settled.body.data.asset.business_state).toBe("maintenance");
-			expect(settled.body.data.asset.visibility_state).toBe("private");
 
-			const handoverSession = await rentalRequest<any>(
-				owner,
-				"GET",
-				`/api/rental/handover/${moveOut.body.data.handover.id}`,
-			);
+			const settled = await rentalRequestAt<{
+				handover: Record<string, unknown>;
+				asset: Record<string, unknown>;
+			}>(baseUrl, renter, "POST", `/api/rental/handover/${moveOut.body.data?.handover.id}/settle`, {
+				settlementSpec: { agreedRepairCost: 2500, renterAccepted: true },
+			});
+
+			expect(settled.body.data?.handover.handover_state).toBe("closed");
+			expect(settled.body.data?.asset.business_state).toBe("maintenance");
+			expect(settled.body.data?.asset.visibility_state).toBe("private");
+
+			const handoverSession = await rentalRequestAt<{
+				rounds: Array<Record<string, unknown>>;
+				checks: Array<Record<string, unknown>>;
+			}>(baseUrl, owner, "GET", `/api/rental/handover/${moveOut.body.data?.handover.id}`);
+
 			expect(
-				handoverSession.body.data.rounds.every((round) => round.round_phase === "return"),
+				handoverSession.body.data?.rounds.every((round) => round.round_phase === "return"),
 			).toBe(true);
-			expect(handoverSession.body.data.checks[0].dispute_state).toBe("settlement_agreed");
+			expect(handoverSession.body.data?.checks[0].dispute_state).toBe("settlement_agreed");
 
-			const agreementAfterReturn = await rentalRequest<any>(
-				owner,
-				"GET",
-				`/api/rental/agreements/${agreement.id}`,
-			);
-			expect(JSON.stringify(agreementAfterReturn.body.data.agreement.printable_snapshot)).toBe(
+			const agreementAfterReturn = await rentalRequestAt<{
+				agreement: Record<string, unknown>;
+			}>(baseUrl, owner, "GET", `/api/rental/agreements/${agreement.id}`);
+
+			expect(JSON.stringify(agreementAfterReturn.body.data?.agreement.printable_snapshot)).toBe(
 				snapshotBeforeReturn,
 			);
 		} finally {

@@ -74,6 +74,40 @@ export function requireParam(context: AstroLikeContext, name: string): string {
 	return value;
 }
 
+export function requireRentalCsrf(context: AstroLikeContext): void {
+	if (context.request.method === "GET" || context.request.method === "HEAD") return;
+	if (context.request.headers.get("X-EmDash-Request") !== "1") {
+		throw new DomainError("CSRF_REJECTED", "Rental mutation requires X-EmDash-Request", 403);
+	}
+}
+
+export function requireSameOriginForMutation(context: AstroLikeContext): void {
+	if (context.request.method === "GET" || context.request.method === "HEAD") return;
+	const origin = context.request.headers.get("Origin");
+	if (!origin) return;
+	const requestOrigin = new URL(context.request.url).origin;
+	let originUrl: URL;
+	try {
+		originUrl = new URL(origin);
+	} catch (error) {
+		throw new DomainError("CSRF_REJECTED", "Rental mutation origin is not allowed", 403, {
+			cause: error,
+		});
+	}
+	if (originUrl.origin !== requestOrigin) {
+		throw new DomainError("CSRF_REJECTED", "Rental mutation origin is not allowed", 403);
+	}
+}
+
+export async function withRentalMutationGuard<T>(
+	context: AstroLikeContext,
+	callback: () => Promise<T>,
+): Promise<T> {
+	requireRentalCsrf(context);
+	requireSameOriginForMutation(context);
+	return callback();
+}
+
 export function jsonOk(data: unknown, status = 200): Response {
 	return new Response(JSON.stringify({ ok: true, data }, null, 2), {
 		status,

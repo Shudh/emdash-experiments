@@ -9,6 +9,7 @@ MOCK_MARKETPLACE_JS="$SANDBOX_DIR/mock-marketplace.mjs"
 MOCK_MARKETPLACE_PID="$SANDBOX_DIR/mock-marketplace.pid"
 
 mkdir -p "$SANDBOX_DIR"
+node scripts/ensure-rental-local-db.mjs "$DB_PATH"
 
 if ss -ltnp | grep -q ':4444'; then
   echo "Port 4444 is already in use. Stop the existing server first."
