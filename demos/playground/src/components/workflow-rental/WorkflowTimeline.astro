@@ -1,0 +1,34 @@
+---
+interface Props {
+	events: Array<Record<string, unknown>>;
+}
+
+const { events } = Astro.props;
+---
+
+<section class="rental-panel">
+	<h2>Workflow timeline</h2>
+	<div class="workflow-timeline">
+		{events.map((event) => (
+			<article>
+				<strong>{String(event.event_kind ?? "event")}</strong>
+				<span>{String(event.actor_role ?? "actor")}</span>
+			</article>
+		))}
+	</div>
+</section>
+
+<style>
+	.workflow-timeline {
+		display: grid;
+		gap: 10px;
+	}
+
+	.workflow-timeline article {
+		display: grid;
+		gap: 4px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 10px;
+	}
+</style>

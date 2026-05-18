@@ -28,13 +28,28 @@ async function loadWorkspace() {
 }
 
 function objectValue(value: unknown): Record<string, unknown> {
-	return value && typeof value === "object" && !Array.isArray(value)
-		? value as Record<string, unknown>
-		: {};
+	if (value && typeof value === "object" && !Array.isArray(value)) {
+		return value as Record<string, unknown>;
+	}
+
+	if (typeof value === "string") {
+		try {
+			const parsed = JSON.parse(value);
+			return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+				? parsed as Record<string, unknown>
+				: {};
+		} catch {
+			return {};
+		}
+	}
+
+	return {};
 }
 
 function arrayValue(value: unknown): Array<Record<string, unknown>> {
-	return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>> : [];
+	return Array.isArray(value)
+		? value.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>
+		: [];
 }
 
 function textValue(value: unknown, fallback = ""): string {
@@ -44,19 +59,23 @@ function textValue(value: unknown, fallback = ""): string {
 }
 
 const workspace = await loadWorkspace();
+
 const asset = objectValue(workspace?.asset);
 const interest = objectValue(workspace?.interest);
 const instance = objectValue(workspace?.instance);
 const projection = objectValue(workspace?.projection);
 const stage = objectValue(projection.stage);
+
 const cards = arrayValue(workspace?.cards);
 const responses = arrayValue(workspace?.responses);
 const events = arrayValue(workspace?.events);
+
 const statusPills = Array.isArray(projection.statusPills) ? projection.statusPills.map(String) : [];
 const availableCardTypes = arrayValue(projection.availableCardTypes);
 const availableActions = arrayValue(projection.availableActions);
 const pendingCardsForViewer = arrayValue(projection.pendingCardsForViewer);
 const unresolvedRequiredCards = arrayValue(projection.unresolvedRequiredCards);
+
 const viewerRole = textValue(workspace?.viewerRole, "unknown");
 const workflowInstanceId = textValue(instance.id);
 const stageLabel = textValue(stage.label, textValue(instance.workflow_state, "Workflow"));
@@ -136,7 +155,7 @@ function cardTypeHelpText(cardType: Record<string, unknown>): string {
 
 						<div class="thread-column">
 							{pendingCardsForViewer.length ? (
-								<section class="rental-panel pending-panel">
+								<section class="rental-panel pending-panel" data-testid="pending-task-cards">
 									<div class="pending-head">
 										<h2>Your pending task cards</h2>
 										<span class="rental-badge">{pendingCardsForViewer.length} pending</span>
@@ -145,8 +164,14 @@ function cardTypeHelpText(cardType: Record<string, unknown>): string {
 									<div class="pending-list">
 										{pendingCardsForViewer.map((card) => {
 											const kind = answerSchemaKind(card);
+
 											return (
-												<ActionForm title={textValue(card.prompt, "Workflow request")} action={`/api/wf-rental/workflow/cards/${card.id}/answer`} submitLabel="Answer" successRedirect={`/wf/interests/${interestId}`}>
+												<ActionForm
+													title={textValue(card.prompt, "Workflow request")}
+													action={`/api/wf-rental/workflow/cards/${card.id}/answer`}
+													submitLabel="Answer"
+													successRedirect={`/wf/interests/${interestId}`}
+												>
 													{kind === "amount_proof" ? (
 														<>
 															<div class="rental-field">
@@ -172,53 +197,77 @@ function cardTypeHelpText(cardType: Record<string, unknown>): string {
 															<textarea id={`answer-${card.id}`} name="answer.text" required>I will provide this.</textarea>
 														</div>
 													)}
-													<input type="hidden" name="message" value={`Answered request: ${textValue(card.prompt, card.id as string)}`} />
+
+													<input type="hidden" name="message" value={`Answered request: ${textValue(card.prompt, textValue(card.id))}`} />
 												</ActionForm>
 											);
 										})}
 									</div>
 								</section>
 							) : waitingMessage ? (
-								<section class="rental-panel wait-panel">
+								<section class="rental-panel wait-panel" data-testid="waiting-message">
 									<h2>No action needed now</h2>
 									<p class="rental-muted">{waitingMessage}</p>
 								</section>
 							) : null}
 
 							{availableActions.length || availableCardTypes.length ? (
-								<section class="rental-panel">
+								<section class="rental-panel" data-testid="available-next-work">
 									<h2>Available next work</h2>
 
 									<div class="action-grid">
 										{availableActions.map((action) => {
+											const actionId = textValue(action.id);
+											const actionLabel = textValue(action.label, actionId || "Run workflow action");
 											const warnings = Array.isArray(action.warnings) ? action.warnings.map(String) : [];
 											const blocked = action.blocked === true;
+
 											return (
-												<div class="workflow-action-card">
+												<div class="workflow-action-card" data-testid={`workflow-action-${actionId}`}>
 													{warnings.length ? warnings.map((warning) => <p class="rental-muted">{warning}</p>) : null}
+
 													{blocked ? (
-														<button class="rental-button secondary" disabled>{textValue(action.label, "Action blocked")}</button>
+														<button class="rental-button secondary" type="button" disabled>
+															{actionLabel}
+														</button>
 													) : (
-														<ActionForm title={textValue(action.label, "Run workflow action")} action="/api/wf-rental/workflow/actions" submitLabel={textValue(action.label, "Run action")} successRedirect={`/wf/interests/${interestId}`}>
+														<ActionForm
+															title={actionLabel}
+															action="/api/wf-rental/workflow/actions"
+															submitLabel={actionLabel}
+															successRedirect={`/wf/interests/${interestId}`}
+														>
 															<input type="hidden" name="workflowInstanceId" value={workflowInstanceId} />
-															<input type="hidden" name="actionId" value={textValue(action.id)} />
+															<input type="hidden" name="actionId" value={actionId} />
 														</ActionForm>
 													)}
 												</div>
 											);
 										})}
 
-										{availableCardTypes.map((cardType) => (
-											<ActionForm title={textValue(cardType.label, "Create workflow card")} action="/api/wf-rental/workflow/cards" submitLabel={cardTypeSubmitLabel(cardType)} successRedirect={`/wf/interests/${interestId}`}>
-												<input type="hidden" name="workflowInstanceId" value={workflowInstanceId} />
-												<input type="hidden" name="cardType" value={textValue(cardType.id)} />
-												<div class="rental-field full">
-													<label for={`prompt-${textValue(cardType.id)}`}>{cardTypePromptLabel(cardType)}</label>
-													<textarea id={`prompt-${textValue(cardType.id)}`} name="prompt" required>{cardTypeDefaultPrompt(cardType)}</textarea>
-												</div>
-												{cardTypeHelpText(cardType) ? <p class="rental-muted">{cardTypeHelpText(cardType)}</p> : null}
-											</ActionForm>
-										))}
+										{availableCardTypes.map((cardType) => {
+											const cardTypeId = textValue(cardType.id);
+											const cardTypeLabel = textValue(cardType.label, cardTypeId || "Create workflow card");
+
+											return (
+												<ActionForm
+													title={cardTypeLabel}
+													action="/api/wf-rental/workflow/cards"
+													submitLabel={cardTypeSubmitLabel(cardType)}
+													successRedirect={`/wf/interests/${interestId}`}
+												>
+													<input type="hidden" name="workflowInstanceId" value={workflowInstanceId} />
+													<input type="hidden" name="cardType" value={cardTypeId} />
+
+													<div class="rental-field full">
+														<label for={`prompt-${cardTypeId}`}>{cardTypePromptLabel(cardType)}</label>
+														<textarea id={`prompt-${cardTypeId}`} name="prompt" required>{cardTypeDefaultPrompt(cardType)}</textarea>
+													</div>
+
+													{cardTypeHelpText(cardType) ? <p class="rental-muted">{cardTypeHelpText(cardType)}</p> : null}
+												</ActionForm>
+											);
+										})}
 									</div>
 								</section>
 							) : null}
@@ -233,7 +282,9 @@ function cardTypeHelpText(cardType: Record<string, unknown>): string {
 							{unresolvedRequiredCards.length ? (
 								<section class="rental-panel">
 									<h2>Unresolved required cards</h2>
-									<p class="rental-muted">{unresolvedRequiredCards.length} required task card{unresolvedRequiredCards.length === 1 ? " is" : "s are"} still unresolved.</p>
+									<p class="rental-muted">
+										{unresolvedRequiredCards.length} required task card{unresolvedRequiredCards.length === 1 ? " is" : "s are"} still unresolved.
+									</p>
 								</section>
 							) : null}
 
@@ -280,6 +331,7 @@ function cardTypeHelpText(cardType: Record<string, unknown>): string {
 		border-radius: var(--r-radius);
 		padding: 14px;
 		background: var(--r-panel-soft);
+		overflow-wrap: anywhere;
 	}
 
 	.workflow-stage h2,

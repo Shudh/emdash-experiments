@@ -1,0 +1,49 @@
+---
+import WorkflowRentalBase from "../../components/workflow-rental/WorkflowRentalBase.astro";
+
+export const prerender = false;
+---
+
+<WorkflowRentalBase title="Workflow rental preview" description="Workflow-card rental preview">
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">ALM Rentals</p>
+					<h1>Workflow engine preview</h1>
+					<p class="rental-muted">Side-by-side parity surface backed by workflow cards and ec_wf_* tables.</p>
+				</div>
+				<div class="owner-detail-actions">
+					<a class="rental-button" href="/wf/marketplace">View marketplace</a>
+					<a class="rental-button secondary" href="/wf/owner">Dashboard</a>
+					<a class="rental-button secondary" href="/wf/owner/assets/new">Add new property</a>
+				</div>
+			</div>
+			<div class="dashboard-grid">
+				<section class="rental-panel"><h2>My assets</h2><p class="rental-muted">Create and publish workflow assets.</p></section>
+				<section class="rental-panel"><h2>My applications</h2><p class="rental-muted">Review workflow-card applications.</p></section>
+				<section class="rental-panel"><h2>My handovers</h2><p class="rental-muted">Move-in actions are workflow actions in this preview.</p></section>
+			</div>
+		</div>
+	</section>
+</WorkflowRentalBase>
+
+<style>
+	.owner-detail-actions,
+	.dashboard-grid {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 12px;
+	}
+
+	.dashboard-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	@media (max-width: 800px) {
+		.dashboard-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

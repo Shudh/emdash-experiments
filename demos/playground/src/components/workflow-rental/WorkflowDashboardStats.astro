@@ -1,0 +1,13 @@
+---
+interface Props {
+	assets: Array<Record<string, unknown>>;
+	inbox: Array<Record<string, unknown>>;
+}
+
+const { assets, inbox } = Astro.props;
+---
+
+<div class="rental-badges">
+	<span class="rental-badge">{assets.length} workflow assets</span>
+	<span class="rental-badge">{inbox.length} workflow applications</span>
+</div>

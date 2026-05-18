@@ -1,0 +1,302 @@
+import type { DomainStore, UserContext } from "../../domain/types.js";
+import { DomainError, asString } from "../../domain/types.js";
+import { answerWorkflowCard } from "../commands/answer-workflow-card.js";
+import { attachEvidence } from "../commands/attach-evidence.js";
+import { createWorkflowAsset } from "../commands/create-asset.js";
+import { createTenantDocument } from "../commands/create-tenant-document.js";
+import { createWorkflowCard } from "../commands/create-workflow-card.js";
+import { decideWorkflowCard } from "../commands/decide-workflow-card.js";
+import { expressWorkflowInterest } from "../commands/express-interest.js";
+import { publishWorkflowAsset } from "../commands/publish-asset.js";
+import { runWorkflowAction } from "../commands/run-workflow-action.js";
+import { updateWorkflowAssetConfig } from "../commands/update-asset-config.js";
+import { getWorkflowAssetWorkspace } from "../queries/asset-workspace.js";
+import { getWorkflowInterestWorkspace } from "../queries/interest-workspace.js";
+import {
+	getWorkflowMarketplaceAsset,
+	listWorkflowMarketplaceAssets,
+} from "../queries/marketplace.js";
+import { getWorkflowOwnerDashboard } from "../queries/owner-dashboard.js";
+import { WORKFLOW_RENTAL_COLLECTIONS } from "../store/collections.js";
+import { actorRoleFor, getAssetOrThrow, getInterestOrThrow } from "../store/repository.js";
+import {
+	optionalArray,
+	optionalNumber,
+	optionalRecord,
+	parseRecord,
+	stringField,
+} from "./contracts.js";
+
+export type WorkflowRentalRouteInput = {
+	request: Request;
+	path: string;
+	store: DomainStore;
+	user: UserContext | null;
+};
+
+export async function handleWorkflowRentalRoute(
+	input: WorkflowRentalRouteInput,
+): Promise<Response> {
+	try {
+		const parts = input.path.split("/").filter(Boolean);
+		const body = input.request.method === "GET" ? {} : parseRecord(await readJson(input.request));
+
+		if (input.request.method === "GET" && input.path === "marketplace/assets") {
+			return jsonOk({ items: await listWorkflowMarketplaceAssets(input.store, input.user) });
+		}
+
+		if (
+			input.request.method === "GET" &&
+			parts[0] === "marketplace" &&
+			parts[1] === "assets" &&
+			parts[2]
+		) {
+			const details = await getWorkflowMarketplaceAsset(input.store, input.user, parts[2]);
+			if (!details) throw new DomainError("ASSET_NOT_FOUND", "Asset not found", 404);
+			return jsonOk(details);
+		}
+
+		const user = requireUser(input.user);
+
+		if (input.request.method === "GET" && input.path === "owner/dashboard") {
+			return jsonOk(await getWorkflowOwnerDashboard(input.store, user));
+		}
+
+		if (input.request.method === "POST" && input.path === "owner/assets/add") {
+			return jsonOk(
+				await createWorkflowAsset(input.store, user, {
+					assetKind: stringField(body, "assetKind"),
+					title: stringField(body, "title"),
+					locationLabel: asOptionalString(body.locationLabel),
+					publicPrice: optionalNumber(body, "publicPrice"),
+					currency: asOptionalString(body.currency) ?? "INR",
+					ownerConditionsSpec: optionalRecord(body, "ownerConditionsSpec"),
+				}),
+				201,
+			);
+		}
+
+		if (
+			input.request.method === "POST" &&
+			parts[0] === "owner" &&
+			parts[1] === "assets" &&
+			parts[2]
+		) {
+			if (parts[3] === "config") {
+				return jsonOk(
+					await updateWorkflowAssetConfig(input.store, user, parts[2], {
+						publicPrice: optionalNumber(body, "publicPrice"),
+						currency: asOptionalString(body.currency),
+						minimumMonths: optionalNumber(body, "minimumMonths"),
+						configSpec: optionalRecord(body, "configSpec"),
+						conditionSpec: optionalRecord(body, "conditionSpec"),
+						ownerConditionsSpec: optionalRecord(body, "ownerConditionsSpec"),
+						items: optionalArray(body, "items"),
+					}),
+				);
+			}
+			if (parts[3] === "publish-to-marketplace") {
+				return jsonOk(await publishWorkflowAsset(input.store, user, parts[2]));
+			}
+		}
+
+		if (
+	input.request.method === "POST" &&
+	parts[0] === "marketplace" &&
+	parts[1] === "assets" &&
+	parts[2] &&
+	parts[3] === "express-interest"
+) {
+	const result = await expressWorkflowInterest(input.store, user, parts[2], {
+		name: asOptionalString(body.name),
+		officialEmail: asOptionalString(body.officialEmail),
+		phone: asOptionalString(body.phone),
+		employerName: asOptionalString(body.employerName),
+		offeredPrice: optionalNumber(body, "offeredPrice"),
+		requestedStartDate: asOptionalString(body.requestedStartDate),
+		requestedMinimumMonths: optionalNumber(body, "requestedMinimumMonths"),
+		message: asOptionalString(body.message),
+		interestSpec: optionalRecord(body, "interestSpec"),
+		acceptedConditionsVersion: optionalNumber(body, "acceptedConditionsVersion"),
+		acceptedConditionsHash: asOptionalString(body.acceptedConditionsHash),
+	});
+
+	return jsonOk(
+		{
+			interestId: result.interest.id,
+			assetId: result.asset.id,
+			workflowInstanceId: result.instance.id,
+			redirectTo: `/wf/interests/${result.interest.id}`,
+			...result,
+		},
+		201,
+	);
+}
+		if (
+			input.request.method === "GET" &&
+			parts[0] === "assets" &&
+			parts[1] &&
+			parts[2] === "workspace"
+		) {
+			return jsonOk(await getWorkflowAssetWorkspace(input.store, user, parts[1]));
+		}
+
+		if (
+			input.request.method === "GET" &&
+			parts[0] === "interests" &&
+			parts[1] &&
+			parts[2] === "workspace"
+		) {
+			return jsonOk(await getWorkflowInterestWorkspace(input.store, user, parts[1]));
+		}
+
+		if (input.request.method === "POST" && input.path === "workflow/cards") {
+			return jsonOk(
+				await createWorkflowCard(input.store, user, {
+					workflowInstanceId: stringField(body, "workflowInstanceId"),
+					cardType: stringField(body, "cardType"),
+					prompt: asOptionalString(body.prompt),
+					cardSpec: optionalRecord(body, "cardSpec"),
+					attachments: optionalArray(body, "attachments"),
+				}),
+				201,
+			);
+		}
+
+		if (
+			input.request.method === "POST" &&
+			parts[0] === "workflow" &&
+			parts[1] === "cards" &&
+			parts[2]
+		) {
+			if (parts[3] === "answer") {
+				return jsonOk(
+					await answerWorkflowCard(input.store, user, parts[2], {
+						answer: optionalRecord(body, "answer") ?? {},
+						message: asOptionalString(body.message),
+						attachments: optionalArray(body, "attachments"),
+					}),
+					201,
+				);
+			}
+			if (parts[3] === "decision") {
+				return jsonOk(
+					await decideWorkflowCard(input.store, user, parts[2], {
+						decision: stringField(body, "decision") as "accept",
+					}),
+				);
+			}
+		}
+
+		if (input.request.method === "POST" && input.path === "workflow/actions") {
+			return jsonOk(
+				await runWorkflowAction(input.store, user, {
+					workflowInstanceId: stringField(body, "workflowInstanceId"),
+					actionId: stringField(body, "actionId"),
+					actionSpec: optionalRecord(body, "actionSpec"),
+				}),
+			);
+		}
+
+		if (input.request.method === "POST" && input.path === "documents") {
+			return jsonOk(
+				await createTenantDocument(input.store, user, {
+					documentKind: stringField(body, "documentKind"),
+					documentLabel: stringField(body, "documentLabel"),
+					storageKey: asOptionalString(body.storageKey),
+					mimeType: asOptionalString(body.mimeType),
+					documentSpec: optionalRecord(body, "documentSpec"),
+				}),
+				201,
+			);
+		}
+
+		if (input.request.method === "POST" && input.path === "evidence/attach") {
+			return jsonOk(
+				await attachEvidence(input.store, user, {
+					cardId: stringField(body, "cardId"),
+					tenantDocumentId: asOptionalString(body.tenantDocumentId),
+					attachmentLabel: asOptionalString(body.attachmentLabel),
+					storageKey: asOptionalString(body.storageKey),
+					mimeType: asOptionalString(body.mimeType),
+					attachmentSpec: optionalRecord(body, "attachmentSpec"),
+				}),
+				201,
+			);
+		}
+
+		if (
+			input.request.method === "GET" &&
+			parts[0] === "evidence" &&
+			parts[1] &&
+			parts[2] === "download"
+		) {
+			return jsonOk(await evidenceDownload(input.store, user, parts[1]));
+		}
+
+		return jsonError(new DomainError("NOT_FOUND", "Not found", 404));
+	} catch (error) {
+		return jsonError(error);
+	}
+}
+
+async function evidenceDownload(store: DomainStore, user: UserContext, attachmentId: string) {
+	const attachment = await store.get(
+		WORKFLOW_RENTAL_COLLECTIONS.EVIDENCE_ATTACHMENTS,
+		attachmentId,
+	);
+	if (!attachment)
+		throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence attachment not found", 404);
+	const [asset, interest] = await Promise.all([
+		getAssetOrThrow(store, asString(attachment.asset_id)),
+		getInterestOrThrow(store, asString(attachment.interest_id)),
+	]);
+	const role = actorRoleFor(user, asset, interest);
+	if (role !== "owner" && role !== "applicant" && role !== "renter") {
+		throw new DomainError("FORBIDDEN", "Evidence is private to workflow participants", 403);
+	}
+	return {
+		attachment,
+		download: {
+			storageKey: attachment.storage_key,
+			message: "Private evidence download authorization succeeded.",
+		},
+	};
+}
+
+async function readJson(request: Request): Promise<unknown> {
+	const text = await request.text();
+	if (!text.trim()) return {};
+	try {
+		return JSON.parse(text) as unknown;
+	} catch (error) {
+		throw new DomainError("INVALID_JSON", "Request body must be valid JSON", 400, { cause: error });
+	}
+}
+
+function requireUser(user: UserContext | null): UserContext {
+	if (!user?.id) throw new DomainError("UNAUTHORIZED", "Login required", 401);
+	return user;
+}
+
+function asOptionalString(value: unknown): string | undefined {
+	return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function jsonOk(data: unknown, status = 200): Response {
+	return Response.json({ ok: true, data }, { status });
+}
+
+function jsonError(error: unknown): Response {
+	if (error instanceof DomainError) {
+		return Response.json(
+			{ ok: false, error: { code: error.code, message: error.message } },
+			{ status: error.status },
+		);
+	}
+	console.error("[wf-rental] API route failed", error);
+	return Response.json(
+		{ ok: false, error: { code: "INTERNAL_ERROR", message: "Internal error" } },
+		{ status: 500 },
+	);
+}

@@ -1,0 +1,152 @@
+---
+import ActionForm from "../../../components/rental/ActionForm.astro";
+import WorkflowAssetCard from "../../../components/workflow-rental/WorkflowAssetCard.astro";
+import WorkflowDashboardStats from "../../../components/workflow-rental/WorkflowDashboardStats.astro";
+import WorkflowRentalBase from "../../../components/workflow-rental/WorkflowRentalBase.astro";
+
+export const prerender = false;
+
+async function loadDashboard() {
+	try {
+		const response = await fetch(new URL("/api/wf-rental/owner/dashboard", Astro.url), {
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
+		});
+		const payload = await response.json() as {
+			data?: { assets?: Array<Record<string, unknown>>; inbox?: Array<Record<string, unknown>> };
+			error?: { message?: string };
+		};
+		return {
+			ok: response.ok,
+			assets: payload.data?.assets ?? [],
+			inbox: payload.data?.inbox ?? [],
+			error: payload.error?.message,
+		};
+	} catch (error) {
+		return {
+			ok: false,
+			assets: [],
+			inbox: [],
+			error: error instanceof Error ? error.message : "Dashboard unavailable",
+		};
+	}
+}
+
+const dashboard = await loadDashboard();
+const pendingInboxCount = dashboard.inbox.filter((interest) => String(interest.interest_state ?? "") === "submitted").length;
+---
+
+<WorkflowRentalBase title="Workflow owner dashboard" description="Workflow owner rental dashboard">
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">Owner</p>
+					<h1>Dashboard</h1>
+					<p class="rental-muted">Owned workflow assets, applications, cards, and handover actions.</p>
+					<WorkflowDashboardStats assets={dashboard.assets} inbox={dashboard.inbox} />
+				</div>
+				<a class="rental-button" href="/wf/owner/assets/new">Create asset</a>
+			</div>
+			{
+				!dashboard.ok ? (
+					<div class="rental-panel">
+						<h2>Login required</h2>
+						<p class="rental-muted">{dashboard.error ?? "Owner dashboard requires a session."}</p>
+					</div>
+				) : (
+					<div class="dashboard-grid">
+						<section class="rental-panel inbox-panel">
+							<div class="inbox-head">
+								<h2>Submitted interest inbox</h2>
+								<span class="rental-badge">{pendingInboxCount} pending interests</span>
+							</div>
+							<div class="inbox-list">
+								{dashboard.inbox.length ? (
+									dashboard.inbox.map((interest) => (
+										<a href={`/wf/interests/${interest.id}`} class="inbox-item">
+											<strong>{String(interest.asset_title ?? "Asset")}</strong>
+											<span>{String(interest.name ?? interest.official_email ?? "Interested renter")}</span>
+											<span>Official email: {String(interest.official_email ?? "pending")}</span>
+											<span>Employer: {String(interest.employer_name ?? "pending")}</span>
+											<span>Offer: {String(interest.offered_price ?? "pending")}</span>
+											<div class="rental-badges">
+												<span class="rental-badge">{String(interest.interest_state ?? "submitted")}</span>
+												<span class="rental-badge">{String(interest.pending_request_count ?? 0)} pending requests</span>
+											</div>
+											<span class="rental-button secondary">View details</span>
+										</a>
+									))
+								) : (
+									<p class="rental-muted">No submitted interests yet.</p>
+								)}
+							</div>
+						</section>
+						<section>
+							<h2>Owned assets</h2>
+							<div class="rental-grid">
+								{dashboard.assets.length ? (
+									dashboard.assets.map((asset) => (
+										<div class="asset-management">
+											<WorkflowAssetCard asset={asset} href={`/wf/marketplace/assets/${asset.id}`} />
+											<div class="rental-panel asset-state-actions">
+												<div class="rental-badges">
+													<span class="rental-badge">status: {String(asset.status ?? "draft")}</span>
+													<span class="rental-badge">business_state: {String(asset.business_state ?? "draft")}</span>
+													<span class="rental-badge">visibility_state: {String(asset.visibility_state ?? "private")}</span>
+												</div>
+												{asset.status === "published" && asset.business_state === "listed" ? (
+													<button class="rental-button secondary" disabled>Already published</button>
+												) : asset.business_state === "booked" && asset.active_workflow_instance_id ? (
+													<ActionForm title="Start move-in handover" description="Open a workflow move-in action." action="/api/wf-rental/workflow/actions" submitLabel="Start move-in" successRedirect={`/wf/interests/${asset.active_interest_id}`}>
+														<input type="hidden" name="workflowInstanceId" value={String(asset.active_workflow_instance_id)} />
+														<input type="hidden" name="actionId" value="start_move_in" />
+													</ActionForm>
+												) : asset.business_state === "rented" ? (
+													<p class="rental-muted">Start move-out handover</p>
+												) : (
+													<p class="rental-muted">State actions appear when the workflow definition allows a transition.</p>
+												)}
+											</div>
+										</div>
+									))
+								) : (
+									<div class="rental-panel"><p class="rental-muted">No owned assets yet.</p></div>
+								)}
+							</div>
+						</section>
+					</div>
+				)
+			}
+		</div>
+	</section>
+</WorkflowRentalBase>
+
+<style>
+	.dashboard-grid,
+	.inbox-list,
+	.asset-management,
+	.asset-state-actions {
+		display: grid;
+		gap: 16px;
+	}
+
+	.inbox-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.inbox-item {
+		display: grid;
+		gap: 5px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 14px;
+		background: var(--r-bg);
+	}
+</style>

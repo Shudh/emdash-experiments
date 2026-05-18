@@ -1,0 +1,11 @@
+---
+interface Props {
+	attachments?: Array<Record<string, unknown>>;
+}
+
+const { attachments = [] } = Astro.props;
+---
+
+<div class="workflow-evidence-list">
+	{attachments.map((attachment) => <span class="rental-badge">{String(attachment.attachment_label ?? "Evidence")}</span>)}
+</div>

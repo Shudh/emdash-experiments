@@ -1,0 +1,12 @@
+---
+import AssetCard from "../rental/AssetCard.astro";
+
+interface Props {
+	asset: Record<string, unknown>;
+	href?: string;
+}
+
+const { asset, href = `/wf/marketplace/assets/${asset.id}` } = Astro.props;
+---
+
+<AssetCard asset={asset} href={href} />

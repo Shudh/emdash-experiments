@@ -27,6 +27,7 @@ pnpm-debug.log*
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+.local/workflow-rental-sandbox/
 
 # uploads & EmDash data
 uploads/

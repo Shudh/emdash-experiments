@@ -82,12 +82,20 @@ const { title, description, action, submitLabel, successRedirect } = Astro.props
 				});
 				const payload = await response.json().catch(() => ({}));
 				if (!response.ok) throw new Error(payload?.error?.message ?? "Request failed");
-				const redirect = form.dataset.success;
-				if (redirect) {
-					location.href = applyRedirectTemplate(redirect, payload);
-					return;
-				}
-				if (status) status.textContent = "Saved.";
+				const redirectTo = findPayloadValue(payload, "redirectTo");
+
+if (redirectTo && redirectTo.startsWith("/")) {
+	location.href = redirectTo;
+	return;
+}
+
+const redirect = form.dataset.success;
+if (redirect) {
+	location.href = applyRedirectTemplate(redirect, payload);
+	return;
+}
+
+if (status) status.textContent = "Saved.";
 			} catch (error) {
 				if (status) {
 					status.dataset.state = "error";

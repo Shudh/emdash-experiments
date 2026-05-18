@@ -1,0 +1,49 @@
+---
+import WorkflowAssetCard from "../../../components/workflow-rental/WorkflowAssetCard.astro";
+import WorkflowRentalBase from "../../../components/workflow-rental/WorkflowRentalBase.astro";
+
+export const prerender = false;
+
+async function loadAssets() {
+	try {
+		const response = await fetch(new URL("/api/wf-rental/marketplace/assets", Astro.url), {
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
+		});
+		const payload = await response.json() as { data?: { items?: Array<Record<string, unknown>> } };
+		return response.ok ? payload.data?.items ?? [] : [];
+	} catch {
+		return [];
+	}
+}
+
+const assets = await loadAssets();
+---
+
+<WorkflowRentalBase title="Workflow marketplace" description="Workflow rental asset marketplace">
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">Marketplace</p>
+					<h1>Published assets</h1>
+					<p class="rental-muted">Public listings backed by the workflow-card engine.</p>
+				</div>
+				<a class="rental-button secondary" href="/wf/owner/assets/new">List asset</a>
+			</div>
+			{
+				assets.length ? (
+					<div class="rental-grid" data-marketplace-grid>
+						{assets.map((asset) => <WorkflowAssetCard asset={asset} />)}
+					</div>
+				) : (
+					<div class="rental-panel">
+						<p class="rental-muted">No marketplace assets are currently listed.</p>
+					</div>
+				)
+			}
+		</div>
+	</section>
+</WorkflowRentalBase>

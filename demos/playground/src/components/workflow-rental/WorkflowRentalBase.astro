@@ -1,0 +1,335 @@
+---
+import RentalBase from "../../layouts/RentalBase.astro";
+
+interface Props {
+	title: string;
+	description?: string;
+}
+
+const { title, description } = Astro.props;
+const user = Astro.locals.user as { email?: string | null } | undefined;
+const workflowHomeHref = "/wf";
+const workflowLogoutRedirect = `/login?redirect=${encodeURIComponent(workflowHomeHref)}`;
+---
+
+<RentalBase title={title} description={description}>
+	<section class="workflow-route-guard" data-workflow-route-guard>
+		<div class="rental-shell workflow-route-guard-inner">
+			<div>
+				<p class="workflow-mode-kicker">WF CORE PREVIEW</p>
+				<strong>Workflow-card engine route boundary is active</strong>
+				<span>All product links on this screen stay under /wf and /api/wf-rental.</span>
+			</div>
+			<nav class="workflow-route-nav" aria-label="Workflow rental navigation">
+				<a href="/wf">WF home</a>
+				<a href="/wf/marketplace">WF marketplace</a>
+				<a href="/wf/owner">WF owner</a>
+				<a href="/wf/owner/assets/new">WF list asset</a>
+				{
+					user?.email ? (
+						<button type="button" data-workflow-logout>
+							Logout {user.email}
+						</button>
+					) : (
+						<a href={`/login?redirect=${encodeURIComponent("/wf")}`}>Login</a>
+					)
+				}
+			</nav>
+		</div>
+	</section>
+
+	<div class="workflow-page-scope" data-workflow-page-scope>
+		<slot />
+	</div>
+
+	<script define:vars={{ workflowLogoutRedirect }}>
+		const WORKFLOW_ROUTE_MAP = [
+			{ from: "/", to: "/wf", exact: true },
+			{ from: "/marketplace", to: "/wf/marketplace", exact: false },
+			{ from: "/owner", to: "/wf/owner", exact: false },
+			{ from: "/interests", to: "/wf/interests", exact: false },
+			{ from: "/handover", to: "/wf/handover", exact: false },
+			{ from: "/api/rental", to: "/api/wf-rental", exact: false },
+		];
+
+		function isExternalHref(rawHref) {
+			return (
+				rawHref.startsWith("http://") ||
+				rawHref.startsWith("https://") ||
+				rawHref.startsWith("mailto:") ||
+				rawHref.startsWith("tel:")
+			);
+		}
+
+		function rewriteRedirectParam(url) {
+			const redirect = url.searchParams.get("redirect");
+			if (!redirect) return url;
+			const rewrittenRedirect = rewriteWorkflowHref(redirect);
+			if (rewrittenRedirect !== redirect) {
+				url.searchParams.set("redirect", rewrittenRedirect);
+			}
+			return url;
+		}
+
+		function rewriteWorkflowHref(rawHref) {
+			if (!rawHref) return rawHref;
+			if (rawHref.startsWith("#")) return rawHref;
+			if (isExternalHref(rawHref)) return rawHref;
+
+			let url;
+			try {
+				url = new URL(rawHref, window.location.origin);
+			} catch {
+				return rawHref;
+			}
+
+			if (url.origin !== window.location.origin) return rawHref;
+
+			if (url.pathname === "/login") {
+				return rewriteRedirectParam(url).pathname + rewriteRedirectParam(url).search + rewriteRedirectParam(url).hash;
+			}
+
+			if (url.pathname.startsWith("/wf")) return url.pathname + url.search + url.hash;
+			if (url.pathname.startsWith("/api/wf-rental")) return url.pathname + url.search + url.hash;
+			if (url.pathname.startsWith("/_emdash")) return url.pathname + url.search + url.hash;
+
+			for (const route of WORKFLOW_ROUTE_MAP) {
+				const matches = route.exact
+					? url.pathname === route.from
+					: url.pathname === route.from || url.pathname.startsWith(`${route.from}/`);
+
+				if (!matches) continue;
+
+				const suffix = route.exact ? "" : url.pathname.slice(route.from.length);
+				return `${route.to}${suffix}${url.search}${url.hash}`;
+			}
+
+			return rawHref;
+		}
+
+		function rewriteWorkflowLinks(root) {
+			const scope = root ?? document;
+
+			scope.querySelectorAll("a[href]").forEach((anchor) => {
+				const currentHref = anchor.getAttribute("href");
+				const rewrittenHref = rewriteWorkflowHref(currentHref);
+				if (rewrittenHref && rewrittenHref !== currentHref) {
+					anchor.setAttribute("href", rewrittenHref);
+					anchor.setAttribute("data-workflow-rewritten-href", "true");
+				}
+			});
+
+			scope.querySelectorAll("form[action]").forEach((form) => {
+				const currentAction = form.getAttribute("action");
+				const rewrittenAction = rewriteWorkflowHref(currentAction);
+				if (rewrittenAction && rewrittenAction !== currentAction) {
+					form.setAttribute("action", rewrittenAction);
+					form.setAttribute("data-workflow-rewritten-action", "true");
+				}
+			});
+		}
+
+		function closestWorkflowLink(target) {
+			if (!(target instanceof Element)) return null;
+			return target.closest("a[href]");
+		}
+
+		function closestWorkflowForm(target) {
+			if (!(target instanceof Element)) return null;
+			return target.closest("form[action]");
+		}
+
+		function installWorkflowRouteGuard() {
+			rewriteWorkflowLinks(document);
+
+			const observer = new MutationObserver((mutations) => {
+				for (const mutation of mutations) {
+					for (const node of mutation.addedNodes) {
+						if (node instanceof Element) {
+							rewriteWorkflowLinks(node);
+						}
+					}
+				}
+			});
+
+			observer.observe(document.documentElement, {
+				childList: true,
+				subtree: true,
+			});
+
+			document.addEventListener(
+				"click",
+				(event) => {
+					const link = closestWorkflowLink(event.target);
+					if (!link) return;
+
+					const currentHref = link.getAttribute("href");
+					const rewrittenHref = rewriteWorkflowHref(currentHref);
+
+					if (rewrittenHref && rewrittenHref !== currentHref) {
+						event.preventDefault();
+						link.setAttribute("href", rewrittenHref);
+						window.location.assign(rewrittenHref);
+					}
+				},
+				true,
+			);
+
+			document.addEventListener(
+				"submit",
+				(event) => {
+					const form = closestWorkflowForm(event.target);
+					if (!form) return;
+
+					const currentAction = form.getAttribute("action");
+					const rewrittenAction = rewriteWorkflowHref(currentAction);
+
+					if (rewrittenAction && rewrittenAction !== currentAction) {
+						form.setAttribute("action", rewrittenAction);
+					}
+				},
+				true,
+			);
+
+			document.querySelectorAll("[data-workflow-logout]").forEach((button) => {
+				button.addEventListener("click", async () => {
+					try {
+						await fetch("/_emdash/api/auth/logout", {
+							method: "POST",
+							credentials: "same-origin",
+							headers: {
+								"X-EmDash-Request": "1",
+							},
+						});
+					} finally {
+						window.location.assign(workflowLogoutRedirect);
+					}
+				});
+			});
+		}
+
+		if (document.readyState === "loading") {
+			document.addEventListener("DOMContentLoaded", installWorkflowRouteGuard, { once: true });
+		} else {
+			installWorkflowRouteGuard();
+		}
+	</script>
+</RentalBase>
+
+<style>
+	:global(.rental-topbar) {
+		border-bottom: 1px solid rgba(220, 255, 236, 0.22) !important;
+		background:
+			linear-gradient(90deg, rgba(7, 48, 37, 0.98), rgba(20, 83, 65, 0.96)) !important;
+		box-shadow: 0 10px 30px rgba(4, 21, 16, 0.2);
+	}
+
+	:global(.rental-topbar .rental-brand),
+	:global(.rental-topbar .rental-nav nav a),
+	:global(.rental-topbar .rental-user) {
+		color: #f1fff8 !important;
+	}
+
+	:global(.rental-topbar .rental-brand)::after {
+		content: " / WF";
+		display: inline-flex;
+		margin-left: 8px;
+		border: 1px solid rgba(241, 255, 248, 0.5);
+		border-radius: 999px;
+		padding: 2px 8px;
+		color: #f1fff8;
+		font-size: 0.72rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		vertical-align: middle;
+	}
+
+	.workflow-route-guard {
+		border-bottom: 1px solid rgba(11, 68, 51, 0.18);
+		background:
+			linear-gradient(135deg, rgba(7, 48, 37, 0.96), rgba(18, 95, 72, 0.92)),
+			#0b3d2f;
+		color: #f3fff8;
+	}
+
+	.workflow-route-guard-inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 18px;
+		padding-block: 14px;
+	}
+
+	.workflow-route-guard-inner > div {
+		display: grid;
+		gap: 3px;
+	}
+
+	.workflow-route-guard strong {
+		font-size: 1.02rem;
+		font-weight: 950;
+	}
+
+	.workflow-route-guard span {
+		color: rgba(243, 255, 248, 0.78);
+		font-size: 0.9rem;
+		font-weight: 650;
+	}
+
+	.workflow-mode-kicker {
+		margin: 0;
+		color: rgba(243, 255, 248, 0.7);
+		font-size: 0.72rem;
+		font-weight: 950;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+	}
+
+	.workflow-route-nav {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 10px;
+	}
+
+	.workflow-route-nav a,
+	.workflow-route-nav button {
+		border: 1px solid rgba(243, 255, 248, 0.32);
+		border-radius: 999px;
+		padding: 8px 12px;
+		background: rgba(255, 255, 255, 0.08);
+		color: #f3fff8;
+		font: inherit;
+		font-size: 0.88rem;
+		font-weight: 850;
+		line-height: 1;
+		text-decoration: none;
+		cursor: pointer;
+	}
+
+	.workflow-route-nav a:hover,
+	.workflow-route-nav button:hover {
+		background: rgba(255, 255, 255, 0.16);
+	}
+
+	.workflow-page-scope {
+		position: relative;
+	}
+
+	.workflow-page-scope :global(.rental-kicker)::before {
+		content: "WF · ";
+		color: var(--r-brand-strong);
+	}
+
+	@media (max-width: 820px) {
+		.workflow-route-guard-inner {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+
+		.workflow-route-nav {
+			justify-content: flex-start;
+		}
+	}
+</style>
