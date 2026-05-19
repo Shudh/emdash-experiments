@@ -1,0 +1,112 @@
+---
+import ActionForm from "../../../../components/rental/ActionForm.astro";
+import ConditionBox from "../../../../components/rental/ConditionBox.astro";
+import SpecTable from "../../../../components/rental/SpecTable.astro";
+import Wf1Base from "../../../../components/wf1/Wf1Base.astro";
+
+export const prerender = false;
+
+const assetId = Astro.params.id;
+
+async function loadDetails() {
+	if (!assetId) return null;
+	try {
+		const response = await fetch(new URL(`/api/wf1-rental/marketplace/assets/${assetId}`, Astro.url), {
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
+		});
+		const payload = await response.json() as {
+			data?: {
+				asset?: Record<string, unknown>;
+				ownerConditions?: { version?: unknown; hash?: unknown; spec?: Record<string, unknown> };
+			};
+		};
+		return response.ok ? payload.data ?? null : null;
+	} catch {
+		return null;
+	}
+}
+
+const details = await loadDetails();
+const asset = details?.asset;
+const ownerConditions = details?.ownerConditions;
+const viewer = asset?.viewer && typeof asset.viewer === "object"
+	? asset.viewer as Record<string, unknown>
+	: {};
+const relationship = String(viewer.relationship ?? "anonymous");
+const workflowInstanceId = typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
+const canExpressInterest = viewer.canExpressInterest === true;
+const loginRedirect = asset?.id ? `/wf1/marketplace/assets/${asset.id}` : "/wf1/marketplace";
+const loginHref = `/login?redirect=${encodeURIComponent(loginRedirect)}`;
+---
+
+<Wf1Base title={asset ? String(asset.title) : "WF1 asset"} description="WF1 asset details">
+	<section class="rental-section">
+		<div class="rental-shell detail-grid">
+			{asset ? (
+				<>
+					<article class="rental-panel detail-main">
+						<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
+						<h1>{String(asset.title ?? "Untitled asset")}</h1>
+						<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+						<div class="rental-badges">
+							<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
+							<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+						</div>
+					</article>
+					<div class="detail-side">
+						<ConditionBox conditions={ownerConditions} />
+						{relationship === "owner" ? (
+							<div class="rental-panel">
+								<h2>This is Eva's asset</h2>
+								<a class="rental-button" href="/wf1/owner">Owner dashboard</a>
+							</div>
+						) : relationship === "interested_applicant" && workflowInstanceId ? (
+							<div class="rental-panel">
+								<h2>Application submitted</h2>
+								<a class="rental-button" href={`/wf1/workspaces/${workflowInstanceId}`}>Open workspace</a>
+							</div>
+						) : canExpressInterest ? (
+							<ActionForm title="Express interest" description="Rakesh selects the workflow definition for this application." action={`/api/wf1-rental/marketplace/assets/${asset.id}/express-interest`} submitLabel="Express interest">
+								<input type="hidden" name="acceptedConditionsVersion" value={String(ownerConditions?.version ?? "")} data-number="true" />
+								<input type="hidden" name="acceptedConditionsHash" value={String(ownerConditions?.hash ?? "")} />
+								<div class="rental-field full">
+									<label for="workflowDefinitionId">Workflow definition</label>
+									<select id="workflowDefinitionId" name="workflowDefinitionId">
+										<option value="simple-available-rented">Simple available/rented workflow</option>
+										<option value="alm-current-parity">ALM parity workflow</option>
+									</select>
+								</div>
+								<input type="hidden" name="workflowDefinitionVersion" value="1" data-number="true" />
+								<div class="rental-field"><label for="name">Name</label><input id="name" name="name" value="Rakesh" required /></div>
+								<div class="rental-field"><label for="officialEmail">Official email</label><input id="officialEmail" name="officialEmail" type="email" /></div>
+								<div class="rental-field"><label for="employerName">Employer</label><input id="employerName" name="employerName" /></div>
+								<div class="rental-field"><label for="offeredPrice">Offer</label><input id="offeredPrice" name="offeredPrice" type="number" data-number="true" /></div>
+								<div class="rental-field full"><label for="message">Message</label><textarea id="message" name="message">Eva, I am interested in this flat.</textarea></div>
+								<div class="rental-field full"><label><input name="accepted" type="checkbox" required /> I accept the current owner conditions.</label></div>
+							</ActionForm>
+						) : (
+							<div class="rental-panel">
+								<h2>Login required</h2>
+								<a class="rental-button" href={loginHref}>Login or register</a>
+							</div>
+						)}
+					</div>
+					<div class="rental-panel"><SpecTable title="Configuration" spec={asset.config_spec as Record<string, unknown>} /></div>
+					<div class="rental-panel"><SpecTable title="Physical condition" spec={asset.condition_spec as Record<string, unknown>} /></div>
+				</>
+			) : (
+				<div class="rental-panel">
+					<h1>Asset not found</h1>
+					<p class="rental-muted">This WF1 asset is unavailable.</p>
+				</div>
+			)}
+		</div>
+	</section>
+</Wf1Base>
+
+<style>
+	.detail-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:18px;align-items:start}.detail-main{display:grid;gap:14px;min-height:260px;align-content:end}.detail-side{display:grid;gap:18px}@media (max-width:900px){.detail-grid{grid-template-columns:1fr}}
+</style>

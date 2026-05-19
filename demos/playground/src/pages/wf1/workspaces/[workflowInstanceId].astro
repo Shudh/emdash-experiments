@@ -1,0 +1,133 @@
+---
+import SpecTable from "../../../components/rental/SpecTable.astro";
+import Wf1ActionPanel from "../../../components/wf1/Wf1ActionPanel.astro";
+import Wf1Base from "../../../components/wf1/Wf1Base.astro";
+import Wf1CardComposerPanel from "../../../components/wf1/Wf1CardComposerPanel.astro";
+import Wf1RequiredGatePanel from "../../../components/wf1/Wf1RequiredGatePanel.astro";
+import Wf1StatePanel from "../../../components/wf1/Wf1StatePanel.astro";
+import Wf1TaskBuckets from "../../../components/wf1/Wf1TaskBuckets.astro";
+import Wf1Timeline from "../../../components/wf1/Wf1Timeline.astro";
+
+export const prerender = false;
+
+const workflowInstanceId = Astro.params.workflowInstanceId;
+
+async function loadWorkspace() {
+	if (!workflowInstanceId) return null;
+	try {
+		const response = await fetch(new URL(`/api/wf1-rental/workspaces/${workflowInstanceId}`, Astro.url), {
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
+		});
+		const payload = await response.json() as { data?: Record<string, unknown> };
+		return response.ok ? payload.data ?? null : null;
+	} catch {
+		return null;
+	}
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? value as Record<string, unknown>
+		: {};
+}
+
+function arrayValue(value: unknown): Array<Record<string, unknown>> {
+	return Array.isArray(value)
+		? value.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>
+		: [];
+}
+
+const workspace = await loadWorkspace();
+const asset = objectValue(workspace?.asset);
+const interest = objectValue(workspace?.interest);
+const instance = objectValue(workspace?.instance);
+const projection = objectValue(workspace?.projection);
+const taskBuckets = objectValue(projection.taskBuckets) as Record<string, Array<Record<string, unknown>>>;
+const responses = arrayValue(workspace?.responses);
+const events = arrayValue(workspace?.events);
+const availableActions = arrayValue(projection.availableActions);
+const availableCardTypes = arrayValue(projection.availableCardTypes);
+const requiredUnresolvedTasks = arrayValue(taskBuckets.requiredUnresolvedTasks);
+const viewerRole = String(workspace?.viewerRole ?? "unknown");
+const workspaceHref = workflowInstanceId ? `/wf1/workspaces/${workflowInstanceId}` : "/wf1";
+---
+
+<Wf1Base title="WF1 workspace" description="Generic workflow workspace">
+	<section class="rental-section">
+		<div class="rental-shell workspace-grid">
+			{workspace ? (
+				<>
+					<div class="workspace-header">
+						<div>
+							<p class="rental-kicker">Workspace</p>
+							<h1>{String(asset.title ?? "Asset application")}</h1>
+							<p class="rental-muted">Workflow definition: {String(instance.definition_id ?? "unknown")}@{String(instance.definition_version ?? "1")}</p>
+						</div>
+						<a class="rental-button secondary" href="/wf1/owner">Owner dashboard</a>
+					</div>
+
+					<Wf1StatePanel projection={projection} viewerRole={viewerRole} />
+
+					<div class="workspace-columns">
+						<aside class="sidebar">
+							<div class="rental-panel">
+								<h2>Application Context</h2>
+								<SpecTable title="Applicant" spec={{
+									name: interest.name,
+									official_email: interest.official_email,
+									employer_name: interest.employer_name,
+									offered_price: interest.offered_price,
+								}} />
+							</div>
+							<Wf1RequiredGatePanel requiredUnresolvedTasks={requiredUnresolvedTasks} />
+						</aside>
+						<main class="thread">
+							<Wf1ActionPanel availableActions={availableActions} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
+							<Wf1CardComposerPanel availableCardTypes={availableCardTypes} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
+							<Wf1TaskBuckets taskBuckets={taskBuckets} responses={responses} workspaceHref={workspaceHref} />
+							<Wf1Timeline events={events} />
+						</main>
+					</div>
+				</>
+			) : (
+				<div class="rental-panel">
+					<h1>Workspace unavailable</h1>
+					<p class="rental-muted">Login as Eva or Rakesh for this workflow instance.</p>
+				</div>
+			)}
+		</div>
+	</section>
+</Wf1Base>
+
+<style>
+	.workspace-grid,
+	.thread,
+	.sidebar {
+		display: grid;
+		gap: 18px;
+	}
+
+	.workspace-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.workspace-columns {
+		display: grid;
+		grid-template-columns: 340px minmax(0, 1fr);
+		gap: 18px;
+		align-items: start;
+	}
+
+	@media (max-width: 900px) {
+		.workspace-columns {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

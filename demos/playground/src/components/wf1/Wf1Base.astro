@@ -1,0 +1,120 @@
+---
+import RentalBase from "../../layouts/RentalBase.astro";
+
+interface Props {
+	title: string;
+	description?: string;
+}
+
+const { title, description } = Astro.props;
+const user = Astro.locals.user as { email?: string | null } | undefined;
+const logoutRedirect = `/login?redirect=${encodeURIComponent("/wf1")}`;
+---
+
+<RentalBase title={title} description={description}>
+	<section class="wf1-boundary">
+		<div class="rental-shell wf1-boundary-inner">
+			<div>
+				<p class="rental-kicker">WF1</p>
+				<strong>Clean workflow engine route</strong>
+				<span>Workflow behavior comes from definition data and workspace projections.</span>
+			</div>
+			<nav class="wf1-nav" aria-label="WF1 navigation">
+				<a href="/wf1">Home</a>
+				<a href="/wf1/marketplace">Marketplace</a>
+				<a href="/wf1/owner">Owner</a>
+				<a href="/wf1/owner/assets/new">List asset</a>
+				{
+					user?.email ? (
+						<button type="button" data-wf1-logout>
+							Logout {user.email}
+						</button>
+					) : (
+						<a href={`/login?redirect=${encodeURIComponent("/wf1")}`}>Login</a>
+					)
+				}
+			</nav>
+		</div>
+	</section>
+	<slot />
+	<script is:inline define:vars={{ logoutRedirect }}>
+		document.querySelectorAll("[data-wf1-logout]").forEach((button) => {
+			button.addEventListener("click", async () => {
+				try {
+					await fetch("/_emdash/api/auth/logout", {
+						method: "POST",
+						credentials: "same-origin",
+						headers: { "X-EmDash-Request": "1" },
+					});
+				} finally {
+					window.location.assign(logoutRedirect);
+				}
+			});
+		});
+	</script>
+</RentalBase>
+
+<style>
+	.wf1-boundary {
+		border-bottom: 1px solid var(--r-border);
+		background: var(--r-panel-soft);
+	}
+
+	.wf1-boundary-inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 18px;
+		padding-block: 14px;
+	}
+
+	.wf1-boundary-inner > div {
+		display: grid;
+		gap: 3px;
+	}
+
+	.wf1-boundary strong {
+		font-size: 1.02rem;
+		font-weight: 950;
+	}
+
+	.wf1-boundary span {
+		color: var(--r-muted);
+		font-size: 0.9rem;
+		font-weight: 650;
+	}
+
+	.wf1-nav {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 10px;
+	}
+
+	.wf1-nav a,
+	.wf1-nav button {
+		border: 1px solid var(--r-border);
+		border-radius: 999px;
+		padding: 8px 12px;
+		background: var(--r-panel);
+		color: var(--r-text);
+		font: inherit;
+		font-size: 0.88rem;
+		font-weight: 850;
+		line-height: 1;
+		text-decoration: none;
+		cursor: pointer;
+	}
+
+	@media (max-width: 820px) {
+		.wf1-boundary-inner {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+
+		.wf1-nav {
+			justify-content: flex-start;
+		}
+	}
+</style>

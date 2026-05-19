@@ -1,0 +1,87 @@
+---
+interface Props {
+	card: Record<string, unknown>;
+	responses?: Array<Record<string, unknown>>;
+}
+
+const { card, responses = [] } = Astro.props;
+const cardResponses = responses.filter((response) => response.card_id === card.id);
+const spec = card.card_spec && typeof card.card_spec === "object" ? card.card_spec as Record<string, unknown> : {};
+const title = String(spec.displayTitle ?? card.card_type ?? "Task card");
+
+function parseJsonObject(value: string): Record<string, unknown> {
+	try {
+		const parsed = JSON.parse(value);
+		return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+			? parsed as Record<string, unknown>
+			: {};
+	} catch {
+		return {};
+	}
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+	if (value && typeof value === "object" && !Array.isArray(value)) {
+		return value as Record<string, unknown>;
+	}
+
+	if (typeof value === "string") {
+		return parseJsonObject(value);
+	}
+
+	return {};
+}
+
+function textValue(value: unknown, fallback = ""): string {
+	if (typeof value === "string") return value;
+	if (typeof value === "number" || typeof value === "boolean") return String(value);
+	return fallback;
+}
+
+function answerText(response: Record<string, unknown>): string {
+	const answer = objectValue(response.answer_value);
+	const amount = answer.amount;
+	const reference = answer.reference;
+	const text = answer.text ?? answer.value ?? answer.documentReference ?? response.message;
+
+	if (amount || reference) {
+		return [
+			amount ? `Amount: ${String(amount)}` : "",
+			reference ? `Reference: ${String(reference)}` : "",
+		].filter(Boolean).join(" · ");
+	}
+
+	return textValue(text, "Answered");
+}
+---
+
+<article class="wf1-card">
+	<div>
+		<strong>{title}</strong>
+		<span class="rental-badge">{String(card.card_state ?? "open")}</span>
+	</div>
+	<p>{String(card.prompt ?? "")}</p>
+	{cardResponses.length ? (
+		<div class="wf1-responses">
+			{cardResponses.map((response) => <p class="rental-muted">{answerText(response)}</p>)}
+		</div>
+	) : null}
+</article>
+
+<style>
+	.wf1-card {
+		display: grid;
+		gap: 8px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 14px;
+		background: var(--r-bg);
+	}
+
+	.wf1-card > div {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+</style>

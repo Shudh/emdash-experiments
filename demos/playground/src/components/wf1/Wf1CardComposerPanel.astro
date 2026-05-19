@@ -1,0 +1,57 @@
+---
+import ActionForm from "../rental/ActionForm.astro";
+
+interface Props {
+	availableCardTypes: Array<Record<string, unknown>>;
+	workflowInstanceId: string;
+	workspaceHref: string;
+}
+
+const { availableCardTypes, workflowInstanceId, workspaceHref } = Astro.props;
+
+function uiFor(cardType: Record<string, unknown>) {
+	return cardType.ui && typeof cardType.ui === "object" ? cardType.ui as Record<string, unknown> : {};
+}
+---
+
+<section class="rental-panel wf1-panel" data-testid="wf1-card-composer">
+	<h2>Available Task Cards</h2>
+	<p class="rental-muted">Cards create work inside the current Application State.</p>
+	{availableCardTypes.length ? (
+		<div class="wf1-compose-grid">
+			{availableCardTypes.map((cardType) => {
+				const cardTypeId = String(cardType.id ?? "");
+				const ui = uiFor(cardType);
+				return (
+					<ActionForm title={String(cardType.label ?? cardTypeId)} action="/api/wf1-rental/workflow/cards" submitLabel={String(ui.submitLabel ?? "Create card")} successRedirect={workspaceHref}>
+						<input type="hidden" name="workflowInstanceId" value={workflowInstanceId} />
+						<input type="hidden" name="cardType" value={cardTypeId} />
+						<div class="rental-field full">
+							<label for={`prompt-${cardTypeId}`}>{String(ui.promptLabel ?? "Task")}</label>
+							<textarea id={`prompt-${cardTypeId}`} name="prompt" required>{String(ui.defaultPrompt ?? cardType.label ?? "Please answer this task.")}</textarea>
+						</div>
+						{ui.helpText ? <p class="rental-muted">{String(ui.helpText)}</p> : null}
+					</ActionForm>
+				);
+			})}
+		</div>
+	) : <p class="rental-muted">No card types are available for your role now.</p>}
+</section>
+
+<style>
+	.wf1-panel,
+	.wf1-compose-grid {
+		display: grid;
+		gap: 14px;
+	}
+
+	.wf1-compose-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	@media (max-width: 760px) {
+		.wf1-compose-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

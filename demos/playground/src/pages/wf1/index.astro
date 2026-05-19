@@ -1,0 +1,32 @@
+---
+import Wf1Base from "../../components/wf1/Wf1Base.astro";
+
+export const prerender = false;
+---
+
+<Wf1Base title="WF1 workflow engine" description="Clean workflow engine workspace">
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">WF1</p>
+					<h1>Generic workflow workspace</h1>
+					<p class="rental-muted">A clean route for assets, applications, task cards, gates, and projection-derived actions.</p>
+				</div>
+				<div class="wf1-actions">
+					<a class="rental-button" href="/wf1/owner">Owner dashboard</a>
+					<a class="rental-button secondary" href="/wf1/owner/assets/new">Create asset</a>
+					<a class="rental-button secondary" href="/wf1/marketplace">Marketplace</a>
+				</div>
+			</div>
+		</div>
+	</section>
+</Wf1Base>
+
+<style>
+	.wf1-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+</style>

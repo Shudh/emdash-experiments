@@ -1,0 +1,105 @@
+---
+import Wf1Base from "../../../components/wf1/Wf1Base.astro";
+import Wf1ApplicationList from "../../../components/wf1/Wf1ApplicationList.astro";
+
+export const prerender = false;
+
+async function loadDashboard() {
+	try {
+		const response = await fetch(new URL("/api/wf1-rental/owner/dashboard", Astro.url), {
+			headers: {
+				Accept: "application/json",
+				Cookie: Astro.request.headers.get("cookie") ?? "",
+			},
+		});
+		const payload = await response.json() as {
+			data?: { assets?: Array<Record<string, unknown>>; applicationRows?: Array<Record<string, unknown>> };
+			error?: { message?: string };
+		};
+		return {
+			ok: response.ok,
+			assets: payload.data?.assets ?? [],
+			applicationRows: payload.data?.applicationRows ?? [],
+			error: payload.error?.message,
+		};
+	} catch (error) {
+		return {
+			ok: false,
+			assets: [],
+			applicationRows: [],
+			error: error instanceof Error ? error.message : "Dashboard unavailable",
+		};
+	}
+}
+
+const dashboard = await loadDashboard();
+const assetRows = dashboard.assets.map((asset) => ({
+	asset,
+	applications: Array.isArray(asset.applications)
+		? asset.applications as Array<Record<string, unknown>>
+		: [],
+}));
+---
+
+<Wf1Base title="WF1 owner dashboard" description="WF1 owner dashboard">
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">Owner</p>
+					<h1>Dashboard</h1>
+					<p class="rental-muted">Eva sees assets, Asset State, applications, Application State, and projection-derived actions.</p>
+				</div>
+				<a class="rental-button" href="/wf1/owner/assets/new">Create asset</a>
+			</div>
+			{!dashboard.ok ? (
+				<div class="rental-panel">
+					<h2>Login required</h2>
+					<p class="rental-muted">{dashboard.error ?? "Owner dashboard requires a session."}</p>
+				</div>
+			) : (
+				<div class="asset-sections">
+					{assetRows.length ? assetRows.map((row) => (
+						<section class="rental-panel asset-management">
+							<div class="asset-head">
+								<div>
+									<p class="rental-kicker">{String(row.asset.asset_kind ?? "asset")}</p>
+									<h2>{String(row.asset.title ?? "Untitled asset")}</h2>
+									<p class="rental-muted">{String(row.asset.location_label ?? "Location pending")}</p>
+								</div>
+								<div class="rental-badges">
+									<span class="rental-badge">Asset State: {String(row.asset.business_state ?? "draft")}</span>
+									<span class="rental-badge">{String(row.asset.visibility_state ?? "private")}</span>
+								</div>
+							</div>
+							<div class="asset-links">
+								<a class="rental-button secondary" href={`/wf1/marketplace/assets/${row.asset.id}`}>View listing</a>
+							</div>
+							<h3>Applications</h3>
+							<Wf1ApplicationList applications={row.applications} />
+						</section>
+					)) : (
+						<div class="rental-panel"><p class="rental-muted">No owned assets yet.</p></div>
+					)}
+				</div>
+			)}
+		</div>
+	</section>
+</Wf1Base>
+
+<style>
+	.asset-sections,
+	.asset-management {
+		display: grid;
+		gap: 16px;
+	}
+
+	.asset-head,
+	.asset-links {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+</style>

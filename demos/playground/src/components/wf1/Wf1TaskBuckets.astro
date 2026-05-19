@@ -1,0 +1,38 @@
+---
+import Wf1PendingTaskCard from "./Wf1PendingTaskCard.astro";
+import Wf1Card from "./Wf1Card.astro";
+
+interface Props {
+	taskBuckets: Record<string, Array<Record<string, unknown>>>;
+	responses: Array<Record<string, unknown>>;
+	workspaceHref: string;
+}
+
+const { taskBuckets, responses, workspaceHref } = Astro.props;
+const myOpenTasks = taskBuckets.myOpenTasks ?? [];
+const otherSideOpenTasks = taskBuckets.otherSideOpenTasks ?? [];
+const completedCards = taskBuckets.completedCards ?? [];
+---
+
+<section class="bucket-grid">
+	<div class="rental-panel" data-testid="wf1-my-open-tasks">
+		<h2>My Open Tasks</h2>
+		{myOpenTasks.length ? myOpenTasks.map((card) => <Wf1PendingTaskCard card={card} workspaceHref={workspaceHref} />) : <p class="rental-muted">No open task for you.</p>}
+	</div>
+	<div class="rental-panel" data-testid="wf1-other-open-tasks">
+		<h2>Other Side's Open Tasks</h2>
+		{otherSideOpenTasks.length ? otherSideOpenTasks.map((card) => <Wf1Card card={card} responses={responses} />) : <p class="rental-muted">No open task waiting on the other side.</p>}
+	</div>
+	<div class="rental-panel" data-testid="wf1-completed-cards">
+		<h2>Completed / History Cards</h2>
+		{completedCards.length ? completedCards.map((card) => <Wf1Card card={card} responses={responses} />) : <p class="rental-muted">No completed cards yet.</p>}
+	</div>
+</section>
+
+<style>
+	.bucket-grid,
+	.bucket-grid > section {
+		display: grid;
+		gap: 16px;
+	}
+</style>

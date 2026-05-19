@@ -1,0 +1,16 @@
+---
+interface Props {
+	requiredUnresolvedTasks: Array<Record<string, unknown>>;
+}
+
+const { requiredUnresolvedTasks } = Astro.props;
+---
+
+<section class="rental-panel" data-testid="wf1-required-gates">
+	<h2>Required Unresolved Gates</h2>
+	{requiredUnresolvedTasks.length ? (
+		<ul>
+			{requiredUnresolvedTasks.map((card) => <li>{String(card.card_type ?? "task")} blocks required actions until answered.</li>)}
+		</ul>
+	) : <p class="rental-muted">No required gates are unresolved.</p>}
+</section>

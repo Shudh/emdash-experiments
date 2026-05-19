@@ -1,0 +1,58 @@
+---
+import ActionForm from "../rental/ActionForm.astro";
+
+interface Props {
+	availableActions: Array<Record<string, unknown>>;
+	workflowInstanceId: string;
+	workspaceHref: string;
+}
+
+const { availableActions, workflowInstanceId, workspaceHref } = Astro.props;
+---
+
+<section class="rental-panel wf1-panel" data-testid="wf1-actions">
+	<h2>Available Stage Actions</h2>
+	<p class="rental-muted">Actions move Application State and sometimes Asset State. Cards do not move state by themselves.</p>
+	{availableActions.length ? (
+		<div class="wf1-action-grid">
+			{availableActions.map((action) => {
+				const actionId = String(action.id ?? "");
+				const label = String(action.label ?? actionId);
+				const warnings = Array.isArray(action.warnings) ? action.warnings.map(String) : [];
+				const blocked = action.blocked === true;
+				return (
+					<div class="wf1-action">
+						{warnings.map((warning) => <p class="rental-muted">{warning}</p>)}
+						{blocked ? (
+							<button class="rental-button secondary" type="button" disabled>{label}</button>
+						) : (
+							<ActionForm title={label} action="/api/wf1-rental/workflow/actions" submitLabel={label} successRedirect={workspaceHref}>
+								<input type="hidden" name="workflowInstanceId" value={workflowInstanceId} />
+								<input type="hidden" name="actionId" value={actionId} />
+							</ActionForm>
+						)}
+					</div>
+				);
+			})}
+		</div>
+	) : <p class="rental-muted">No stage actions are available for your role now.</p>}
+</section>
+
+<style>
+	.wf1-panel,
+	.wf1-action-grid,
+	.wf1-action {
+		display: grid;
+		gap: 14px;
+	}
+
+	.wf1-action-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	@media (max-width: 760px) {
+		.wf1-action-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

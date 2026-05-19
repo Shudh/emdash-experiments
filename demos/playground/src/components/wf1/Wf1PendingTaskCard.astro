@@ -1,0 +1,54 @@
+---
+import ActionForm from "../rental/ActionForm.astro";
+
+interface Props {
+	card: Record<string, unknown>;
+	workspaceHref: string;
+}
+
+const { card, workspaceHref } = Astro.props;
+const answerSchema = card.answer_schema && typeof card.answer_schema === "object" ? card.answer_schema as Record<string, unknown> : {};
+const kind = String(answerSchema.kind ?? "free_text");
+const answerLabel = kind === "amount_proof" ? "Reference" : "Answer";
+---
+
+<ActionForm title={String(card.prompt ?? card.card_type ?? "Task")} action={`/api/wf1-rental/workflow/cards/${card.id}/answer`} submitLabel="Answer" successRedirect={workspaceHref}>
+	{
+		kind === "amount_proof" ? (
+			<>
+				<div class="rental-field">
+					<label for={`amount-${card.id}`}>Amount</label>
+					<input id={`amount-${card.id}`} name="answer.amount" type="number" data-number="true" />
+				</div>
+				<div class="rental-field full">
+					<label for={`reference-${card.id}`}>{answerLabel}</label>
+					<input id={`reference-${card.id}`} name="answer.reference" required />
+				</div>
+				<input type="hidden" name="attachments.0.storageKey" value={`wf1-local-proof-${card.id}`} />
+				<input type="hidden" name="attachments.0.mimeType" value="application/pdf" />
+			</>
+		) : kind === "yes_no" || kind === "agreement_review" ? (
+			<div class="rental-field">
+				<label for={`answer-${card.id}`}>Answer</label>
+				<select id={`answer-${card.id}`} name="answer.value" required>
+					<option value="yes">Yes</option>
+					<option value="no">No</option>
+				</select>
+			</div>
+		) : kind === "document_upload" || kind === "signed_document_upload" ? (
+			<>
+				<div class="rental-field">
+					<label for={`document-${card.id}`}>Document reference</label>
+					<input id={`document-${card.id}`} name="answer.documentReference" required />
+				</div>
+				<input type="hidden" name="attachments.0.storageKey" value={`wf1-local-document-${card.id}`} />
+				<input type="hidden" name="attachments.0.mimeType" value="application/pdf" />
+			</>
+		) : (
+			<div class="rental-field full">
+				<label for={`answer-${card.id}`}>{answerLabel}</label>
+				<textarea id={`answer-${card.id}`} name="answer.text" required>I will provide this.</textarea>
+			</div>
+		)
+	}
+</ActionForm>
