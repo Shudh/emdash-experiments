@@ -17,7 +17,9 @@ async function loadAssets() {
 				Cookie: Astro.request.headers.get("cookie") ?? "",
 			},
 		});
-		const payload = await response.json() as { data?: { items?: Array<Record<string, unknown>> } };
+		const payload = (await response.json()) as {
+			data?: { items?: Array<Record<string, unknown>> };
+		};
 		return response.ok ? payload.data?.items ?? [] : [];
 	} catch {
 		return [];
@@ -26,8 +28,50 @@ async function loadAssets() {
 
 function viewerFor(asset: Record<string, unknown>) {
 	return asset.viewer && typeof asset.viewer === "object"
-		? asset.viewer as Record<string, unknown>
+		? (asset.viewer as Record<string, unknown>)
 		: {};
+}
+
+function configFor(asset: Record<string, unknown>) {
+	return asset.config_spec && typeof asset.config_spec === "object"
+		? (asset.config_spec as Record<string, unknown>)
+		: {};
+}
+
+function mediaUrlFromStorageKey(storageKey: string) {
+	return `/_emdash/api/media/file/${storageKey
+		.split("/")
+		.map((part) => encodeURIComponent(part))
+		.join("/")}`;
+}
+
+function thumbnailFor(asset: Record<string, unknown>) {
+	const config = configFor(asset);
+	const thumbnail =
+		config.thumbnailMediaRef && typeof config.thumbnailMediaRef === "object"
+			? (config.thumbnailMediaRef as Record<string, unknown>)
+			: null;
+	const mediaRefs = Array.isArray(config.mediaRefs)
+		? (config.mediaRefs.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>)
+		: [];
+	const media = thumbnail ?? mediaRefs[0] ?? null;
+
+	if (!media) return null;
+
+	const url =
+		typeof media.url === "string" && media.url
+			? media.url
+			: typeof media.storageKey === "string" && media.storageKey
+				? mediaUrlFromStorageKey(media.storageKey)
+				: "";
+
+	if (!url) return null;
+
+	return {
+		url,
+		mimeType: String(media.mimeType ?? ""),
+		filename: String(media.filename ?? "Asset media"),
+	};
 }
 
 function assetDetailHref(asset: Record<string, unknown>) {
@@ -41,9 +85,8 @@ function loginHrefFor(asset: Record<string, unknown>) {
 function cardCta(asset: Record<string, unknown>): MarketplaceCta {
 	const viewer = viewerFor(asset);
 	const relationship = String(viewer.relationship ?? "anonymous");
-	const workflowInstanceId = typeof viewer.workflowInstanceId === "string"
-		? viewer.workflowInstanceId
-		: "";
+	const workflowInstanceId =
+		typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
 	const canExpressInterest = viewer.canExpressInterest === true;
 
 	if (relationship === "owner") {
@@ -103,39 +146,60 @@ const assets = await loadAssets();
 				<div>
 					<p class="rental-kicker">Marketplace</p>
 					<h1>Published assets</h1>
-					<p class="rental-muted">Applicants select a workflow definition when they express interest.</p>
+					<p class="rental-muted">
+						Applicants select a workflow definition when they express interest.
+					</p>
 				</div>
 				<a class="rental-button secondary" href="/wf1/owner/assets/new">List asset</a>
 			</div>
-			{assets.length ? (
-				<div class="rental-grid" data-marketplace-grid>
-					{assets.map((asset) => {
-						const cta = cardCta(asset);
-						const detailHref = assetDetailHref(asset);
 
-						return (
-							<article class="rental-panel asset-card">
-								<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
-								<h2><a href={detailHref}>{String(asset.title ?? "Untitled asset")}</a></h2>
-								<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
-								<div class="rental-badges">
-									<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
-									<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
-								</div>
-								<div class="asset-card-actions">
-									<a class={`rental-button ${cta.tone === "secondary" ? "secondary" : ""}`} href={cta.href}>
-										{cta.label}
+			{
+				assets.length ? (
+					<div class="rental-grid" data-marketplace-grid>
+						{assets.map((asset) => {
+							const cta = cardCta(asset);
+							const detailHref = assetDetailHref(asset);
+							const thumbnail = thumbnailFor(asset);
+							const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
+
+							return (
+								<article class="rental-panel asset-card">
+									<a class="asset-thumb" href={detailHref} aria-label={`Open ${String(asset.title ?? "asset")}`}>
+										{thumbnail && isImage ? (
+											<img src={thumbnail.url} alt={thumbnail.filename} loading="lazy" />
+										) : thumbnail ? (
+											<span>{thumbnail.filename || "PDF attached"}</span>
+										) : (
+											<span>No image yet</span>
+										)}
 									</a>
-								</div>
-							</article>
-						);
-					})}
-				</div>
-			) : (
-				<div class="rental-panel">
-					<p class="rental-muted">No marketplace assets are currently listed.</p>
-				</div>
-			)}
+
+									<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
+									<h2>
+										<a href={detailHref}>{String(asset.title ?? "Untitled asset")}</a>
+									</h2>
+									<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+									<div class="rental-badges">
+										<span class="rental-badge">
+											Asset State: {String(asset.business_state ?? "listed")}
+										</span>
+										<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+									</div>
+									<div class="asset-card-actions">
+										<a class={`rental-button ${cta.tone === "secondary" ? "secondary" : ""}`} href={cta.href}>
+											{cta.label}
+										</a>
+									</div>
+								</article>
+							);
+						})}
+					</div>
+				) : (
+					<div class="rental-panel">
+						<p class="rental-muted">No marketplace assets are currently listed.</p>
+					</div>
+				)
+			}
 		</div>
 	</section>
 </Wf1Base>
@@ -145,6 +209,26 @@ const assets = await loadAssets();
 		display: grid;
 		gap: 12px;
 		align-content: start;
+	}
+
+	.asset-thumb {
+		display: grid;
+		place-items: center;
+		width: 100%;
+		aspect-ratio: 16 / 10;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		background: var(--r-panel-soft);
+		color: var(--r-muted);
+		font-weight: 850;
+		overflow: hidden;
+	}
+
+	.asset-thumb img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
 	}
 
 	.asset-card h2 a {

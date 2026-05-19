@@ -32,20 +32,30 @@ export async function answerWorkflowCard(
 		const instance = await getInstanceOrThrow(tx, asString(card.workflow_instance_id));
 		const definition = workflowDefinitionForInstance(instance);
 		const cardDefinition = definition.cardTypes[asString(card.card_type)];
-		if (!cardDefinition)
+
+		if (!cardDefinition) {
 			throw new DomainError("CARD_TYPE_NOT_FOUND", "Workflow card type not found", 404);
+		}
+
 		const [asset, interest] = await Promise.all([
 			getAssetOrThrow(tx, asString(instance.asset_id)),
 			getInterestOrThrow(tx, asString(instance.interest_id)),
 		]);
+
 		const role = assertWorkflowRole(actorRoleFor(user, asset, interest), cardDefinition.answeredBy);
+
 		assertStateAllowed(
 			asString(instance.workflow_state),
 			asString(asset.business_state),
 			cardDefinition,
 		);
-		validateEvidencePolicy(cardDefinition.evidencePolicy, input.attachments ?? []);
+
+		const attachments = input.attachments ?? [];
+
+		validateEvidencePolicy(cardDefinition.evidencePolicy, attachments);
+
 		const answerValue = validateAnswer(cardDefinition.answerSchema, input.answer);
+
 		await tx.insert(WORKFLOW_RENTAL_COLLECTIONS.WORKFLOW_CARD_RESPONSES, {
 			status: WF_STATUS.PUBLISHED,
 			author_id: user.id,
@@ -55,12 +65,17 @@ export async function answerWorkflowCard(
 			interest_id: interest.id,
 			responded_by_user_id: user.id,
 			responded_by_role: role,
-			answer_value: answerValue,
+			answer_value: {
+				...answerValue,
+				attachments,
+			},
 			message: input.message ?? answerValue.text ?? null,
 		});
+
 		await tx.update(WORKFLOW_RENTAL_COLLECTIONS.WORKFLOW_CARDS, card.id, {
 			card_state: WF_CARD_STATE.ANSWERED,
 		});
+
 		const transitioned = await applyTransitionRules(tx, {
 			rules: cardDefinition.transitions ?? [],
 			when: "card_answered",
@@ -69,6 +84,7 @@ export async function answerWorkflowCard(
 			instance,
 			actor: user,
 		});
+
 		await appendWorkflowEvent(tx, {
 			asset: transitioned.asset,
 			interest,
@@ -81,7 +97,11 @@ export async function answerWorkflowCard(
 			toWorkflowState: asString(transitioned.instance.workflow_state),
 			fromAssetState: asString(asset.business_state),
 			toAssetState: asString(transitioned.asset.business_state),
+			eventSpec: {
+				attachments,
+			},
 		});
+
 		return listWorkspace(tx, user, transitioned.instance);
 	});
 }

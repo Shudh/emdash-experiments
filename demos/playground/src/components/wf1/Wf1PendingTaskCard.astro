@@ -1,5 +1,6 @@
 ---
 import ActionForm from "../rental/ActionForm.astro";
+import Wf1MediaUpload from "./Wf1MediaUpload.astro";
 
 interface Props {
 	card: Record<string, unknown>;
@@ -7,12 +8,30 @@ interface Props {
 }
 
 const { card, workspaceHref } = Astro.props;
-const answerSchema = card.answer_schema && typeof card.answer_schema === "object" ? card.answer_schema as Record<string, unknown> : {};
+
+const answerSchema =
+	card.answer_schema && typeof card.answer_schema === "object"
+		? (card.answer_schema as Record<string, unknown>)
+		: {};
+
+const evidencePolicy =
+	card.evidence_policy && typeof card.evidence_policy === "object"
+		? (card.evidence_policy as Record<string, unknown>)
+		: {};
+
 const kind = String(answerSchema.kind ?? "free_text");
 const answerLabel = kind === "amount_proof" ? "Reference" : "Answer";
+const evidenceMode = String(evidencePolicy.attachment ?? "forbidden");
+const acceptsEvidence = evidenceMode !== "forbidden";
+const requiresEvidence = evidenceMode === "required";
 ---
 
-<ActionForm title={String(card.prompt ?? card.card_type ?? "Task")} action={`/api/wf1-rental/workflow/cards/${card.id}/answer`} submitLabel="Answer" successRedirect={workspaceHref}>
+<ActionForm
+	title={String(card.prompt ?? card.card_type ?? "Task")}
+	action={`/api/wf1-rental/workflow/cards/${card.id}/answer`}
+	submitLabel="Answer"
+	successRedirect={workspaceHref}
+>
 	{
 		kind === "amount_proof" ? (
 			<>
@@ -24,8 +43,6 @@ const answerLabel = kind === "amount_proof" ? "Reference" : "Answer";
 					<label for={`reference-${card.id}`}>{answerLabel}</label>
 					<input id={`reference-${card.id}`} name="answer.reference" required />
 				</div>
-				<input type="hidden" name="attachments.0.storageKey" value={`wf1-local-proof-${card.id}`} />
-				<input type="hidden" name="attachments.0.mimeType" value="application/pdf" />
 			</>
 		) : kind === "yes_no" || kind === "agreement_review" ? (
 			<div class="rental-field">
@@ -36,19 +53,25 @@ const answerLabel = kind === "amount_proof" ? "Reference" : "Answer";
 				</select>
 			</div>
 		) : kind === "document_upload" || kind === "signed_document_upload" ? (
-			<>
-				<div class="rental-field">
-					<label for={`document-${card.id}`}>Document reference</label>
-					<input id={`document-${card.id}`} name="answer.documentReference" required />
-				</div>
-				<input type="hidden" name="attachments.0.storageKey" value={`wf1-local-document-${card.id}`} />
-				<input type="hidden" name="attachments.0.mimeType" value="application/pdf" />
-			</>
+			<div class="rental-field">
+				<label for={`document-${card.id}`}>Document reference</label>
+				<input id={`document-${card.id}`} name="answer.documentReference" required />
+			</div>
 		) : (
 			<div class="rental-field full">
 				<label for={`answer-${card.id}`}>{answerLabel}</label>
 				<textarea id={`answer-${card.id}`} name="answer.text" required>I will provide this.</textarea>
 			</div>
 		)
+	}
+
+	{
+		acceptsEvidence ? (
+			<Wf1MediaUpload
+				prefix="attachments.0"
+				label={requiresEvidence ? "Required evidence image/PDF" : "Optional evidence image/PDF"}
+				required={requiresEvidence}
+			/>
+		) : null
 	}
 </ActionForm>
