@@ -17,6 +17,18 @@ async function routeJson(input: Parameters<typeof handleWorkflowRentalRoute>[0])
 	return { response, payload };
 }
 
+function findAsset(items: Array<Record<string, unknown>>, assetId: string) {
+	const asset = items.find((item) => item.id === assetId);
+	expect(asset).toBeTruthy();
+	return asset as Record<string, unknown>;
+}
+
+function viewerOf(asset: Record<string, unknown>) {
+	expect(asset.viewer).toBeTruthy();
+	expect(typeof asset.viewer).toBe("object");
+	return asset.viewer as Record<string, unknown>;
+}
+
 describe("wf1 API routes", () => {
 	test("workspace route exposes Asset State and Application State", async () => {
 		const { store, instance } = await seedSimpleApplication();
@@ -29,6 +41,79 @@ describe("wf1 API routes", () => {
 		expect(response.status).toBe(200);
 		expect(payload.data.projection.assetState.id).toBe("listed");
 		expect(payload.data.projection.applicationState.id).toBe("available");
+	});
+
+	test("marketplace viewer data supports anonymous, owner, applicant, and apply CTA states", async () => {
+		const { store, asset, instance } = await seedSimpleApplication();
+
+		const anonymousResult = await routeJson({
+			request: jsonRequest("GET"),
+			path: "marketplace/assets",
+			store,
+			user: null,
+		});
+		expect(anonymousResult.response.status).toBe(200);
+		const anonymousAsset = findAsset(anonymousResult.payload.data.items, asset.id);
+		expect(viewerOf(anonymousAsset)).toMatchObject({
+			relationship: "anonymous",
+			canExpressInterest: false,
+		});
+
+		const ownerResult = await routeJson({
+			request: jsonRequest("GET"),
+			path: "marketplace/assets",
+			store,
+			user: eva,
+		});
+		expect(ownerResult.response.status).toBe(200);
+		const ownerAsset = findAsset(ownerResult.payload.data.items, asset.id);
+		expect(viewerOf(ownerAsset)).toMatchObject({
+			relationship: "owner",
+			canExpressInterest: false,
+		});
+
+		const unrelatedResult = await routeJson({
+			request: jsonRequest("GET"),
+			path: "marketplace/assets",
+			store,
+			user: kavya,
+		});
+		expect(unrelatedResult.response.status).toBe(200);
+		const unrelatedAsset = findAsset(unrelatedResult.payload.data.items, asset.id);
+		expect(viewerOf(unrelatedAsset)).toMatchObject({
+			relationship: "logged_in",
+			canExpressInterest: true,
+		});
+
+		const applicantResult = await routeJson({
+			request: jsonRequest("GET"),
+			path: "marketplace/assets",
+			store,
+			user: rakesh,
+		});
+		expect(applicantResult.response.status).toBe(200);
+		const applicantAsset = findAsset(applicantResult.payload.data.items, asset.id);
+		expect(viewerOf(applicantAsset)).toMatchObject({
+			relationship: "interested_applicant",
+			canExpressInterest: false,
+			workflowInstanceId: instance.id,
+		});
+	});
+
+	test("marketplace detail includes workspace id for an existing applicant", async () => {
+		const { store, asset, instance } = await seedSimpleApplication();
+		const { response, payload } = await routeJson({
+			request: jsonRequest("GET"),
+			path: `marketplace/assets/${asset.id}`,
+			store,
+			user: rakesh,
+		});
+		expect(response.status).toBe(200);
+		expect(payload.data.asset.viewer).toMatchObject({
+			relationship: "interested_applicant",
+			canExpressInterest: false,
+			workflowInstanceId: instance.id,
+		});
 	});
 
 	test("Eva creates tasks, Rakesh answers, and Eva marks rented", async () => {

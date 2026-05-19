@@ -33,10 +33,22 @@ test("Eva and Rakesh complete simple available-rented WF1 UI flow", async ({ bro
 		await expect(eva.page).toHaveURL(/\/wf1\/marketplace\/assets\/[^/]+$/);
 		const assetUrl = eva.page.url();
 
+		const anonymous = await browser.newContext({ baseURL: WF1_BASE_URL });
+		try {
+			const anonymousPage = await anonymous.newPage();
+			await anonymousPage.goto("/wf1/marketplace", { waitUntil: "domcontentloaded" });
+			const anonymousCard = anonymousPage.locator(".asset-card").filter({ hasText: title });
+			await expect(anonymousCard).toBeVisible();
+			await expect(anonymousCard.getByRole("link", { name: "Login to apply" })).toBeVisible();
+		} finally {
+			await anonymous.close();
+		}
+
 		await rakesh.page.goto("/wf1/marketplace", { waitUntil: "domcontentloaded" });
 		const assetCard = rakesh.page.locator(".asset-card").filter({ hasText: title });
 		await expect(assetCard).toBeVisible();
-		await assetCard.getByRole("link", { name: title }).click();
+		await expect(assetCard.getByRole("link", { name: "View and apply" })).toBeVisible();
+		await assetCard.getByRole("link", { name: "View and apply" }).click();
 		await expect(rakesh.page).toHaveURL(assetUrl);
 		await rakesh.page.waitForFunction(
 			() => (window as { __rentalFormsReady?: boolean }).__rentalFormsReady === true,
@@ -51,6 +63,13 @@ test("Eva and Rakesh complete simple available-rented WF1 UI flow", async ({ bro
 		const workspaceUrl = rakesh.page.url();
 		await expect(rakesh.page.getByText("Asset State: listed")).toBeVisible();
 		await expect(rakesh.page.getByText("Application State: available")).toBeVisible();
+
+		await rakesh.page.goto("/wf1/marketplace", { waitUntil: "domcontentloaded" });
+		const appliedCard = rakesh.page.locator(".asset-card").filter({ hasText: title });
+		await expect(appliedCard).toBeVisible();
+		await expect(appliedCard.getByRole("link", { name: "Open application workspace" })).toBeVisible();
+		await appliedCard.getByRole("link", { name: "Open application workspace" }).click();
+		await expect(rakesh.page).toHaveURL(WORKSPACE_URL_PATTERN);
 
 		await eva.page.goto("/wf1/owner", { waitUntil: "domcontentloaded" });
 		const ownerAsset = eva.page.locator(".asset-management").filter({ hasText: title });

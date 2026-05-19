@@ -3,6 +3,12 @@ import Wf1Base from "../../../components/wf1/Wf1Base.astro";
 
 export const prerender = false;
 
+type MarketplaceCta = {
+	label: string;
+	href: string;
+	tone: "primary" | "secondary";
+};
+
 async function loadAssets() {
 	try {
 		const response = await fetch(new URL("/api/wf1-rental/marketplace/assets", Astro.url), {
@@ -16,6 +22,75 @@ async function loadAssets() {
 	} catch {
 		return [];
 	}
+}
+
+function viewerFor(asset: Record<string, unknown>) {
+	return asset.viewer && typeof asset.viewer === "object"
+		? asset.viewer as Record<string, unknown>
+		: {};
+}
+
+function assetDetailHref(asset: Record<string, unknown>) {
+	return `/wf1/marketplace/assets/${String(asset.id)}`;
+}
+
+function loginHrefFor(asset: Record<string, unknown>) {
+	return `/login?redirect=${encodeURIComponent(assetDetailHref(asset))}`;
+}
+
+function cardCta(asset: Record<string, unknown>): MarketplaceCta {
+	const viewer = viewerFor(asset);
+	const relationship = String(viewer.relationship ?? "anonymous");
+	const workflowInstanceId = typeof viewer.workflowInstanceId === "string"
+		? viewer.workflowInstanceId
+		: "";
+	const canExpressInterest = viewer.canExpressInterest === true;
+
+	if (relationship === "owner") {
+		return {
+			label: "Manage in owner dashboard",
+			href: "/wf1/owner",
+			tone: "secondary",
+		};
+	}
+
+	if (relationship === "interested_applicant" && workflowInstanceId) {
+		return {
+			label: "Open application workspace",
+			href: `/wf1/workspaces/${workflowInstanceId}`,
+			tone: "primary",
+		};
+	}
+
+	if (relationship === "interested_applicant") {
+		return {
+			label: "View application",
+			href: assetDetailHref(asset),
+			tone: "primary",
+		};
+	}
+
+	if (relationship === "anonymous") {
+		return {
+			label: "Login to apply",
+			href: loginHrefFor(asset),
+			tone: "primary",
+		};
+	}
+
+	if (canExpressInterest) {
+		return {
+			label: "View and apply",
+			href: assetDetailHref(asset),
+			tone: "primary",
+		};
+	}
+
+	return {
+		label: "View details",
+		href: assetDetailHref(asset),
+		tone: "secondary",
+	};
 }
 
 const assets = await loadAssets();
@@ -34,17 +109,27 @@ const assets = await loadAssets();
 			</div>
 			{assets.length ? (
 				<div class="rental-grid" data-marketplace-grid>
-					{assets.map((asset) => (
-						<article class="rental-panel asset-card">
-							<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
-							<h2><a href={`/wf1/marketplace/assets/${asset.id}`}>{String(asset.title ?? "Untitled asset")}</a></h2>
-							<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
-							<div class="rental-badges">
-								<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
-								<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
-							</div>
-						</article>
-					))}
+					{assets.map((asset) => {
+						const cta = cardCta(asset);
+						const detailHref = assetDetailHref(asset);
+
+						return (
+							<article class="rental-panel asset-card">
+								<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
+								<h2><a href={detailHref}>{String(asset.title ?? "Untitled asset")}</a></h2>
+								<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+								<div class="rental-badges">
+									<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
+									<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+								</div>
+								<div class="asset-card-actions">
+									<a class={`rental-button ${cta.tone === "secondary" ? "secondary" : ""}`} href={cta.href}>
+										{cta.label}
+									</a>
+								</div>
+							</article>
+						);
+					})}
 				</div>
 			) : (
 				<div class="rental-panel">
@@ -54,3 +139,24 @@ const assets = await loadAssets();
 		</div>
 	</section>
 </Wf1Base>
+
+<style>
+	.asset-card {
+		display: grid;
+		gap: 12px;
+		align-content: start;
+	}
+
+	.asset-card h2 a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.asset-card h2 a:hover {
+		text-decoration: underline;
+	}
+
+	.asset-card-actions {
+		margin-top: 4px;
+	}
+</style>

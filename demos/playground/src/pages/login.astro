@@ -3,38 +3,66 @@ import RentalBase from "../layouts/RentalBase.astro";
 
 export const prerender = false;
 
+const DEFAULT_MARKETPLACE = "/marketplace";
+const WF1_HOME = "/wf1";
+const WF1_MARKETPLACE = "/wf1/marketplace";
+
 const user = Astro.locals.user as { email?: string | null } | undefined;
-const redirectRaw = Astro.url.searchParams.get("redirect") ?? "/marketplace";
+const redirectRaw = Astro.url.searchParams.get("redirect") ?? DEFAULT_MARKETPLACE;
 
 function safeRedirect(value: string): string {
 	const trimmed = value.trim();
 
-	if (!trimmed) return "/marketplace";
-	if (!trimmed.startsWith("/")) return "/marketplace";
-	if (trimmed.startsWith("//")) return "/marketplace";
-	if (trimmed.startsWith("/_emdash")) return "/marketplace";
-	if (trimmed.includes("\\")) return "/marketplace";
+	if (!trimmed) return DEFAULT_MARKETPLACE;
+	if (!trimmed.startsWith("/")) return DEFAULT_MARKETPLACE;
+	if (trimmed.startsWith("//")) return DEFAULT_MARKETPLACE;
+	if (trimmed.startsWith("/_emdash")) return DEFAULT_MARKETPLACE;
+	if (trimmed.includes("\\")) return DEFAULT_MARKETPLACE;
 
 	return trimmed;
 }
 
 const redirect = safeRedirect(redirectRaw);
+const isWf1Redirect = redirect === WF1_HOME || redirect.startsWith(`${WF1_HOME}/`);
+const marketplaceHref = isWf1Redirect ? WF1_MARKETPLACE : DEFAULT_MARKETPLACE;
+const loginKicker = isWf1Redirect ? "WF1 login" : "ALM Rentals";
+const loginDescription = isWf1Redirect
+	? "This login was opened from the isolated WF1 workflow route. After login, you return to the WF1 task flow."
+	: "This is the rental-facing account page for owners and tenants. It uses EmDash auth APIs underneath, but it is not the EmDash backend admin login.";
 const isDev = import.meta.env.DEV;
 ---
 
 <RentalBase title="Login" description="Rental-facing login for ALM Rentals">
+	{
+		isWf1Redirect ? (
+			<section class="wf1-login-boundary">
+				<div class="rental-shell wf1-login-boundary-inner">
+					<a class="wf1-login-brand" href="/wf1">
+						<span class="wf1-login-mark">WF1</span>
+						<span>
+							<strong>Clean workflow engine login</strong>
+							<small>Orange route family. Continue safely into /wf1.</small>
+						</span>
+					</a>
+					<nav aria-label="WF1 login navigation">
+						<a href="/wf1">Home</a>
+						<a href="/wf1/marketplace">Marketplace</a>
+						<a href={redirect}>Requested page</a>
+					</nav>
+				</div>
+			</section>
+		) : null
+	}
+
 	<section class="rental-section">
 		<div class="rental-shell alm-login-grid">
 			<article class="rental-panel alm-login-hero">
-				<p class="rental-kicker">ALM Rentals</p>
+				<p class="rental-kicker">{loginKicker}</p>
 				<h1>{user?.email ? "You are already logged in." : "Login or register to continue."}</h1>
-				<p class="rental-muted">
-					This is the rental-facing account page for owners and tenants. It uses EmDash auth APIs
-					underneath, but it is not the EmDash backend admin login.
-				</p>
+				<p class="rental-muted">{loginDescription}</p>
 
 				<div class="alm-login-actions">
-					<a class="rental-button secondary" href="/marketplace">Back to marketplace</a>
+					<a class="rental-button secondary" href={marketplaceHref}>Back to marketplace</a>
 					<a class="rental-button" href={redirect}>Back to requested page</a>
 				</div>
 			</article>
@@ -163,7 +191,7 @@ const isDev = import.meta.env.DEV;
 	</section>
 </RentalBase>
 
-<script is:inline>
+<script is:inline define:vars={{ fallbackRedirect: marketplaceHref }}>
 	function setStatus(element, message, state) {
 		if (!element) return;
 
@@ -259,7 +287,7 @@ const isDev = import.meta.env.DEV;
 		event.preventDefault();
 
 		const email = new FormData(passkeyForm).get("email")?.toString().trim();
-		const redirect = passkeyForm.dataset.redirect || "/marketplace";
+		const redirect = passkeyForm.dataset.redirect || fallbackRedirect;
 
 		if (!email) {
 			setStatus(passkeyStatus, "Email is required.", "error");
@@ -423,7 +451,7 @@ const isDev = import.meta.env.DEV;
 		event.preventDefault();
 
 		const email = new FormData(devForm).get("email")?.toString().trim();
-		const redirect = devForm.dataset.redirect || "/marketplace";
+		const redirect = devForm.dataset.redirect || fallbackRedirect;
 
 		if (!email) {
 			setStatus(devStatus, "Email is required.", "error");
@@ -457,7 +485,81 @@ const isDev = import.meta.env.DEV;
 	});
 </script>
 
+<style is:global>
+	.rental-topbar {
+		display: none;
+	}
+</style>
+
 <style>
+	.wf1-login-boundary {
+		border-bottom: 1px solid rgba(194, 65, 12, 0.24);
+		background: linear-gradient(90deg, rgba(234, 88, 12, 0.18), rgba(251, 146, 60, 0.10));
+	}
+
+	.wf1-login-boundary-inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 18px;
+		padding-block: 14px;
+	}
+
+	.wf1-login-brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		color: #9a3412;
+		text-decoration: none;
+	}
+
+	.wf1-login-mark {
+		display: inline-grid;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+		border-radius: 14px;
+		background: #ea580c;
+		color: white;
+		font-weight: 950;
+		letter-spacing: -0.04em;
+	}
+
+	.wf1-login-brand strong,
+	.wf1-login-brand small {
+		display: block;
+	}
+
+	.wf1-login-brand strong {
+		font-size: 1rem;
+		font-weight: 950;
+	}
+
+	.wf1-login-brand small {
+		color: var(--r-muted);
+		font-size: 0.78rem;
+		font-weight: 750;
+	}
+
+	.wf1-login-boundary nav {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 10px;
+	}
+
+	.wf1-login-boundary nav a {
+		border: 1px solid rgba(194, 65, 12, 0.22);
+		border-radius: 999px;
+		padding: 8px 12px;
+		background: var(--r-panel);
+		color: var(--r-text);
+		font-size: 0.88rem;
+		font-weight: 850;
+		line-height: 1;
+		text-decoration: none;
+	}
+
 	.alm-login-grid {
 		display: grid;
 		grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
@@ -500,8 +602,18 @@ const isDev = import.meta.env.DEV;
 	}
 
 	@media (max-width: 900px) {
+		.wf1-login-boundary-inner,
 		.alm-login-grid {
 			grid-template-columns: 1fr;
+		}
+
+		.wf1-login-boundary-inner {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+
+		.wf1-login-boundary nav {
+			justify-content: flex-start;
 		}
 	}
 </style>
