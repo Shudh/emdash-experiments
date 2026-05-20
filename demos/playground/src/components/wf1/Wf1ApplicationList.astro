@@ -7,24 +7,54 @@ interface Props {
 
 const { applications } = Astro.props;
 
-const rows = applications.map((application) => {
-	const applicationState =
-		application.applicationState && typeof application.applicationState === "object"
-			? application.applicationState as Record<string, unknown>
-			: {};
-	const instance = application.instance && typeof application.instance === "object"
-		? application.instance as Record<string, unknown>
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? value as Record<string, unknown>
 		: {};
-	return {
-		application,
-		applicationState,
-		actions: Array.isArray(application.availableActions)
-			? application.availableActions as Array<Record<string, unknown>>
-			: [],
-		workspaceHref: String(application.workspaceHref ?? ""),
-		workflowInstanceId: String(application.workflow_instance_id ?? instance.id ?? ""),
-	};
-});
+}
+
+function numberTime(value: unknown): number {
+	if (typeof value !== "string") return 0;
+
+	const timestamp = Date.parse(value);
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function latestStamp(row: Record<string, unknown>): number {
+	return Math.max(
+		numberTime(row.updated_at),
+		numberTime(row.created_at),
+		numberTime(row.submitted_at),
+	);
+}
+
+function applicationStamp(application: Record<string, unknown>): number {
+	const instance = objectValue(application.instance);
+	const interest = objectValue(application.interest);
+
+	return Math.max(
+		latestStamp(application),
+		latestStamp(instance),
+		latestStamp(interest),
+	);
+}
+
+const rows = [...applications]
+	.sort((left, right) => applicationStamp(right) - applicationStamp(left))
+	.map((application) => {
+		const applicationState = objectValue(application.applicationState);
+		const instance = objectValue(application.instance);
+
+		return {
+			application,
+			applicationState,
+			actions: Array.isArray(application.availableActions)
+				? application.availableActions as Array<Record<string, unknown>>
+				: [],
+			workspaceHref: String(application.workspaceHref ?? ""),
+			workflowInstanceId: String(application.workflow_instance_id ?? instance.id ?? ""),
+		};
+	});
 ---
 
 <div class="wf1-applications">

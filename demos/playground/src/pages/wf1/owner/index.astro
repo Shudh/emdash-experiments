@@ -4,6 +4,8 @@ import Wf1ApplicationList from "../../../components/wf1/Wf1ApplicationList.astro
 
 export const prerender = false;
 
+type JsonObject = Record<string, unknown>;
+
 async function loadDashboard() {
 	try {
 		const response = await fetch(new URL("/api/wf1-rental/owner/dashboard", Astro.url), {
@@ -12,8 +14,8 @@ async function loadDashboard() {
 				Cookie: Astro.request.headers.get("cookie") ?? "",
 			},
 		});
-		const payload = await response.json() as {
-			data?: { assets?: Array<Record<string, unknown>>; applicationRows?: Array<Record<string, unknown>> };
+		const payload = (await response.json()) as {
+			data?: { assets?: Array<JsonObject>; applicationRows?: Array<JsonObject> };
 			error?: { message?: string };
 		};
 		return {
@@ -32,12 +34,51 @@ async function loadDashboard() {
 	}
 }
 
+function rowsFrom(value: unknown): Array<JsonObject> {
+	return Array.isArray(value)
+		? value.filter((item): item is JsonObject => item !== null && typeof item === "object" && !Array.isArray(item))
+		: [];
+}
+
+function numberTime(value: unknown): number {
+	if (typeof value !== "string") return 0;
+
+	const timestamp = Date.parse(value);
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function latestStamp(row: JsonObject): number {
+	return Math.max(
+		numberTime(row.updated_at),
+		numberTime(row.created_at),
+		numberTime(row.published_at),
+		numberTime(row.submitted_at),
+	);
+}
+
+function latestApplicationStamp(application: JsonObject): number {
+	const instance = application.instance && typeof application.instance === "object" && !Array.isArray(application.instance)
+		? application.instance as JsonObject
+		: {};
+	const interest = application.interest && typeof application.interest === "object" && !Array.isArray(application.interest)
+		? application.interest as JsonObject
+		: application;
+
+	return Math.max(latestStamp(application), latestStamp(instance), latestStamp(interest));
+}
+
+function latestFirst(rows: Array<JsonObject>): Array<JsonObject> {
+	return [...rows].sort((left, right) => latestStamp(right) - latestStamp(left));
+}
+
+function latestApplicationsFirst(rows: Array<JsonObject>): Array<JsonObject> {
+	return [...rows].sort((left, right) => latestApplicationStamp(right) - latestApplicationStamp(left));
+}
+
 const dashboard = await loadDashboard();
-const assetRows = dashboard.assets.map((asset) => ({
+const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 	asset,
-	applications: Array.isArray(asset.applications)
-		? asset.applications as Array<Record<string, unknown>>
-		: [],
+	applications: latestApplicationsFirst(rowsFrom(asset.applications)),
 }));
 ---
 
@@ -48,7 +89,7 @@ const assetRows = dashboard.assets.map((asset) => ({
 				<div>
 					<p class="rental-kicker">Owner</p>
 					<h1>Dashboard</h1>
-					<p class="rental-muted">Eva sees assets, Asset State, applications, Application State, and projection-derived actions.</p>
+					<p class="rental-muted">Latest assets first. Each asset shows applications, Application State, and projection-derived actions.</p>
 				</div>
 				<a class="rental-button" href="/wf1/owner/assets/new">Create asset</a>
 			</div>

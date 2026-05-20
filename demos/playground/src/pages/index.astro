@@ -1,294 +1,236 @@
 ---
-import RentalBase from "../layouts/RentalBase.astro";
+import Wf1Base from "../components/wf1/Wf1Base.astro";
 
 export const prerender = false;
 
+type JsonObject = Record<string, unknown>;
+
 const user = Astro.locals.user as { email?: string | null } | undefined;
 const cookie = Astro.request.headers.get("cookie") ?? "";
+const loginHref = `/login?redirect=${encodeURIComponent("/wf1")}`;
 
-async function rentalGet(path: string) {
+async function wf1Get(path: string): Promise<JsonObject | null> {
 	try {
 		const response = await fetch(new URL(path, Astro.url), {
-			headers: cookie ? { Cookie: cookie } : {},
+			headers: {
+				Accept: "application/json",
+				...(cookie ? { Cookie: cookie } : {}),
+			},
 		});
-		if (!response.ok) return null;
-		const payload = await response.json();
-		return payload?.data ?? null;
+
+		const payload = (await response.json()) as { data?: JsonObject };
+
+		return response.ok ? payload.data ?? null : null;
 	} catch {
 		return null;
 	}
 }
 
-const [ownerDashboard, renterDashboard] = user
-	? await Promise.all([rentalGet("/api/rental/owner/dashboard"), rentalGet("/api/rental/renter/dashboard")])
-	: [null, null];
-const ownedAssets = Array.isArray(ownerDashboard?.assets) ? ownerDashboard.assets : [];
-const ownerInbox = Array.isArray(ownerDashboard?.inbox) ? ownerDashboard.inbox : [];
-const renterInterests = Array.isArray(renterDashboard?.interests) ? renterDashboard.interests : [];
-const renterAccess = Array.isArray(renterDashboard?.access) ? renterDashboard.access : [];
-const pendingOwnerInbox = ownerInbox.filter((interest) => String(interest.interest_state ?? "") === "submitted").length;
-const pendingTenantRequests = renterInterests.reduce(
-	(total, interest) => total + Number(interest.pending_request_count ?? 0),
-	0,
-);
-const handoverTasks = ownedAssets.filter((asset) => asset.active_handover_id).length;
+function rowsFrom(value: unknown): Array<JsonObject> {
+	return Array.isArray(value)
+		? value.filter((item): item is JsonObject => item !== null && typeof item === "object" && !Array.isArray(item))
+		: [];
+}
+
+function viewerFor(asset: JsonObject): JsonObject {
+	return asset.viewer && typeof asset.viewer === "object" && !Array.isArray(asset.viewer)
+		? asset.viewer as JsonObject
+		: {};
+}
+
+function numberTime(value: unknown): number {
+	if (typeof value !== "string") return 0;
+
+	const timestamp = Date.parse(value);
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function latestStamp(row: JsonObject): number {
+	return Math.max(
+		numberTime(row.updated_at),
+		numberTime(row.created_at),
+		numberTime(row.published_at),
+		numberTime(row.submitted_at),
+	);
+}
+
+function latestFirst(rows: Array<JsonObject>): Array<JsonObject> {
+	return [...rows].sort((left, right) => latestStamp(right) - latestStamp(left));
+}
+
+function assetHref(asset: JsonObject): string {
+	return `/wf1/marketplace/assets/${String(asset.id ?? "")}`;
+}
+
+function applicationHref(asset: JsonObject): string {
+	const viewer = viewerFor(asset);
+	const workflowInstanceId = typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
+
+	return workflowInstanceId ? `/wf1/workspaces/${workflowInstanceId}` : assetHref(asset);
+}
+
+function applicationAssetsFromMarketplace(assets: Array<JsonObject>): Array<JsonObject> {
+	return latestFirst(
+		assets.filter((asset) => {
+			const viewer = viewerFor(asset);
+			return String(viewer.relationship ?? "") === "interested_applicant";
+		}),
+	);
+}
+
+const [ownerDashboard, marketplaceData] = await Promise.all([
+	user ? wf1Get("/api/wf1-rental/owner/dashboard") : Promise.resolve(null),
+	wf1Get("/api/wf1-rental/marketplace/assets"),
+]);
+
+const marketplaceAssets = latestFirst(rowsFrom(marketplaceData?.items));
+const ownedAssets = latestFirst(rowsFrom(ownerDashboard?.assets));
+const applicationRows = latestFirst(rowsFrom(ownerDashboard?.applicationRows));
+const myApplications = applicationAssetsFromMarketplace(marketplaceAssets);
+const latestApplicationHref = myApplications[0] ? applicationHref(myApplications[0]) : "/wf1/marketplace";
 ---
 
-<RentalBase
-	title="ALM Rentals"
-	description="A thin Astro rental SaaS frontend over the tested ALM backend"
->
+<Wf1Base title="WF1 rentals" description="WF1 asset lifecycle landing page">
 	<section class="landing-hero">
 		<div class="rental-shell hero-grid">
 			<div class="hero-copy">
 				<p class="rental-kicker">Asset lifecycle management</p>
-				<h1>{user ? "Rental launchpad" : "Rent assets with conditions, negotiation, and handover built in."}</h1>
-				<p>
-					{
-						user
-							? "Jump to marketplace, assets, applications, handovers, and pending work from one place."
-							: "Owners publish flats, vehicles, and equipment with explicit terms. Renters accept current conditions before interest, then both sides negotiate on a shared thread."
-					}
-				</p>
+				<h1>Clean rentals.</h1>
+				<p class="rental-muted">WF1 routes for assets, applications, task cards, gates, and evidence.</p>
+
 				<div class="hero-actions">
-					<a class="rental-button secondary" href="/marketplace">View marketplace</a>
+					<a class="rental-button" href="/wf1/marketplace">Marketplace</a>
+					<a class="rental-button secondary" href="/wf1/owner">Owner</a>
+					<a class="rental-button secondary" href="/wf1/owner/assets/new">List asset</a>
 					{
-						user ? (
-							<>
-								<a class="rental-button" href="/owner">Dashboard</a>
-								<a class="rental-button secondary" href="/owner/assets/new">Add new property</a>
-							</>
+						user?.email ? (
+							<a class="rental-button secondary" href={latestApplicationHref}>My applications</a>
 						) : (
-							<>
-								<a class="rental-button" href="/login">Login / register</a>
-								<a class="rental-button secondary" href="/marketplace">Continue as tenant</a>
-							</>
+							<a class="rental-button secondary" href={loginHref}>Login / register</a>
 						)
 					}
 				</div>
 			</div>
+
 			<div class="hero-product rental-panel launchpad">
-				{
-					user ? (
-						<>
-							<a class="launch-card" href="/owner">
-								<span>My assets</span>
-								<strong>{ownedAssets.length}</strong>
-							</a>
-							<a class="launch-card" href="/owner">
-								<span>Pending inbox</span>
-								<strong>{pendingOwnerInbox}</strong>
-							</a>
-							<a class="launch-card" href={renterInterests[0]?.id ? `/interests/${renterInterests[0].id}` : "/marketplace"}>
-								<span>My applications</span>
-								<strong>{renterInterests.length}</strong>
-							</a>
-							<a class="launch-card" href="/owner">
-								<span>My handovers</span>
-								<strong>{handoverTasks}</strong>
-							</a>
-							<div class="launch-card">
-								<span>Pending requests</span>
-								<strong>{pendingTenantRequests}</strong>
-							</div>
-							<div class="launch-card">
-								<span>Agreements / access</span>
-								<strong>{renterAccess.length}</strong>
-							</div>
-						</>
-					) : (
-						<>
-							<div class="product-row">
-								<span>Marketplace</span>
-								<strong>browse without login</strong>
-							</div>
-							<div class="product-row">
-								<span>Owner terms</span>
-								<strong>accepted before interest</strong>
-							</div>
-							<div class="product-row">
-								<span>Handover</span>
-								<strong>item checks and disputes</strong>
-							</div>
-						</>
-					)
-				}
+				<a class="launch-card" href="/wf1/marketplace">
+					<span>Marketplace</span>
+					<strong>{marketplaceAssets.length}</strong>
+				</a>
+				<a class="launch-card" href="/wf1/owner">
+					<span>Owner assets</span>
+					<strong>{ownedAssets.length}</strong>
+				</a>
+				<a class="launch-card" href={latestApplicationHref}>
+					<span>My applications</span>
+					<strong>{myApplications.length}</strong>
+				</a>
+				<a class="launch-card" href="/wf1/owner">
+					<span>Owner inbox</span>
+					<strong>{applicationRows.length}</strong>
+				</a>
 			</div>
 		</div>
 	</section>
 
-	<section class="rental-section">
-		<div class="rental-shell">
-			<div class="rental-section-header">
-				<div>
-					<p class="rental-kicker">Features</p>
-					<h2>Small UI, backend-owned state.</h2>
+	{
+		user?.email && myApplications.length ? (
+			<section id="my-applications" class="rental-section compact-section">
+				<div class="rental-shell">
+					<div class="rental-section-header">
+						<div>
+							<p class="rental-kicker">My applications</p>
+							<h2>Latest first.</h2>
+						</div>
+						<a class="rental-button secondary" href="/wf1/marketplace">Browse marketplace</a>
+					</div>
+
+					<div class="application-grid">
+						{myApplications.map((asset) => (
+							<article class="rental-panel application-card">
+								<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
+								<h3>
+									<a href={applicationHref(asset)}>{String(asset.title ?? "Untitled asset")}</a>
+								</h3>
+								<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+								<div class="rental-badges">
+									<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
+									<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+								</div>
+								<a class="rental-button" href={applicationHref(asset)}>Open application workspace</a>
+							</article>
+						))}
+					</div>
 				</div>
-			</div>
-			<div class="rental-grid">
-				{
-					[
-						["Condition acceptance", "Renter interest requires the current owner condition version and hash."],
-						["Owner inbox", "Submitted interests land in the owner dashboard with renter details."],
-						["Shared negotiation", "Owners and renters add append-only rounds before final terms."],
-						["Handover checks", "Move-in and return sessions reuse the same item-check model."],
-					].map(([title, copy]) => (
-						<article class="rental-panel">
-							<h3>{title}</h3>
-							<p class="rental-muted">{copy}</p>
-						</article>
-					))
-				}
-			</div>
-		</div>
-	</section>
+			</section>
+		) : null
+	}
 
 	<section class="rental-section subtle">
-		<div class="rental-shell">
-			<div class="rental-section-header">
-				<div>
-					<p class="rental-kicker">How it works</p>
-					<h2>From listing to agreement.</h2>
-				</div>
-			</div>
-			<div class="steps">
-				{
-					[
-						["1", "Owner lists an asset", "Add specs, physical condition, rental conditions, and config items."],
-						["2", "Tenant accepts conditions", "The backend stores the accepted condition snapshot on interest."],
-						["3", "Both sides negotiate", "Questions, answers, offers, counters, and final terms stay append-only."],
-						["4", "Agreement restricts access", "Final acceptance snapshots terms and removes the asset from public marketplace."],
-					].map(([num, title, copy]) => (
-						<article>
-							<span>{num}</span>
-							<h3>{title}</h3>
-							<p>{copy}</p>
-						</article>
-					))
-				}
-			</div>
-		</div>
-	</section>
+		<div class="rental-shell wf1-explain-grid">
+			<article class="rental-panel">
+				<p class="rental-kicker">For owners</p>
+				<h2>List assets.</h2>
+				<p class="rental-muted">Create a flat, publish it to WF1 marketplace, then review applications from the owner dashboard.</p>
+				<a class="rental-button secondary" href="/wf1/owner/assets/new">Create asset</a>
+			</article>
 
-	<section class="rental-section">
-		<div class="rental-shell">
-			<div class="rental-section-header">
-				<div>
-					<p class="rental-kicker">Pricing</p>
-					<h2>Simple SaaS plans.</h2>
-				</div>
-			</div>
-			<div class="pricing-grid">
-				{
-					[
-						["Starter", "Free", "Test the flow with one listed asset."],
-						["Operator", "₹2,999", "Manage owner inboxes and handover tasks."],
-						["Portfolio", "Custom", "Scale ALM workflows across asset teams."],
-					].map(([name, price, copy], index) => (
-						<article class:list={["rental-panel", { featured: index === 1 }]}>
-							<h3>{name}</h3>
-							<strong>{price}</strong>
-							<p class="rental-muted">{copy}</p>
-							<a class="rental-button secondary" href="/owner/assets/new">Start</a>
-						</article>
-					))
-				}
-			</div>
-		</div>
-	</section>
+			<article class="rental-panel">
+				<p class="rental-kicker">For tenants</p>
+				<h2>Track applications.</h2>
+				<p class="rental-muted">Applied flats appear under My applications, latest first, with one-click workspace access.</p>
+				<a class="rental-button secondary" href="/wf1/marketplace">Open marketplace</a>
+			</article>
 
-	<section class="rental-section subtle">
-		<div class="rental-shell faq-grid">
-			<div>
-				<p class="rental-kicker">FAQ</p>
-				<h2>Designed for the existing ALM contracts.</h2>
-			</div>
-			<div class="faq-list">
-				<details open>
-					<summary>Is this the EmDash admin?</summary>
-					<p>No. These are tenant and owner-facing Astro pages over the rental API.</p>
-				</details>
-				<details>
-					<summary>Can anonymous visitors express interest?</summary>
-					<p>No. Public users can browse. Interest requires a logged-in renter session.</p>
-				</details>
-				<details>
-					<summary>Where does business logic live?</summary>
-					<p>In the existing domain commands and API route, not inside Astro page templates.</p>
-				</details>
-			</div>
+			<article class="rental-panel">
+				<p class="rental-kicker">For managers</p>
+				<h2>See states.</h2>
+				<p class="rental-muted">Every workspace separates Asset State from Application State. Actions move state; cards collect work.</p>
+				<a class="rental-button secondary" href="/wf1">WF1 home</a>
+			</article>
 		</div>
 	</section>
-
-	<section class="rental-section cta-section">
-		<div class="rental-shell rental-panel cta-panel">
-			<div>
-				<p class="rental-kicker">Next step</p>
-				<h2>Publish an asset or inspect the marketplace.</h2>
-			</div>
-			<div class="hero-actions">
-				<a class="rental-button" href="/owner/assets/new">List a property</a>
-				<a class="rental-button secondary" href="/marketplace">View marketplace</a>
-			</div>
-		</div>
-	</section>
-</RentalBase>
+</Wf1Base>
 
 <style>
 	.landing-hero {
-		padding: 76px 0 42px;
+		padding: 42px 0 30px;
 	}
 
 	.hero-grid {
 		display: grid;
-		grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
-		gap: 28px;
+		grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+		gap: 24px;
 		align-items: center;
 	}
 
 	.hero-copy h1 {
-		max-width: 760px;
-		font-size: clamp(2.5rem, 7vw, 5.4rem);
+		max-width: 640px;
+		font-size: clamp(2.2rem, 6vw, 4.2rem);
 	}
 
 	.hero-copy p:not(.rental-kicker) {
-		max-width: 680px;
-		color: var(--r-muted);
-		font-size: 1.18rem;
+		max-width: 620px;
+		font-size: 1.05rem;
 	}
 
 	.hero-actions {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 12px;
-		margin-top: 26px;
+		gap: 10px;
+		margin-top: 22px;
 	}
 
 	.hero-product {
 		display: grid;
-		gap: 14px;
-		min-height: 330px;
-		align-content: center;
+		gap: 12px;
 		background:
-			linear-gradient(135deg, rgba(49, 95, 86, 0.08), rgba(184, 111, 52, 0.1)),
+			linear-gradient(135deg, rgba(234, 88, 12, 0.12), rgba(251, 146, 60, 0.10)),
 			var(--r-panel);
-	}
-
-	.product-row {
-		display: flex;
-		justify-content: space-between;
-		gap: 16px;
-		border-bottom: 1px solid var(--r-border);
-		padding-bottom: 14px;
-	}
-
-	.product-row span {
-		color: var(--r-muted);
 	}
 
 	.launchpad {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		min-height: auto;
 	}
 
 	.launch-card {
@@ -298,6 +240,7 @@ const handoverTasks = ownedAssets.filter((asset) => asset.active_handover_id).le
 		border-radius: var(--r-radius);
 		padding: 14px;
 		background: var(--r-bg);
+		text-decoration: none;
 	}
 
 	.launch-card span {
@@ -306,104 +249,44 @@ const handoverTasks = ownedAssets.filter((asset) => asset.active_handover_id).le
 	}
 
 	.launch-card strong {
-		font-size: 1.8rem;
 		color: var(--r-brand-strong);
+		font-size: 1.8rem;
 	}
 
-	.subtle {
-		background: rgba(243, 240, 232, 0.56);
+	.compact-section {
+		padding-top: 28px;
 	}
 
-	.steps {
+	.application-grid,
+	.wf1-explain-grid {
 		display: grid;
-		grid-template-columns: repeat(4, 1fr);
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
 		gap: 16px;
 	}
 
-	.steps article {
-		border-top: 2px solid var(--r-brand);
-		padding-top: 14px;
-	}
-
-	.steps span {
-		color: var(--r-accent);
-		font-weight: 900;
-	}
-
-	.steps p {
-		color: var(--r-muted);
-	}
-
-	.pricing-grid {
+	.application-card {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 18px;
+		gap: 12px;
+		align-content: start;
 	}
 
-	.pricing-grid article {
-		display: grid;
-		gap: 14px;
+	.application-card h3 a {
+		color: inherit;
+		text-decoration: none;
 	}
 
-	.pricing-grid strong {
-		font-size: 2rem;
-		color: var(--r-brand-strong);
+	.application-card h3 a:hover {
+		text-decoration: underline;
 	}
 
-	.featured {
-		border-color: var(--r-brand);
-		transform: translateY(-8px);
-	}
-
-	.faq-grid {
-		display: grid;
-		grid-template-columns: 0.8fr 1.2fr;
-		gap: 30px;
-	}
-
-	.faq-list {
-		display: grid;
-		gap: 10px;
-	}
-
-	.faq-list details {
-		border: 1px solid var(--r-border);
-		border-radius: var(--r-radius);
-		background: var(--r-panel);
-		padding: 16px;
-	}
-
-	.faq-list summary {
-		cursor: pointer;
-		font-weight: 800;
-	}
-
-	.cta-panel {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 24px;
+	.subtle {
+		background: rgba(255, 237, 213, 0.42);
 	}
 
 	@media (max-width: 900px) {
 		.hero-grid,
-		.faq-grid {
-			grid-template-columns: 1fr;
-		}
-
-		.steps,
-		.pricing-grid,
 		.launchpad {
 			grid-template-columns: 1fr;
-		}
-
-		.featured {
-			transform: none;
-		}
-
-		.cta-panel {
-			align-items: start;
-			flex-direction: column;
 		}
 	}
 </style>

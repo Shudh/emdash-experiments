@@ -9,6 +9,8 @@ type MarketplaceCta = {
 	tone: "primary" | "secondary";
 };
 
+type AssetRow = Record<string, unknown>;
+
 async function loadAssets() {
 	try {
 		const response = await fetch(new URL("/api/wf1-rental/marketplace/assets", Astro.url), {
@@ -18,7 +20,7 @@ async function loadAssets() {
 			},
 		});
 		const payload = (await response.json()) as {
-			data?: { items?: Array<Record<string, unknown>> };
+			data?: { items?: Array<AssetRow> };
 		};
 		return response.ok ? payload.data?.items ?? [] : [];
 	} catch {
@@ -26,16 +28,48 @@ async function loadAssets() {
 	}
 }
 
-function viewerFor(asset: Record<string, unknown>) {
-	return asset.viewer && typeof asset.viewer === "object"
+function viewerFor(asset: AssetRow) {
+	return asset.viewer && typeof asset.viewer === "object" && !Array.isArray(asset.viewer)
 		? (asset.viewer as Record<string, unknown>)
 		: {};
 }
 
-function configFor(asset: Record<string, unknown>) {
-	return asset.config_spec && typeof asset.config_spec === "object"
+function configFor(asset: AssetRow) {
+	return asset.config_spec && typeof asset.config_spec === "object" && !Array.isArray(asset.config_spec)
 		? (asset.config_spec as Record<string, unknown>)
 		: {};
+}
+
+function numberTime(value: unknown): number {
+	if (typeof value !== "string") return 0;
+
+	const timestamp = Date.parse(value);
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function latestStamp(asset: AssetRow): number {
+	return Math.max(
+		numberTime(asset.updated_at),
+		numberTime(asset.published_at),
+		numberTime(asset.created_at),
+	);
+}
+
+function hasApplication(asset: AssetRow): boolean {
+	return String(viewerFor(asset).relationship ?? "") === "interested_applicant";
+}
+
+function sortMarketplaceAssets(items: Array<AssetRow>): Array<AssetRow> {
+	return [...items].sort((left, right) => {
+		const rightApplication = hasApplication(right) ? 1 : 0;
+		const leftApplication = hasApplication(left) ? 1 : 0;
+
+		if (rightApplication !== leftApplication) {
+			return rightApplication - leftApplication;
+		}
+
+		return latestStamp(right) - latestStamp(left);
+	});
 }
 
 function mediaUrlFromStorageKey(storageKey: string) {
@@ -45,7 +79,7 @@ function mediaUrlFromStorageKey(storageKey: string) {
 		.join("/")}`;
 }
 
-function thumbnailFor(asset: Record<string, unknown>) {
+function thumbnailFor(asset: AssetRow) {
 	const config = configFor(asset);
 	const thumbnail =
 		config.thumbnailMediaRef && typeof config.thumbnailMediaRef === "object"
@@ -74,15 +108,15 @@ function thumbnailFor(asset: Record<string, unknown>) {
 	};
 }
 
-function assetDetailHref(asset: Record<string, unknown>) {
+function assetDetailHref(asset: AssetRow) {
 	return `/wf1/marketplace/assets/${String(asset.id)}`;
 }
 
-function loginHrefFor(asset: Record<string, unknown>) {
+function loginHrefFor(asset: AssetRow) {
 	return `/login?redirect=${encodeURIComponent(assetDetailHref(asset))}`;
 }
 
-function cardCta(asset: Record<string, unknown>): MarketplaceCta {
+function cardCta(asset: AssetRow): MarketplaceCta {
 	const viewer = viewerFor(asset);
 	const relationship = String(viewer.relationship ?? "anonymous");
 	const workflowInstanceId =
@@ -136,7 +170,8 @@ function cardCta(asset: Record<string, unknown>): MarketplaceCta {
 	};
 }
 
-const assets = await loadAssets();
+const assets = sortMarketplaceAssets(await loadAssets());
+const applicationCount = assets.filter(hasApplication).length;
 ---
 
 <Wf1Base title="WF1 marketplace" description="WF1 workflow marketplace">
@@ -147,10 +182,13 @@ const assets = await loadAssets();
 					<p class="rental-kicker">Marketplace</p>
 					<h1>Published assets</h1>
 					<p class="rental-muted">
-						Applicants select a workflow definition when they express interest.
+						Latest listings appear first. Your existing applications stay on top.
 					</p>
 				</div>
-				<a class="rental-button secondary" href="/wf1/owner/assets/new">List asset</a>
+				<div class="marketplace-actions">
+					{applicationCount ? <a class="rental-button secondary" href="/wf1#my-applications">My applications</a> : null}
+					<a class="rental-button secondary" href="/wf1/owner/assets/new">List asset</a>
+				</div>
 			</div>
 
 			{
@@ -163,7 +201,7 @@ const assets = await loadAssets();
 							const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
 
 							return (
-								<article class="rental-panel asset-card">
+								<article class:list={["rental-panel", "asset-card", { applied: hasApplication(asset) }]}>
 									<a class="asset-thumb" href={detailHref} aria-label={`Open ${String(asset.title ?? "asset")}`}>
 										{thumbnail && isImage ? (
 											<img src={thumbnail.url} alt={thumbnail.filename} loading="lazy" />
@@ -174,10 +212,12 @@ const assets = await loadAssets();
 										)}
 									</a>
 
-									<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
-									<h2>
-										<a href={detailHref}>{String(asset.title ?? "Untitled asset")}</a>
-									</h2>
+									<div class="asset-card-title">
+										<p class="rental-kicker">{hasApplication(asset) ? "My application" : String(asset.asset_kind ?? "asset")}</p>
+										<h2>
+											<a href={detailHref}>{String(asset.title ?? "Untitled asset")}</a>
+										</h2>
+									</div>
 									<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
 									<div class="rental-badges">
 										<span class="rental-badge">
@@ -205,10 +245,24 @@ const assets = await loadAssets();
 </Wf1Base>
 
 <style>
+	.marketplace-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		justify-content: flex-end;
+	}
+
 	.asset-card {
 		display: grid;
 		gap: 12px;
 		align-content: start;
+	}
+
+	.asset-card.applied {
+		border-color: rgba(234, 88, 12, 0.48);
+		background:
+			linear-gradient(180deg, rgba(255, 247, 237, 0.82), rgba(255, 255, 255, 0.96)),
+			var(--r-panel);
 	}
 
 	.asset-thumb {
@@ -229,6 +283,11 @@ const assets = await loadAssets();
 		height: 100%;
 		object-fit: cover;
 		display: block;
+	}
+
+	.asset-card-title {
+		display: grid;
+		gap: 4px;
 	}
 
 	.asset-card h2 a {

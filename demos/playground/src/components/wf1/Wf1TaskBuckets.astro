@@ -9,9 +9,30 @@ interface Props {
 }
 
 const { taskBuckets, responses, workspaceHref } = Astro.props;
-const myOpenTasks = taskBuckets.myOpenTasks ?? [];
-const otherSideOpenTasks = taskBuckets.otherSideOpenTasks ?? [];
-const completedCards = taskBuckets.completedCards ?? [];
+
+function numberTime(value: unknown): number {
+	if (typeof value !== "string") return 0;
+
+	const timestamp = Date.parse(value);
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function cardStamp(card: Record<string, unknown>): number {
+	return Math.max(
+		numberTime(card.updated_at),
+		numberTime(card.created_at),
+		numberTime(card.answered_at),
+		numberTime(card.decided_at),
+	);
+}
+
+function latestCardsFirst(cards: Array<Record<string, unknown>> | undefined): Array<Record<string, unknown>> {
+	return [...(cards ?? [])].sort((left, right) => cardStamp(right) - cardStamp(left));
+}
+
+const myOpenTasks = latestCardsFirst(taskBuckets.myOpenTasks);
+const otherSideOpenTasks = latestCardsFirst(taskBuckets.otherSideOpenTasks);
+const completedCards = latestCardsFirst(taskBuckets.completedCards);
 ---
 
 <section class="bucket-grid">

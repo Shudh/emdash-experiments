@@ -2,31 +2,187 @@
 import Wf1Base from "../../components/wf1/Wf1Base.astro";
 
 export const prerender = false;
+
+type JsonObject = Record<string, unknown>;
+
+const cookie = Astro.request.headers.get("cookie") ?? "";
+const user = Astro.locals.user as { email?: string | null } | undefined;
+
+async function wf1Get(path: string): Promise<JsonObject | null> {
+	try {
+		const response = await fetch(new URL(path, Astro.url), {
+			headers: {
+				Accept: "application/json",
+				...(cookie ? { Cookie: cookie } : {}),
+			},
+		});
+
+		const payload = (await response.json()) as { data?: JsonObject };
+
+		return response.ok ? payload.data ?? null : null;
+	} catch {
+		return null;
+	}
+}
+
+function rowsFrom(value: unknown): Array<JsonObject> {
+	return Array.isArray(value)
+		? value.filter((item): item is JsonObject => item !== null && typeof item === "object" && !Array.isArray(item))
+		: [];
+}
+
+function viewerFor(asset: JsonObject): JsonObject {
+	return asset.viewer && typeof asset.viewer === "object" && !Array.isArray(asset.viewer)
+		? asset.viewer as JsonObject
+		: {};
+}
+
+function numberTime(value: unknown): number {
+	if (typeof value !== "string") return 0;
+
+	const timestamp = Date.parse(value);
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function latestStamp(row: JsonObject): number {
+	return Math.max(
+		numberTime(row.updated_at),
+		numberTime(row.created_at),
+		numberTime(row.published_at),
+		numberTime(row.submitted_at),
+	);
+}
+
+function latestFirst(rows: Array<JsonObject>): Array<JsonObject> {
+	return [...rows].sort((left, right) => latestStamp(right) - latestStamp(left));
+}
+
+function assetHref(asset: JsonObject): string {
+	return `/wf1/marketplace/assets/${String(asset.id ?? "")}`;
+}
+
+function applicationHref(asset: JsonObject): string {
+	const viewer = viewerFor(asset);
+	const workflowInstanceId = typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
+
+	return workflowInstanceId ? `/wf1/workspaces/${workflowInstanceId}` : assetHref(asset);
+}
+
+function myApplicationAssets(assets: Array<JsonObject>): Array<JsonObject> {
+	return latestFirst(
+		assets.filter((asset) => String(viewerFor(asset).relationship ?? "") === "interested_applicant"),
+	);
+}
+
+const marketplaceData = await wf1Get("/api/wf1-rental/marketplace/assets");
+const marketplaceAssets = latestFirst(rowsFrom(marketplaceData?.items));
+const applications = myApplicationAssets(marketplaceAssets);
+const latestApplicationHref = applications[0] ? applicationHref(applications[0]) : "/wf1/marketplace";
 ---
 
 <Wf1Base title="WF1 workflow engine" description="Clean workflow engine workspace">
-	<section class="rental-section">
+	<section class="rental-section wf1-home-hero">
 		<div class="rental-shell">
 			<div class="rental-section-header">
 				<div>
 					<p class="rental-kicker">WF1</p>
-					<h1>Generic workflow workspace</h1>
-					<p class="rental-muted">A clean route for assets, applications, task cards, gates, and projection-derived actions.</p>
+					<h1>Clean rentals.</h1>
+					<p class="rental-muted">Assets, applications, task cards, gates, and projection-derived actions.</p>
 				</div>
 				<div class="wf1-actions">
-					<a class="rental-button" href="/wf1/owner">Owner dashboard</a>
+					<a class="rental-button" href="/wf1/marketplace">Marketplace</a>
+					<a class="rental-button secondary" href="/wf1/owner">Owner dashboard</a>
 					<a class="rental-button secondary" href="/wf1/owner/assets/new">Create asset</a>
-					<a class="rental-button secondary" href="/wf1/marketplace">Marketplace</a>
+					{
+						user?.email ? (
+							<a class="rental-button secondary" href={latestApplicationHref}>My applications</a>
+						) : null
+					}
 				</div>
 			</div>
+		</div>
+	</section>
+
+	<section id="my-applications" class="rental-section compact-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">My applications</p>
+					<h2>{applications.length ? "Latest first." : "Nothing yet."}</h2>
+					<p class="rental-muted">
+						{
+							applications.length
+								? "Open the flat you are already interacting with. The newest application stays on top."
+								: "Apply from the marketplace. Your application workspaces will appear here."
+						}
+					</p>
+				</div>
+				<a class="rental-button secondary" href="/wf1/marketplace">Browse marketplace</a>
+			</div>
+
+			{
+				applications.length ? (
+					<div class="application-grid">
+						{applications.map((asset) => (
+							<article class="rental-panel application-card">
+								<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
+								<h3>
+									<a href={applicationHref(asset)}>{String(asset.title ?? "Untitled asset")}</a>
+								</h3>
+								<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+								<div class="rental-badges">
+									<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
+									<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+								</div>
+								<a class="rental-button" href={applicationHref(asset)}>Open application workspace</a>
+							</article>
+						))}
+					</div>
+				) : (
+					<div class="rental-panel empty-state">
+						<p class="rental-muted">No applications yet. Go to the marketplace, open a listed flat, and express interest.</p>
+						<a class="rental-button" href="/wf1/marketplace">Open marketplace</a>
+					</div>
+				)
+			}
 		</div>
 	</section>
 </Wf1Base>
 
 <style>
+	.wf1-home-hero {
+		padding-bottom: 28px;
+	}
+
 	.wf1-actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 10px;
+	}
+
+	.compact-section {
+		padding-top: 24px;
+	}
+
+	.application-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+		gap: 16px;
+	}
+
+	.application-card,
+	.empty-state {
+		display: grid;
+		gap: 12px;
+		align-content: start;
+	}
+
+	.application-card h3 a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.application-card h3 a:hover {
+		text-decoration: underline;
 	}
 </style>
