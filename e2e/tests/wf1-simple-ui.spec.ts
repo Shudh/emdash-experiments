@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { Buffer } from "node:buffer";
+import { expect, test, type Page } from "@playwright/test";
 
 import { loginAsLocalRentalUser, timeSuffix } from "../rental-flow-utils.js";
 import { RENTAL_LOCAL_USERS } from "../rental-local-users.js";
@@ -6,8 +7,25 @@ import { RENTAL_LOCAL_USERS } from "../rental-local-users.js";
 const WF1_BASE_URL = "http://localhost:4450";
 const WORKSPACE_URL_PATTERN = /\/wf1\/workspaces\/[^/]+$/;
 
+const ONE_BY_ONE_PNG = Buffer.from(
+	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgAlyl6wAAAAASUVORK5CYII=",
+	"base64",
+);
+
 function uniqueWf1Title() {
 	return `WF1 Eva Flat ${timeSuffix()}`;
+}
+
+async function uploadRequiredPaymentProof(page: Page) {
+	await page.getByLabel("Required evidence image/PDF").setInputFiles({
+		name: "wf1-payment-proof.png",
+		mimeType: "image/png",
+		buffer: ONE_BY_ONE_PNG,
+	});
+
+	await expect(
+		page.locator("[data-media-status]").filter({ hasText: "Uploaded." }).first(),
+	).toBeVisible();
 }
 
 test("Eva and Rakesh complete simple available-rented WF1 UI flow", async ({ browser }) => {
@@ -90,10 +108,16 @@ test("Eva and Rakesh complete simple available-rented WF1 UI flow", async ({ bro
 		await rakesh.page.goto(workspaceUrl, { waitUntil: "domcontentloaded" });
 		await expect(rakesh.page.getByText("My Open Tasks")).toBeVisible();
 		await rakesh.page.getByLabel("Reference").fill("UPI-WF1-TEST-001");
+		await uploadRequiredPaymentProof(rakesh.page);
 		await rakesh.page.getByRole("button", { name: "Answer" }).click();
 		await expect(rakesh.page.getByText("UPI-WF1-TEST-001")).toBeVisible();
+		await expect(
+			rakesh.page.getByRole("button", { name: "Open wf1-payment-proof.png" }),
+		).toBeVisible();
 
 		await eva.page.goto(workspaceUrl, { waitUntil: "domcontentloaded" });
+		await expect(eva.page.getByText("UPI-WF1-TEST-001")).toBeVisible();
+		await expect(eva.page.getByRole("button", { name: "Open wf1-payment-proof.png" })).toBeVisible();
 		await expect(eva.page.getByRole("button", { name: "Mark rented" })).toBeEnabled();
 		await eva.page.getByRole("button", { name: "Mark rented" }).click();
 		await expect(eva.page.getByText("Asset State: rented")).toBeVisible();
