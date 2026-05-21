@@ -185,6 +185,7 @@ export type WorkflowWorkspace = {
 	cards: DomainRow[];
 	responses: DomainRow[];
 	events: DomainRow[];
+	assetConfigItems: DomainRow[];
 	viewerRole: WorkflowActorRole | "anonymous" | "other";
 	pendingRequestCount: number;
 	projection?: WorkflowWorkspaceProjection;

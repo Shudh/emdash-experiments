@@ -151,7 +151,7 @@ export async function listWorkspace(
 		getInterestOrThrow(store, asString(instance.interest_id)),
 	]);
 
-	const [cards, events] = await Promise.all([
+	const [cards, events, assetConfigItems] = await Promise.all([
 		store.list(
 			WORKFLOW_RENTAL_COLLECTIONS.WORKFLOW_CARDS,
 			{ workflow_instance_id: instance.id },
@@ -161,6 +161,11 @@ export async function listWorkspace(
 			WORKFLOW_RENTAL_COLLECTIONS.ASSET_EVENTS,
 			{ workflow_instance_id: instance.id },
 			{ orderBy: "created_at", direction: "desc", limit: 300 },
+		),
+		store.list(
+			WORKFLOW_RENTAL_COLLECTIONS.ASSET_CONFIG_ITEMS,
+			{ asset_id: asset.id },
+			{ orderBy: "created_at", direction: "asc", limit: 500 },
 		),
 	]);
 
@@ -187,6 +192,7 @@ export async function listWorkspace(
 		cards,
 		responses,
 		events,
+		assetConfigItems,
 		viewerRole: actorRoleFor(user, asset, interest),
 		pendingRequestCount,
 	};

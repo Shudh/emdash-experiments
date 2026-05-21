@@ -1,8 +1,10 @@
 ---
 import SpecTable from "../../../components/rental/SpecTable.astro";
 import Wf1ActionPanel from "../../../components/wf1/Wf1ActionPanel.astro";
+import Wf1AssetConfigItemsPanel from "../../../components/wf1/Wf1AssetConfigItemsPanel.astro";
 import Wf1Base from "../../../components/wf1/Wf1Base.astro";
 import Wf1CardComposerPanel from "../../../components/wf1/Wf1CardComposerPanel.astro";
+import Wf1MoveoutTaskGenerator from "../../../components/wf1/Wf1MoveoutTaskGenerator.astro";
 import Wf1RequiredGatePanel from "../../../components/wf1/Wf1RequiredGatePanel.astro";
 import Wf1StatePanel from "../../../components/wf1/Wf1StatePanel.astro";
 import Wf1TaskBuckets from "../../../components/wf1/Wf1TaskBuckets.astro";
@@ -45,14 +47,21 @@ const asset = objectValue(workspace?.asset);
 const interest = objectValue(workspace?.interest);
 const instance = objectValue(workspace?.instance);
 const projection = objectValue(workspace?.projection);
+const applicationState = objectValue(projection.applicationState);
+const assetState = objectValue(projection.assetState);
 const taskBuckets = objectValue(projection.taskBuckets) as Record<string, Array<Record<string, unknown>>>;
 const responses = arrayValue(workspace?.responses);
 const events = arrayValue(workspace?.events);
+const assetConfigItems = arrayValue(workspace?.assetConfigItems);
 const availableActions = arrayValue(projection.availableActions);
 const availableCardTypes = arrayValue(projection.availableCardTypes);
 const requiredUnresolvedTasks = arrayValue(taskBuckets.requiredUnresolvedTasks);
 const viewerRole = String(workspace?.viewerRole ?? "unknown");
 const workspaceHref = workflowInstanceId ? `/wf1/workspaces/${workflowInstanceId}` : "/wf1";
+const canGenerateMoveoutTasks =
+	viewerRole === "owner" &&
+	String(applicationState.id ?? "") === "moveout_requested" &&
+	String(assetState.id ?? "") === "return_pending";
 ---
 
 <Wf1Base title="WF1 workspace" description="Generic workflow workspace">
@@ -63,7 +72,7 @@ const workspaceHref = workflowInstanceId ? `/wf1/workspaces/${workflowInstanceId
 					<div class="workspace-header">
 						<div>
 							<p class="rental-kicker">Workspace</p>
-							<h1>{String(asset.title ?? "Asset application")}</h1>
+							<h1>{String(asset.title ?? "Asset application form")}</h1>
 							<p class="rental-muted">Workflow definition: {String(instance.definition_id ?? "unknown")}@{String(instance.definition_version ?? "1")}</p>
 						</div>
 						<a class="rental-button secondary" href="/wf1/owner">Owner dashboard</a>
@@ -74,7 +83,7 @@ const workspaceHref = workflowInstanceId ? `/wf1/workspaces/${workflowInstanceId
 					<div class="workspace-columns">
 						<aside class="sidebar">
 							<div class="rental-panel">
-								<h2>Application Context</h2>
+								<h2>Application Form Context</h2>
 								<SpecTable title="Applicant" spec={{
 									name: interest.name,
 									official_email: interest.official_email,
@@ -82,11 +91,19 @@ const workspaceHref = workflowInstanceId ? `/wf1/workspaces/${workflowInstanceId
 									offered_price: interest.offered_price,
 								}} />
 							</div>
+							<Wf1AssetConfigItemsPanel items={assetConfigItems} />
 							<Wf1RequiredGatePanel requiredUnresolvedTasks={requiredUnresolvedTasks} />
 						</aside>
 						<main class="thread">
 							<Wf1ActionPanel availableActions={availableActions} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
 							<Wf1CardComposerPanel availableCardTypes={availableCardTypes} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
+							{canGenerateMoveoutTasks ? (
+								<Wf1MoveoutTaskGenerator
+									assetConfigItems={assetConfigItems}
+									workflowInstanceId={String(instance.id ?? "")}
+									workspaceHref={workspaceHref}
+								/>
+							) : null}
 							<Wf1TaskBuckets taskBuckets={taskBuckets} responses={responses} workspaceHref={workspaceHref} />
 							<Wf1Timeline events={events} />
 						</main>

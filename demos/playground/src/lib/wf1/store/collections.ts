@@ -24,6 +24,7 @@ export const WF_ASSET_STATE = {
 	NEGOTIATING: "negotiating",
 	BOOKED: "booked",
 	RENTED: "rented",
+	RETURN_PENDING: "return_pending",
 } as const;
 
 export const WF_VISIBILITY = {

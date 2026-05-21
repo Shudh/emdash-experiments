@@ -16,7 +16,7 @@ function uiFor(cardType: Record<string, unknown>) {
 
 <section class="rental-panel wf1-panel" data-testid="wf1-card-composer">
 	<h2>Available Task Cards</h2>
-	<p class="rental-muted">Cards create work inside the current Application State.</p>
+	<p class="rental-muted">Pick a generic task card. The prompt gives it business meaning inside the current application form state.</p>
 	{availableCardTypes.length ? (
 		<div class="wf1-compose-grid">
 			{availableCardTypes.map((cardType) => {

@@ -23,36 +23,80 @@ const { title, description, action, submitLabel, successRedirect } = Astro.props
 <script>
 	const REDIRECT_TOKEN_PATTERN = /:([A-Za-z0-9_]+)/g;
 
-	function setNested(target: Record<string, any>, path: string, value: unknown) {
-		const parts = path.split(".");
-		let cursor = target;
-		for (const [index, part] of parts.entries()) {
-			const last = index === parts.length - 1;
-			if (last) {
-				cursor[part] = value;
-				return;
-			}
-			cursor[part] ??= {};
-			cursor = cursor[part];
-		}
+	function assignNestedValue(target: Record<string, any> | Array<any>, key: string | number, value: unknown) {
+	const record = target as Record<string | number, any>;
+	const existing = record[key];
+
+	if (existing === undefined) {
+		record[key] = value;
+		return;
 	}
 
-	function valueFrom(input: FormDataEntryValue, element: Element) {
-		const value = String(input).trim();
-		if (element instanceof HTMLInputElement && element.type === "checkbox") {
-			return element.checked;
+	if (Array.isArray(existing)) {
+		if (Array.isArray(value)) {
+			existing.push(...value);
+		} else {
+			existing.push(value);
 		}
-		if ((element as HTMLElement).dataset.number === "true") {
-			return value ? Number(value) : undefined;
-		}
-		if ((element as HTMLElement).dataset.lines === "true") {
-			return value
-				.split("\n")
-				.map((line) => line.trim())
-				.filter(Boolean);
-		}
-		return value || undefined;
+		return;
 	}
+
+	record[key] = Array.isArray(value) ? [existing, ...value] : [existing, value];
+}
+
+function setNested(target: Record<string, any>, path: string, value: unknown) {
+	const parts = path.split(".");
+	let cursor: Record<string, any> | Array<any> = target;
+
+	for (const [index, part] of parts.entries()) {
+		const last = index === parts.length - 1;
+		const nextPart = parts[index + 1];
+		const key = /^\d+$/.test(part) ? Number(part) : part;
+		const nextContainer = nextPart && /^\d+$/.test(nextPart) ? [] : {};
+		const record = cursor as Record<string | number, any>;
+
+		if (last) {
+			assignNestedValue(cursor, key, value);
+			return;
+		}
+
+		if (record[key] === undefined) {
+			record[key] = nextContainer;
+		}
+
+		cursor = record[key];
+	}
+}
+
+function valueFrom(input: FormDataEntryValue, element: Element) {
+	const value = String(input).trim();
+	const htmlElement = element as HTMLElement;
+
+	if (element instanceof HTMLInputElement && element.type === "checkbox") {
+		if (!element.checked) return false;
+		if (htmlElement.dataset.checkboxValue === "true") {
+			return htmlElement.dataset.array === "true" ? [value] : value;
+		}
+		return true;
+	}
+
+	if (htmlElement.dataset.number === "true") {
+		return value ? Number(value) : undefined;
+	}
+
+	if (htmlElement.dataset.lines === "true") {
+		return value
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean);
+	}
+
+	if (htmlElement.dataset.array === "true") {
+		return value ? [value] : undefined;
+	}
+
+	return value || undefined;
+}
 
 	for (const form of document.querySelectorAll<HTMLFormElement>("[data-rental-form]")) {
 		form.addEventListener("submit", async (event) => {

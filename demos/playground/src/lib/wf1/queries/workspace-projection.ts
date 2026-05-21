@@ -283,7 +283,7 @@ export function projectWorkflowWorkspace(workspace: WorkflowWorkspace): Workflow
 		statusPills: [
 			`Asset State: ${assetState}`,
 			visibilityState,
-			`Application State: ${workflowState}`,
+			`Application Form State: ${workflowState}`,
 			`role: ${workspace.viewerRole}`,
 		],
 		availableCardTypes,

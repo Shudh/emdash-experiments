@@ -63,7 +63,7 @@ const rows = [...applications]
 			<article class="wf1-application-row">
 				<div>
 					<strong>{String(row.application.name ?? row.application.official_email ?? "Applicant")}</strong>
-					<span class="rental-badge">Application State: {String(row.applicationState.id ?? row.application.interest_state ?? "submitted")}</span>
+					<span class="rental-badge">Application Form State: {String(row.applicationState.id ?? row.application.interest_state ?? "submitted")}</span>
 				</div>
 				<a class="rental-button secondary" href={row.workspaceHref}>Open workspace</a>
 				{row.actions.length ? (

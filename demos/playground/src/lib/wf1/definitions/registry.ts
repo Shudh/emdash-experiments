@@ -1,6 +1,7 @@
 import { DomainError } from "../../domain/types.js";
 import type { WorkflowDefinition } from "../core/types.js";
 import { ALM_CURRENT_PARITY_V1 } from "./alm-current-parity-v1.js";
+import { RENTAL_APPLICATION_FORM_BASIC_V1 } from "./rental-application-form-basic-v1.js";
 import { RENTAL_APPLICATION_V1 } from "./rental-application-v1.js";
 import { SIMPLE_AVAILABLE_RENTED_V1 } from "./simple-available-rented-v1.js";
 
@@ -8,9 +9,10 @@ const WORKFLOW_DEFINITIONS = [
 	ALM_CURRENT_PARITY_V1,
 	RENTAL_APPLICATION_V1,
 	SIMPLE_AVAILABLE_RENTED_V1,
+	RENTAL_APPLICATION_FORM_BASIC_V1,
 ] as const;
 
-const DEFAULT_WORKFLOW_DEFINITION = SIMPLE_AVAILABLE_RENTED_V1;
+const DEFAULT_WORKFLOW_DEFINITION = RENTAL_APPLICATION_FORM_BASIC_V1;
 
 function keyFor(id: string, version: number): string {
 	return `${id}@${version}`;

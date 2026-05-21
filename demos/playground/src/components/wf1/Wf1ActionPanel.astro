@@ -12,7 +12,7 @@ const { availableActions, workflowInstanceId, workspaceHref } = Astro.props;
 
 <section class="rental-panel wf1-panel" data-testid="wf1-actions">
 	<h2>Available Stage Actions</h2>
-	<p class="rental-muted">Actions move Application State and sometimes Asset State. Cards do not move state by themselves.</p>
+	<p class="rental-muted">Actions move Application Form's State and sometimes Asset State. Cards do not move state by themselves.</p>
 	{availableActions.length ? (
 		<div class="wf1-action-grid">
 			{availableActions.map((action) => {

@@ -7,23 +7,41 @@ interface Props {
 	workspaceHref: string;
 }
 
+type McqOption = {
+	value: string;
+	label: string;
+};
+
 const { card, workspaceHref } = Astro.props;
 
-const answerSchema =
-	card.answer_schema && typeof card.answer_schema === "object"
-		? (card.answer_schema as Record<string, unknown>)
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? value as Record<string, unknown>
 		: {};
+}
 
-const evidencePolicy =
-	card.evidence_policy && typeof card.evidence_policy === "object"
-		? (card.evidence_policy as Record<string, unknown>)
-		: {};
+function mcqOptions(schema: Record<string, unknown>): McqOption[] {
+	return Array.isArray(schema.options)
+		? schema.options
+				.filter((option) => option && typeof option === "object")
+				.map((option) => {
+					const row = option as Record<string, unknown>;
+					const value = String(row.value ?? "");
+					const label = String(row.label ?? value);
+					return { value, label };
+				})
+				.filter((option) => option.value)
+		: [];
+}
 
+const answerSchema = objectValue(card.answer_schema);
+const evidencePolicy = objectValue(card.evidence_policy);
 const kind = String(answerSchema.kind ?? "free_text");
 const answerLabel = kind === "amount_proof" ? "Reference" : "Answer";
 const evidenceMode = String(evidencePolicy.attachment ?? "forbidden");
 const acceptsEvidence = evidenceMode !== "forbidden";
 const requiresEvidence = evidenceMode === "required";
+const options = mcqOptions(answerSchema);
 ---
 
 <ActionForm
@@ -44,6 +62,31 @@ const requiresEvidence = evidenceMode === "required";
 					<input id={`reference-${card.id}`} name="answer.reference" required />
 				</div>
 			</>
+		) : kind === "mcq_single" ? (
+			<div class="rental-field full">
+				<label for={`answer-${card.id}`}>Choice</label>
+				<select id={`answer-${card.id}`} name="answer.value" required>
+					{options.map((option) => (
+						<option value={option.value}>{option.label}</option>
+					))}
+				</select>
+			</div>
+		) : kind === "mcq_multi" ? (
+			<fieldset class="rental-field full wf1-choice-set">
+				<legend>Choices</legend>
+				{options.map((option) => (
+					<label>
+						<input
+							name="answer.values"
+							type="checkbox"
+							value={option.value}
+							data-array="true"
+							data-checkbox-value="true"
+						/>
+						<span>{option.label}</span>
+					</label>
+				))}
+			</fieldset>
 		) : kind === "yes_no" || kind === "agreement_review" ? (
 			<div class="rental-field">
 				<label for={`answer-${card.id}`}>Answer</label>
@@ -75,3 +118,27 @@ const requiresEvidence = evidenceMode === "required";
 		) : null
 	}
 </ActionForm>
+
+<style>
+	.wf1-choice-set {
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 12px;
+	}
+
+	.wf1-choice-set legend {
+		color: var(--r-muted);
+		font-size: 0.84rem;
+		font-weight: 750;
+		padding: 0 6px;
+	}
+
+	.wf1-choice-set label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--r-text);
+		font-size: 0.94rem;
+		font-weight: 700;
+	}
+</style>

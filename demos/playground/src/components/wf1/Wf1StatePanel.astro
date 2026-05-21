@@ -16,8 +16,8 @@ const assetState = projection.assetState as Record<string, unknown> | undefined;
 		<p class="rental-muted">{String(assetState?.label ?? assetState?.id ?? "Unknown")}</p>
 	</div>
 	<div class="rental-panel state-box">
-		<p class="rental-kicker">Application State</p>
-		<h2>Application State: {String(applicationState?.id ?? "unknown")}</h2>
+		<p class="rental-kicker">Application Form State</p>
+		<h2>Application Form State: {String(applicationState?.id ?? "unknown")}</h2>
 		<p class="rental-muted">{String(applicationState?.message ?? applicationState?.label ?? "Unknown")}</p>
 		<span class="rental-badge">Viewer role: {viewerRole}</span>
 	</div>
