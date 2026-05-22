@@ -1,0 +1,42 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "handovernow-cms",
+	"main": "./src/worker.ts",
+	"compatibility_date": "2026-05-07",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"disable_nodejs_process_v2"
+	],
+	"workers_dev": true,
+	"preview_urls": true,
+	"assets": {
+		"directory": "./dist/client",
+		"html_handling": "auto-trailing-slash",
+		"not_found_handling": "404-page"
+	},
+	"routes": [
+		{
+			"pattern": "cms.handovernow.com",
+			"zone_name": "handovernow.com",
+			"custom_domain": true
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "handovernow_cms",
+			"database_name": "handovernow_cms",
+			"database_id": "10dc65d3-e780-4ec1-bca0-4a1e9c941ea8",
+			"remote": true
+		}
+	],
+	"r2_buckets": [
+		{
+			"bucket_name": "handovernow-cms-media",
+			"binding": "handovernow_cms_media",
+			"remote": true
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}

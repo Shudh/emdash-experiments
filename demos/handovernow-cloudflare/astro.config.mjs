@@ -1,0 +1,81 @@
+// @ts-check
+
+import cloudflare from "@astrojs/cloudflare";
+import react from "@astrojs/react";
+import { d1, r2, cloudflareCache } from "@emdash-cms/cloudflare";
+import { defineConfig, fontProviders } from "astro/config";
+import emdash from "emdash/astro";
+
+export default defineConfig({
+	output: "server",
+
+	adapter: cloudflare({
+		imageService: "cloudflare",
+	}),
+
+	i18n: {
+		defaultLocale: "en",
+		locales: ["en", "fr", "es"],
+		fallback: {
+			fr: "en",
+			es: "en",
+		},
+	},
+
+	image: {
+		layout: "constrained",
+		responsiveStyles: true,
+	},
+
+	integrations: [
+		react(),
+
+		emdash({
+			database: d1({
+				binding: "handovernow_cms",
+				session: "auto",
+			}),
+
+			storage: r2({
+				binding: "handovernow_cms_media",
+			}),
+		}),
+	],
+
+	experimental: {
+		cache: {
+			provider: cloudflareCache(),
+		},
+		routeRules: {
+			"/": {
+				maxAge: 3600,
+				swr: 864000,
+			},
+			"/[...slug]": {
+				maxAge: 3600,
+				swr: 864000,
+			},
+		},
+	},
+
+	fonts: [
+		{
+			provider: fontProviders.google(),
+			name: "Inter",
+			cssVariable: "--font-sans",
+			weights: [400, 500, 600, 700],
+			fallbacks: ["sans-serif"],
+		},
+		{
+			provider: fontProviders.google(),
+			name: "JetBrains Mono",
+			cssVariable: "--font-mono",
+			weights: [400, 500],
+			fallbacks: ["monospace"],
+		},
+	],
+
+	devToolbar: {
+		enabled: false,
+	},
+});
