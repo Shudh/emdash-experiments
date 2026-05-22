@@ -9,7 +9,10 @@ import { decideWorkflowCard } from "../commands/decide-workflow-card.js";
 import { expressWorkflowInterest } from "../commands/express-interest.js";
 import { publishWorkflowAsset } from "../commands/publish-asset.js";
 import { runWorkflowAction } from "../commands/run-workflow-action.js";
-import { updateWorkflowAssetConfig } from "../commands/update-asset-config.js";
+import {
+	updateWorkflowAssetConfig,
+	type UpdateWorkflowAssetConfigInput,
+} from "../commands/update-asset-config.js";
 import { getWorkflowAssetWorkspace } from "../queries/asset-workspace.js";
 import { getWorkflowInterestWorkspace } from "../queries/interest-workspace.js";
 import {
@@ -84,17 +87,37 @@ export async function handleWorkflowRentalRoute(
 			parts[2]
 		) {
 			if (parts[3] === "config") {
-				return jsonOk(
-					await updateWorkflowAssetConfig(input.store, user, parts[2], {
-						publicPrice: optionalNumber(body, "publicPrice"),
-						currency: asOptionalString(body.currency),
-						minimumMonths: optionalNumber(body, "minimumMonths"),
-						configSpec: optionalRecord(body, "configSpec"),
-						conditionSpec: optionalRecord(body, "conditionSpec"),
-						ownerConditionsSpec: optionalRecord(body, "ownerConditionsSpec"),
-						items: optionalArray(body, "items"),
-					}),
-				);
+				const configInput: UpdateWorkflowAssetConfigInput = {};
+
+				if (hasOwn(body, "publicPrice")) {
+					configInput.publicPrice = optionalNumber(body, "publicPrice");
+				}
+
+				if (hasOwn(body, "currency")) {
+					configInput.currency = asOptionalString(body.currency);
+				}
+
+				if (hasOwn(body, "minimumMonths")) {
+					configInput.minimumMonths = optionalNumber(body, "minimumMonths");
+				}
+
+				if (hasOwn(body, "configSpec")) {
+					configInput.configSpec = optionalRecord(body, "configSpec");
+				}
+
+				if (hasOwn(body, "conditionSpec")) {
+					configInput.conditionSpec = optionalRecord(body, "conditionSpec");
+				}
+
+				if (hasOwn(body, "ownerConditionsSpec")) {
+					configInput.ownerConditionsSpec = optionalRecord(body, "ownerConditionsSpec");
+				}
+
+				if (hasOwn(body, "items")) {
+					configInput.items = optionalArray(body, "items");
+				}
+
+				return jsonOk(await updateWorkflowAssetConfig(input.store, user, parts[2], configInput));
 			}
 			if (parts[3] === "publish-to-marketplace") {
 				return jsonOk(await publishWorkflowAsset(input.store, user, parts[2]));
@@ -288,7 +311,9 @@ function requireUser(user: UserContext | null): UserContext {
 function asOptionalString(value: unknown): string | undefined {
 	return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
-
+function hasOwn(object: object, key: PropertyKey): boolean {
+	return Object.prototype.hasOwnProperty.call(object, key);
+}
 function jsonOk(data: unknown, status = 200): Response {
 	return Response.json({ ok: true, data }, { status });
 }

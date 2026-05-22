@@ -22,7 +22,7 @@ export async function listWorkflowMarketplaceAssets(store: DomainStore, user: Us
 			business_state: WF_ASSET_STATE.LISTED,
 			visibility_state: WF_VISIBILITY.MARKETPLACE,
 		},
-		{ orderBy: "created_at", direction: "desc", limit: 100 },
+		{ orderBy: "published_at", direction: "desc", limit: 100 },
 	);
 
 	return Promise.all(assets.map((asset) => withViewer(store, user, asset)));

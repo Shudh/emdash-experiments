@@ -47,12 +47,48 @@ function numberTime(value: unknown): number {
 	return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function latestStamp(asset: AssetRow): number {
+function publishedStamp(asset: AssetRow): number {
 	return Math.max(
-		numberTime(asset.updated_at),
 		numberTime(asset.published_at),
 		numberTime(asset.created_at),
 	);
+}
+function moneyLabel(asset: AssetRow): string {
+	const amount = Number(asset.public_price ?? 0);
+	const currency = String(asset.currency ?? "INR");
+
+	if (!Number.isFinite(amount) || amount <= 0) {
+		return "";
+	}
+
+	return new Intl.NumberFormat("en-IN", {
+		style: "currency",
+		currency,
+		maximumFractionDigits: 0,
+	}).format(amount);
+}
+
+function minimumMonthsLabel(asset: AssetRow): string {
+	const months = Number(asset.minimum_months ?? 0);
+
+	if (!Number.isFinite(months) || months <= 0) {
+		return "";
+	}
+
+	return `Minimum stay: ${months} month${months === 1 ? "" : "s"}`;
+}
+
+function publishedLabel(asset: AssetRow): string {
+	const timestamp = numberTime(asset.published_at);
+
+	if (!timestamp) {
+		return "";
+	}
+
+	return new Intl.DateTimeFormat("en-IN", {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(new Date(timestamp));
 }
 
 function hasApplication(asset: AssetRow): boolean {
@@ -60,16 +96,7 @@ function hasApplication(asset: AssetRow): boolean {
 }
 
 function sortMarketplaceAssets(items: Array<AssetRow>): Array<AssetRow> {
-	return [...items].sort((left, right) => {
-		const rightApplication = hasApplication(right) ? 1 : 0;
-		const leftApplication = hasApplication(left) ? 1 : 0;
-
-		if (rightApplication !== leftApplication) {
-			return rightApplication - leftApplication;
-		}
-
-		return latestStamp(right) - latestStamp(left);
-	});
+	return [...items].sort((left, right) => publishedStamp(right) - publishedStamp(left));
 }
 
 function mediaUrlFromStorageKey(storageKey: string) {
@@ -182,7 +209,7 @@ const applicationCount = assets.filter(hasApplication).length;
 					<p class="rental-kicker">Marketplace</p>
 					<h1>Published assets</h1>
 					<p class="rental-muted">
-						Latest listings appear first. Your existing applications stay on top.
+						Latest published listings appear first.
 					</p>
 				</div>
 				<div class="marketplace-actions">
@@ -199,6 +226,9 @@ const applicationCount = assets.filter(hasApplication).length;
 							const detailHref = assetDetailHref(asset);
 							const thumbnail = thumbnailFor(asset);
 							const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
+							const published = publishedLabel(asset);
+							const price = moneyLabel(asset);
+                            const minimumMonths = minimumMonthsLabel(asset);
 
 							return (
 								<article class:list={["rental-panel", "asset-card", { applied: hasApplication(asset) }]}>
@@ -219,6 +249,9 @@ const applicationCount = assets.filter(hasApplication).length;
 										</h2>
 									</div>
 									<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+									{price ? <p class="asset-price">{price} / month</p> : null}
+                                    {minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
+									{published ? <p class="rental-muted asset-published">Published: {published}</p> : null}
 									<div class="rental-badges">
 										<span class="rental-badge">
 											Asset State: {String(asset.business_state ?? "listed")}
@@ -299,7 +332,21 @@ const applicationCount = assets.filter(hasApplication).length;
 		text-decoration: underline;
 	}
 
+	.asset-published {
+		font-size: 0.86rem;
+	}
+
 	.asset-card-actions {
 		margin-top: 4px;
 	}
+	.asset-price {
+	margin: 0;
+	font-size: 1.05rem;
+	font-weight: 900;
+	color: var(--r-text);
+}
+
+.asset-minimum {
+	font-size: 0.86rem;
+}
 </style>

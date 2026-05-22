@@ -42,6 +42,31 @@ function mediaUrlFromStorageKey(storageKey: string) {
 		.join("/")}`;
 }
 
+function moneyLabel(asset: Record<string, unknown> | undefined): string {
+	const amount = Number(asset?.public_price ?? 0);
+	const currency = String(asset?.currency ?? "INR");
+
+	if (!Number.isFinite(amount) || amount <= 0) {
+		return "";
+	}
+
+	return new Intl.NumberFormat("en-IN", {
+		style: "currency",
+		currency,
+		maximumFractionDigits: 0,
+	}).format(amount);
+}
+
+function minimumMonthsLabel(asset: Record<string, unknown> | undefined): string {
+	const months = Number(asset?.minimum_months ?? 0);
+
+	if (!Number.isFinite(months) || months <= 0) {
+		return "";
+	}
+
+	return `Minimum stay: ${months} month${months === 1 ? "" : "s"}`;
+}
+
 function thumbnailFor(asset: Record<string, unknown> | undefined) {
 	const config = configFor(asset);
 	const thumbnail =
@@ -86,6 +111,8 @@ const loginRedirect = asset?.id ? `/wf1/marketplace/assets/${asset.id}` : "/wf1/
 const loginHref = `/login?redirect=${encodeURIComponent(loginRedirect)}`;
 const thumbnail = thumbnailFor(asset);
 const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
+const price = moneyLabel(asset);
+const minimumMonths = minimumMonthsLabel(asset);
 ---
 
 <Wf1Base title={asset ? String(asset.title) : "WF1 asset"} description="WF1 asset details">
@@ -110,6 +137,8 @@ const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
 							<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
 							<h1>{String(asset.title ?? "Untitled asset")}</h1>
 							<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+							{price ? <p class="asset-price">{price} / month</p> : null}
+{minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
 							<div class="rental-badges">
 								<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
 								<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
@@ -183,6 +212,13 @@ const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
 										<label for="employerName">Employer</label>
 										<input id="employerName" name="employerName" />
 									</div>
+                                                                    {price ? (
+                                    <div class="rental-field full price-note">
+                                        <p class="rental-muted">Owner asking price</p>
+                                        <p class="asset-price">{price} / month</p>
+                                        {minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
+                                    </div>
+                                ) : null}
 
 									<div class="rental-field">
 										<label for="offeredPrice">Offer</label>
@@ -275,4 +311,21 @@ const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
 			grid-template-columns: 1fr;
 		}
 	}
+	.asset-price {
+	margin: 0;
+	font-size: 1.2rem;
+	font-weight: 900;
+	color: var(--r-text);
+}
+
+.asset-minimum {
+	font-size: 0.9rem;
+}
+
+.price-note {
+	padding: 12px;
+	border: 1px solid var(--r-border);
+	border-radius: var(--r-radius);
+	background: var(--r-panel-soft);
+}
 </style>

@@ -192,8 +192,24 @@ export class KyselyDomainStore implements DomainStore {
 	}
 
 	async softDelete(collection: string, id: string): Promise<void> {
-		await this.update(collection, id, { deleted_at: this.now() });
+	const existing = await this.get(collection, id);
+
+	if (!existing) {
+		throw new DomainError("NOT_FOUND", `${collection}:${id} not found`, 404);
 	}
+
+	const tbl = tableName(collection);
+	const now = this.now();
+
+	await sql`
+		UPDATE ${sql.ref(tbl)}
+		SET deleted_at = ${now},
+			updated_at = ${now},
+			version = version + 1
+		WHERE id = ${id}
+		AND deleted_at IS NULL
+	`.execute(this.db);
+}
 
 	async transaction<T>(callback: (tx: DomainStore) => Promise<T>): Promise<T> {
 		if (!("transaction" in this.db) || typeof this.db.transaction !== "function") {

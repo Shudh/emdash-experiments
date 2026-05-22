@@ -6,6 +6,8 @@ import { RENTAL_LOCAL_USERS } from "../rental-local-users.js";
 
 const WF1_BASE_URL = "http://localhost:4450";
 const WORKSPACE_URL_PATTERN = /\/wf1\/workspaces\/[^/]+$/;
+const EXTENDED_INITIAL_MONTHLY_PRICE = 60_000;
+const EXTENDED_RELISTED_MONTHLY_PRICE = Math.round(EXTENDED_INITIAL_MONTHLY_PRICE * 1.1);
 
 const ONE_BY_ONE_PNG = Buffer.from(
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAoMBgAlyl6wAAAAASUVORK5CYII=",
@@ -29,6 +31,34 @@ function applicationFormStateText(state: string): RegExp {
 		`Application\\s+(?:Form(?:'s|s)?\\s+)?State:\\s+${escapeRegExp(state)}`,
 		"i",
 	);
+}
+
+function assetIdFromMarketplaceAssetUrl(url: string): string {
+	const match = url.match(/\/wf1\/marketplace\/assets\/([^/?#]+)/);
+
+	if (!match?.[1]) {
+		throw new Error(`Could not read asset id from URL: ${url}`);
+	}
+
+	return decodeURIComponent(match[1]);
+}
+
+function workflowInstanceIdFromWorkspaceUrl(url: string): string {
+	const match = url.match(/\/wf1\/workspaces\/([^/?#]+)/);
+
+	if (!match?.[1]) {
+		throw new Error(`Could not read workflow instance id from URL: ${url}`);
+	}
+
+	return decodeURIComponent(match[1]);
+}
+
+function rupeeAmountText(amount: number): RegExp {
+	const amountText = new Intl.NumberFormat("en-IN", {
+		maximumFractionDigits: 0,
+	}).format(amount);
+
+	return new RegExp(`₹\\s*${escapeRegExp(amountText)}`);
 }
 
 async function expectAssetState(scope: Page | Locator, state: string) {
@@ -121,6 +151,86 @@ async function clickAndWaitForSettledPage(button: Locator, page: Page) {
 	await page.waitForLoadState("domcontentloaded").catch(() => undefined);
 }
 
+async function updateOwnerAssetPublicPriceFromWorkspace(
+	page: Page,
+	workflowInstanceId: string,
+	publicPrice: number,
+) {
+	const result = await page.evaluate(
+		async ({ workflowInstanceId, publicPrice }) => {
+			type JsonObject = Record<string, unknown>;
+
+			function objectValue(value: unknown): JsonObject {
+				return value && typeof value === "object" && !Array.isArray(value)
+					? (value as JsonObject)
+					: {};
+			}
+
+			const workspaceResponse = await fetch(`/api/wf1-rental/workspaces/${workflowInstanceId}`, {
+				method: "GET",
+				credentials: "same-origin",
+				headers: {
+					Accept: "application/json",
+					"X-EmDash-Request": "1",
+				},
+			});
+
+			const workspacePayload = await workspaceResponse.json().catch(() => ({}));
+
+			if (!workspaceResponse.ok) {
+				return {
+					ok: false,
+					status: workspaceResponse.status,
+					stage: "load-workspace",
+					payload: workspacePayload,
+				};
+			}
+
+			const workspaceData = objectValue(objectValue(workspacePayload).data);
+			const asset = objectValue(workspaceData.asset);
+			const assetId = String(asset.id ?? "");
+
+			if (!assetId) {
+				return {
+					ok: false,
+					status: 0,
+					stage: "missing-asset-id",
+					payload: workspacePayload,
+				};
+			}
+
+			const updateResponse = await fetch(`/api/wf1-rental/owner/assets/${assetId}/config`, {
+				method: "POST",
+				credentials: "same-origin",
+				headers: {
+					"Content-Type": "application/json",
+					"X-EmDash-Request": "1",
+				},
+				body: JSON.stringify({
+					publicPrice,
+					currency: asset.currency ?? "INR",
+					minimumMonths: asset.minimum_months ?? undefined,
+					configSpec: asset.config_spec ?? {},
+					conditionSpec: asset.condition_spec ?? {},
+					ownerConditionsSpec: asset.owner_conditions_spec ?? {},
+				}),
+			});
+
+			const updatePayload = await updateResponse.json().catch(() => ({}));
+
+			return {
+				ok: updateResponse.ok,
+				status: updateResponse.status,
+				stage: "update-price",
+				payload: updatePayload,
+			};
+		},
+		{ workflowInstanceId, publicPrice },
+	);
+
+	expect(result.ok, JSON.stringify(result)).toBe(true);
+}
+
 test("Eva and Rakesh complete generic WF1 application form flow", async ({ browser }) => {
 	test.setTimeout(180_000);
 
@@ -142,6 +252,7 @@ test("Eva and Rakesh complete generic WF1 application form flow", async ({ brows
 			await expect(eva.page.locator(".inventory-row")).toHaveCount(14);
 
 			await eva.page.getByLabel("Title").fill(title);
+			await eva.page.getByLabel("Price").fill(String(EXTENDED_INITIAL_MONTHLY_PRICE));
 			await eva.page.getByLabel("Publish to marketplace").check();
 			await eva.page.getByRole("button", { name: "Create asset" }).click();
 
@@ -149,6 +260,7 @@ test("Eva and Rakesh complete generic WF1 application form flow", async ({ brows
 		});
 
 		const assetUrl = eva.page.url();
+		const assetId = assetIdFromMarketplaceAssetUrl(assetUrl);
 		let workspaceUrl = "";
 
 		await test.step("Anonymous marketplace shows login-to-apply state", async () => {
@@ -337,15 +449,78 @@ test("Eva and Rakesh complete generic WF1 application form flow", async ({ brows
 			);
 
 			await expectAssetState(eva.page, "listed");
+
 			await expectApplicationFormState(eva.page, "moveout_closed");
 		});
 
-		await test.step("WF1 home does not leak old /wf links", async () => {
-			const wf1Home = await eva.page.goto("/wf1", { waitUntil: "domcontentloaded" });
+		await test.step("Closed move-out asset is off-market until owner explicitly relists it", async () => {
+			await eva.page.goto("/wf1/marketplace", { waitUntil: "domcontentloaded" });
 
-			expect(wf1Home).not.toBeNull();
-			expect(await wf1Home!.text()).not.toContain("/wf/");
+			const offMarketCard = eva.page.locator(".asset-card").filter({ hasText: title });
+
+			await expect(offMarketCard).toHaveCount(0);
 		});
+
+		await test.step("Eva increases rent by 10 percent and relists the asset", async () => {
+			const workflowInstanceId = workflowInstanceIdFromWorkspaceUrl(workspaceUrl);
+
+			await updateOwnerAssetPublicPriceFromWorkspace(
+				eva.page,
+				workflowInstanceId,
+				EXTENDED_RELISTED_MONTHLY_PRICE,
+			);
+
+			await eva.page.goto("/wf1/owner", { waitUntil: "domcontentloaded" });
+
+			const ownerAsset = eva.page.locator(".asset-management").filter({ hasText: title });
+
+			await expect(ownerAsset).toBeVisible();
+			await expectAssetState(ownerAsset, "listed");
+			await expect(ownerAsset.getByText("restricted").first()).toBeVisible();
+			await expect(ownerAsset.getByRole("button", { name: /^Publish to marketplace$/ })).toBeVisible();
+
+			await ownerAsset.getByRole("button", { name: /^Publish to marketplace$/ }).click();
+			await eva.page.waitForLoadState("domcontentloaded").catch(() => undefined);
+
+			const publishedOwnerAsset = eva.page.locator(".asset-management").filter({ hasText: title });
+
+			await expect(publishedOwnerAsset).toBeVisible();
+			await expectAssetState(publishedOwnerAsset, "listed");
+			await expect(publishedOwnerAsset.getByText("marketplace").first()).toBeVisible();
+		});
+
+		await test.step("Relisted asset appears in marketplace with increased rent", async () => {
+			const marketplacePage = await eva.context.newPage();
+
+			try {
+				await marketplacePage.goto("/wf1/marketplace", { waitUntil: "domcontentloaded" });
+
+				const relistedCard = marketplacePage.locator(".asset-card").filter({ hasText: title });
+
+				await expect(relistedCard).toBeVisible();
+				await expect(
+					relistedCard.getByText(rupeeAmountText(EXTENDED_RELISTED_MONTHLY_PRICE)).first(),
+				).toBeVisible();
+				await expect(relistedCard.getByText("marketplace").first()).toBeVisible();
+			} finally {
+				await marketplacePage.close();
+			}
+		});
+
+		await test.step("WF1 home does not leak old /wf links", async () => {
+			const wf1Page = await eva.context.newPage();
+
+			try {
+				const wf1Home = await wf1Page.goto("/wf1", { waitUntil: "domcontentloaded" });
+
+				expect(wf1Home).not.toBeNull();
+				expect(await wf1Home!.text()).not.toContain("/wf/");
+			} finally {
+				await wf1Page.close();
+			}
+		});
+
+		expect(assetId).toBeTruthy();
 	} finally {
 		await eva.context.close();
 		await rakesh.context.close();

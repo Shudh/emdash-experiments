@@ -93,7 +93,7 @@ export const RENTAL_APPLICATION_FORM_BASIC_V1: WorkflowDefinition =
 				tone: "accepted",
 				terminal: true,
 				descriptionByRole: {
-					owner: "Move-out is closed. The asset can be listed again.",
+					owner: "Move-out is closed. The asset is back under owner control and can be published again when ready.",
 					applicant: "Move-out is closed.",
 					renter: "Move-out is closed.",
 				},
@@ -388,12 +388,12 @@ export const RENTAL_APPLICATION_FORM_BASIC_V1: WorkflowDefinition =
 						when: "action_run",
 						nextWorkflowState: "moveout_closed",
 						nextAssetState: WF_ASSET_STATE.LISTED,
-						nextVisibilityState: WF_VISIBILITY.MARKETPLACE,
+						nextVisibilityState: WF_VISIBILITY.RESTRICTED,
 						grantAccess: ["owner"],
 					},
 				],
 				unresolvedCardPolicy: "block",
-				confirmationMessage: "Close move-out and list this asset again.",
+				confirmationMessage: "Close move-out and return this asset to owner control.",
 			},
 		},
 	});

@@ -100,26 +100,43 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 				</div>
 			) : (
 				<div class="asset-sections">
-					{assetRows.length ? assetRows.map((row) => (
-						<section class="rental-panel asset-management">
-							<div class="asset-head">
-								<div>
-									<p class="rental-kicker">{String(row.asset.asset_kind ?? "asset")}</p>
-									<h2>{String(row.asset.title ?? "Untitled asset")}</h2>
-									<p class="rental-muted">{String(row.asset.location_label ?? "Location pending")}</p>
+					{assetRows.length ? assetRows.map((row) => {
+						const assetId = String(row.asset.id ?? "");
+						const assetState = String(row.asset.business_state ?? "draft");
+						const visibilityState = String(row.asset.visibility_state ?? "private");
+						const canPublish = (assetState === "draft_asset" || assetState === "listed") && visibilityState !== "marketplace";
+						return (
+							<section class="rental-panel asset-management">
+								<div class="asset-head">
+									<div>
+										<p class="rental-kicker">{String(row.asset.asset_kind ?? "asset")}</p>
+										<h2>{String(row.asset.title ?? "Untitled asset")}</h2>
+										<p class="rental-muted">{String(row.asset.location_label ?? "Location pending")}</p>
+									</div>
+									<div class="rental-badges">
+										<span class="rental-badge">Asset State: {assetState}</span>
+										<span class="rental-badge">{visibilityState}</span>
+									</div>
 								</div>
-								<div class="rental-badges">
-									<span class="rental-badge">Asset State: {String(row.asset.business_state ?? "draft")}</span>
-									<span class="rental-badge">{String(row.asset.visibility_state ?? "private")}</span>
+								<div class="asset-links">
+									<a class="rental-button secondary" href={`/wf1/marketplace/assets/${assetId}`}>View listing</a>
+									{canPublish ? (
+										<form
+											class="wf1-inline-publish"
+											data-wf1-publish-form
+											action={`/api/wf1-rental/owner/assets/${assetId}/publish-to-marketplace`}
+											method="post"
+										>
+											<button class="rental-button" type="submit">Publish to marketplace</button>
+											<span class="rental-muted" data-wf1-publish-status></span>
+										</form>
+									) : null}
 								</div>
-							</div>
-							<div class="asset-links">
-								<a class="rental-button secondary" href={`/wf1/marketplace/assets/${row.asset.id}`}>View listing</a>
-							</div>
-							<h3>Applications</h3>
-							<Wf1ApplicationList applications={row.applications} />
-						</section>
-					)) : (
+								<h3>Applications</h3>
+								<Wf1ApplicationList applications={row.applications} />
+							</section>
+						);
+					}) : (
 						<div class="rental-panel"><p class="rental-muted">No owned assets yet.</p></div>
 					)}
 				</div>
@@ -127,6 +144,45 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 		</div>
 	</section>
 </Wf1Base>
+
+<script>
+	for (const form of document.querySelectorAll<HTMLFormElement>("[data-wf1-publish-form]")) {
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+
+			const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+			const status = form.querySelector<HTMLElement>("[data-wf1-publish-status]");
+
+			if (submit) submit.disabled = true;
+			if (status) status.textContent = "Publishing...";
+
+			try {
+				const response = await fetch(form.action, {
+					method: "POST",
+					credentials: "same-origin",
+					headers: {
+						"Content-Type": "application/json",
+						"X-EmDash-Request": "1",
+					},
+					body: "{}",
+				});
+
+				const payload = await response.json().catch(() => ({}));
+
+				if (!response.ok) {
+					throw new Error(payload?.error?.message ?? "Publish failed");
+				}
+
+				location.reload();
+			} catch (error) {
+				if (status) {
+					status.textContent = error instanceof Error ? error.message : "Publish failed";
+				}
+				if (submit) submit.disabled = false;
+			}
+		});
+	}
+</script>
 
 <style>
 	.asset-sections,
@@ -142,5 +198,12 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
+	}
+
+	.wf1-inline-publish {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
 	}
 </style>
