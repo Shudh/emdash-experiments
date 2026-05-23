@@ -1,0 +1,220 @@
+---
+interface Props {
+	assetConfigItems: Array<Record<string, unknown>>;
+	workflowInstanceId: string;
+	workspaceHref: string;
+}
+
+const { assetConfigItems, workflowInstanceId, workspaceHref } = Astro.props;
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? value as Record<string, unknown>
+		: {};
+}
+---
+
+<section class="rental-panel wf1-moveout-generator" data-testid="wf1-moveout-task-generator">
+	<div class="wf1-generator-head">
+		<div>
+			<p class="rental-kicker">Move-out checks</p>
+			<h2>Create return-check tasks</h2>
+			<p class="rental-muted">
+				Select asset config items. Each selected item becomes a generic free-text task with required image/PDF evidence for the renter.
+			</p>
+		</div>
+		<button class="rental-button secondary" type="button" data-select-all-items>Select all</button>
+	</div>
+
+	{
+		assetConfigItems.length ? (
+			<form class="wf1-generator-form" data-moveout-generator data-workflow-instance-id={workflowInstanceId} data-success={workspaceHref}>
+				<div class="wf1-generator-list">
+					{assetConfigItems.map((item) => {
+						const spec = objectValue(item.item_spec);
+						const itemLabel = String(item.item_label ?? "Item");
+						const itemGroup = String(item.item_group ?? "");
+						const ownerDeclaredState = String(item.owner_declared_state ?? "working");
+
+						return (
+							<label class="wf1-generator-item">
+								<input
+									type="checkbox"
+									name="assetConfigItemId"
+									value={String(item.id ?? "")}
+									data-item-label={itemLabel}
+									data-item-kind={String(item.item_kind ?? "fixture")}
+									data-item-group={itemGroup}
+									data-owner-declared-state={ownerDeclaredState}
+									data-condition-details={String(spec.conditionDetails ?? "")}
+									data-quantity={String(spec.quantity ?? "1")}
+								/>
+								<span>
+									<strong>{itemLabel}</strong>
+									<small>{itemGroup || "No group"} · Owner: {ownerDeclaredState}</small>
+								</span>
+							</label>
+						);
+					})}
+				</div>
+
+				<button class="rental-button" type="submit">Create selected return-check tasks</button>
+				<p class="rental-status" data-generator-status></p>
+			</form>
+		) : (
+			<p class="rental-muted">No config items are available for task generation.</p>
+		)
+	}
+</section>
+
+<script>
+	function selectedItemInputs(form: HTMLFormElement): HTMLInputElement[] {
+		return [...form.querySelectorAll<HTMLInputElement>('input[name="assetConfigItemId"]:checked')]
+			.filter((input) => input.value);
+	}
+
+	function promptFor(input: HTMLInputElement): string {
+		const label = input.dataset.itemLabel || "Item";
+		const group = input.dataset.itemGroup || "asset";
+		const ownerState = input.dataset.ownerDeclaredState || "working";
+		const details = input.dataset.conditionDetails || "";
+		const quantity = input.dataset.quantity || "1";
+		const detailText = details ? ` Details: ${details}` : "";
+
+		return `Check ${label} in ${group}. Quantity: ${quantity}. Owner declared state: ${ownerState}.${detailText} Please write the current condition and attach image/PDF evidence.`;
+	}
+
+	function cardSpecFor(input: HTMLInputElement): Record<string, unknown> {
+		return {
+			generatedPurpose: "moveout_return_check",
+			assetConfigItemId: input.value,
+			itemLabel: input.dataset.itemLabel || "Item",
+			itemKind: input.dataset.itemKind || "fixture",
+			itemGroup: input.dataset.itemGroup || "",
+			ownerDeclaredState: input.dataset.ownerDeclaredState || "working",
+			quantity: input.dataset.quantity || "1",
+			conditionDetails: input.dataset.conditionDetails || "",
+		};
+	}
+
+	async function createReturnCheckCard(workflowInstanceId: string, input: HTMLInputElement) {
+		const response = await fetch("/api/wf1-rental/workflow/cards", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"X-EmDash-Request": "1",
+			},
+			body: JSON.stringify({
+				workflowInstanceId,
+				cardType: "free_text_required_evidence",
+				prompt: promptFor(input),
+				cardSpec: cardSpecFor(input),
+			}),
+		});
+
+		const payload = await response.json().catch(() => ({}));
+
+		if (!response.ok) {
+			throw new Error(payload?.error?.message ?? "Could not create return-check task");
+		}
+	}
+
+	for (const button of document.querySelectorAll<HTMLButtonElement>("[data-select-all-items]")) {
+		button.addEventListener("click", () => {
+			const panel = button.closest<HTMLElement>("[data-testid='wf1-moveout-task-generator']");
+			const inputs = panel?.querySelectorAll<HTMLInputElement>('input[name="assetConfigItemId"]') ?? [];
+			const allSelected = [...inputs].every((input) => input.checked);
+
+			for (const input of inputs) {
+				input.checked = !allSelected;
+			}
+
+			button.textContent = allSelected ? "Select all" : "Clear selection";
+		});
+	}
+
+	for (const form of document.querySelectorAll<HTMLFormElement>("[data-moveout-generator]")) {
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+
+			const workflowInstanceId = form.dataset.workflowInstanceId || "";
+			const success = form.dataset.success || location.pathname;
+			const status = form.querySelector<HTMLElement>("[data-generator-status]");
+			const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+			const selected = selectedItemInputs(form);
+
+			if (!workflowInstanceId) {
+				if (status) {
+					status.dataset.state = "error";
+					status.textContent = "Workflow instance is missing.";
+				}
+				return;
+			}
+
+			if (!selected.length) {
+				if (status) {
+					status.dataset.state = "error";
+					status.textContent = "Select at least one config item.";
+				}
+				return;
+			}
+
+			if (submit) submit.disabled = true;
+			if (status) {
+				status.removeAttribute("data-state");
+				status.textContent = `Creating ${selected.length} return-check task${selected.length === 1 ? "" : "s"}...`;
+			}
+
+			try {
+				for (const input of selected) {
+					await createReturnCheckCard(workflowInstanceId, input);
+				}
+
+				location.href = success;
+			} catch (error) {
+				if (status) {
+					status.dataset.state = "error";
+					status.textContent = error instanceof Error ? error.message : "Could not create return-check tasks.";
+				}
+				if (submit) submit.disabled = false;
+			}
+		});
+	}
+</script>
+
+<style>
+	.wf1-moveout-generator,
+	.wf1-generator-form,
+	.wf1-generator-list {
+		display: grid;
+		gap: 14px;
+	}
+
+	.wf1-generator-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: start;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.wf1-generator-item {
+		display: flex;
+		align-items: start;
+		gap: 10px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		background: var(--r-bg);
+		padding: 12px;
+	}
+
+	.wf1-generator-item span {
+		display: grid;
+		gap: 4px;
+	}
+
+	.wf1-generator-item small {
+		color: var(--r-muted);
+		font-weight: 700;
+	}
+</style>

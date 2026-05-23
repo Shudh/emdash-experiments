@@ -1,0 +1,22 @@
+---
+import Wf1Card from "./Wf1Card.astro";
+
+interface Props {
+	cards: Array<Record<string, unknown>>;
+	responses: Array<Record<string, unknown>>;
+}
+
+const { cards, responses } = Astro.props;
+---
+
+<section class="rental-panel card-history" data-testid="wf1-card-history">
+	<h2>Completed / History Cards</h2>
+	{cards.length ? cards.map((card) => <Wf1Card card={card} responses={responses} />) : <p class="rental-muted">No history cards yet.</p>}
+</section>
+
+<style>
+	.card-history {
+		display: grid;
+		gap: 14px;
+	}
+</style>

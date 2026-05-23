@@ -1,0 +1,48 @@
+---
+interface Props {
+	projection: Record<string, unknown>;
+	viewerRole: string;
+}
+
+const { projection, viewerRole } = Astro.props;
+const applicationState = projection.applicationState as Record<string, unknown> | undefined;
+const assetState = projection.assetState as Record<string, unknown> | undefined;
+---
+
+<section class="state-grid" data-testid="wf1-state-panel">
+	<div class="rental-panel state-box">
+		<p class="rental-kicker">Asset State</p>
+		<h2>Asset State: {String(assetState?.id ?? "unknown")}</h2>
+		<p class="rental-muted">{String(assetState?.label ?? assetState?.id ?? "Unknown")}</p>
+	</div>
+	<div class="rental-panel state-box">
+		<p class="rental-kicker">Application Form State</p>
+		<h2>Application Form State: {String(applicationState?.id ?? "unknown")}</h2>
+		<p class="rental-muted">{String(applicationState?.message ?? applicationState?.label ?? "Unknown")}</p>
+		<span class="rental-badge">Viewer role: {viewerRole}</span>
+	</div>
+</section>
+
+<style>
+	.state-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 16px;
+	}
+
+	.state-box {
+		display: grid;
+		gap: 8px;
+	}
+
+	.state-box h2 {
+		margin: 0;
+		font-size: 1.35rem;
+	}
+
+	@media (max-width: 760px) {
+		.state-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

@@ -1,0 +1,67 @@
+---
+interface Props {
+	items: Array<Record<string, unknown>>;
+}
+
+const { items } = Astro.props;
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? value as Record<string, unknown>
+		: {};
+}
+---
+
+<section class="rental-panel wf1-config-panel" data-testid="wf1-asset-config-items">
+	<h2>Asset config items</h2>
+	<p class="rental-muted">These are the saved asset items. Move-out checks can generate generic evidence tasks from them.</p>
+
+	{
+		items.length ? (
+			<div class="wf1-config-list">
+				{items.map((item) => {
+					const spec = objectValue(item.item_spec);
+					const mediaRefs = Array.isArray(item.media_refs) ? item.media_refs : [];
+
+					return (
+						<article class="wf1-config-item">
+							<div>
+								<strong>{String(item.item_label ?? "Item")}</strong>
+								<span class="rental-muted">{String(item.item_group ?? "No group")}</span>
+							</div>
+							<div class="rental-badges">
+								<span class="rental-badge">{String(item.item_kind ?? "fixture")}</span>
+								<span class="rental-badge">Owner: {String(item.owner_declared_state ?? "working")}</span>
+								<span class="rental-badge">Qty: {String(spec.quantity ?? "1")}</span>
+								{mediaRefs.length ? <span class="rental-badge">Media: {mediaRefs.length}</span> : null}
+							</div>
+						</article>
+					);
+				})}
+			</div>
+		) : (
+			<p class="rental-muted">No asset config items were saved for this asset.</p>
+		)
+	}
+</section>
+
+<style>
+	.wf1-config-panel,
+	.wf1-config-list,
+	.wf1-config-item {
+		display: grid;
+		gap: 12px;
+	}
+
+	.wf1-config-item {
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		background: var(--r-bg);
+		padding: 12px;
+	}
+
+	.wf1-config-item > div:first-child {
+		display: grid;
+		gap: 4px;
+	}
+</style>

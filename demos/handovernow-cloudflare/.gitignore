@@ -9,3 +9,4 @@ playwright-report/
 dist/
 .wrangler/
 uploads/
+docs/generated/

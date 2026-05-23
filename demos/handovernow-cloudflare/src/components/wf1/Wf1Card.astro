@@ -1,0 +1,344 @@
+---
+interface Props {
+	card: Record<string, unknown>;
+	responses?: Array<Record<string, unknown>>;
+}
+
+type MediaAttachment = {
+	mediaId: string;
+	storageKey: string;
+	mimeType: string;
+	filename: string;
+	url: string;
+};
+
+const { card, responses = [] } = Astro.props;
+const cardResponses = responses.filter((response) => response.card_id === card.id);
+const spec = objectValue(card.card_spec);
+const title = String(spec.displayTitle ?? card.card_type ?? "Task card");
+const DIALOG_ID_UNSAFE_PATTERN = /[^a-zA-Z0-9_-]/g;
+
+function parseJsonObject(value: string): Record<string, unknown> {
+	try {
+		const parsed = JSON.parse(value);
+		return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+			? parsed as Record<string, unknown>
+			: {};
+	} catch {
+		return {};
+	}
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+	if (value && typeof value === "object" && !Array.isArray(value)) {
+		return value as Record<string, unknown>;
+	}
+
+	if (typeof value === "string") {
+		return parseJsonObject(value);
+	}
+
+	return {};
+}
+
+function textValue(value: unknown, fallback = ""): string {
+	if (typeof value === "string") return value;
+	if (typeof value === "number" || typeof value === "boolean") return String(value);
+	return fallback;
+}
+
+function mediaUrlFromStorageKey(storageKey: string): string {
+	return `/_emdash/api/media/file/${storageKey
+		.split("/")
+		.map((part) => encodeURIComponent(part))
+		.join("/")}`;
+}
+
+function attachmentValue(value: unknown): MediaAttachment | null {
+	const item = objectValue(value);
+	const mediaId = textValue(item.mediaId);
+	const storageKey = textValue(item.storageKey);
+	const mimeType = textValue(item.mimeType);
+	const filename = textValue(item.filename, "Attached file");
+	const url = textValue(item.url) || (storageKey ? mediaUrlFromStorageKey(storageKey) : "");
+
+	if (!url && !storageKey && !mediaId) {
+		return null;
+	}
+
+	return {
+		mediaId,
+		storageKey,
+		mimeType,
+		filename,
+		url,
+	};
+}
+
+function responseAttachments(response: Record<string, unknown>): MediaAttachment[] {
+	const answer = objectValue(response.answer_value);
+	const raw = Array.isArray(answer.attachments) ? answer.attachments : [];
+
+	return raw
+		.map(attachmentValue)
+		.filter((item): item is MediaAttachment => item !== null);
+}
+
+function answerText(response: Record<string, unknown>): string {
+	const answer = objectValue(response.answer_value);
+	const amount = answer.amount;
+	const reference = answer.reference;
+	const text = answer.text ?? answer.value ?? answer.documentReference ?? response.message;
+
+	if (amount || reference) {
+		return [
+			amount ? `Amount: ${String(amount)}` : "",
+			reference ? `Reference: ${String(reference)}` : "",
+		].filter(Boolean).join(" · ");
+	}
+
+	return textValue(text, "Answered");
+}
+
+function dialogId(response: Record<string, unknown>, index: number): string {
+	const raw = `${String(card.id ?? "card")}-${String(response.id ?? "response")}-${index}`;
+	return `wf1-media-${raw.replace(DIALOG_ID_UNSAFE_PATTERN, "-")}`;
+}
+---
+
+<article class="wf1-card">
+	<div class="wf1-card-head">
+		<strong>{title}</strong>
+		<span class="rental-badge">{String(card.card_state ?? "open")}</span>
+	</div>
+
+	<p>{String(card.prompt ?? "")}</p>
+
+	{
+		cardResponses.length ? (
+			<div class="wf1-responses">
+				{cardResponses.map((response) => {
+					const attachments = responseAttachments(response);
+
+					return (
+						<div class="wf1-response">
+							<p class="rental-muted">{answerText(response)}</p>
+
+							{attachments.length ? (
+								<div class="wf1-attachments" aria-label="Attached media">
+									{attachments.map((attachment, index) => {
+										const id = dialogId(response, index);
+										const isImage = attachment.mimeType.startsWith("image/");
+
+										return (
+											<div class="wf1-attachment">
+												<button
+													class="wf1-attachment-thumb"
+													type="button"
+													data-wf1-dialog-open={id}
+													aria-label={`Open ${attachment.filename}`}
+												>
+													{isImage ? (
+														<img src={attachment.url} alt={attachment.filename} loading="lazy" />
+													) : (
+														<span>{attachment.mimeType.includes("pdf") ? "PDF" : "FILE"}</span>
+													)}
+												</button>
+
+												<div class="wf1-attachment-meta">
+													<strong>{attachment.filename}</strong>
+													<a href={attachment.url} target="_blank" rel="noreferrer">Open file</a>
+												</div>
+
+												<dialog class="wf1-media-dialog" id={id}>
+													<div class="wf1-dialog-head">
+														<strong>{attachment.filename}</strong>
+														<button class="rental-button secondary" type="button" data-wf1-dialog-close={id}>
+															Close
+														</button>
+													</div>
+
+													{isImage ? (
+														<img class="wf1-dialog-image" src={attachment.url} alt={attachment.filename} />
+													) : (
+														<div class="wf1-dialog-file">
+															<p class="rental-muted">
+																This attachment is not an inline image. Open it in a new tab.
+															</p>
+															<a class="rental-button" href={attachment.url} target="_blank" rel="noreferrer">
+																Open attachment
+															</a>
+														</div>
+													)}
+												</dialog>
+											</div>
+										);
+									})}
+								</div>
+							) : null}
+						</div>
+					);
+				})}
+			</div>
+		) : null
+	}
+</article>
+
+<script>
+	for (const opener of document.querySelectorAll<HTMLButtonElement>("[data-wf1-dialog-open]")) {
+		opener.addEventListener("click", () => {
+			const id = opener.dataset.wf1DialogOpen;
+			const dialog = id ? document.getElementById(id) : null;
+
+			if (dialog instanceof HTMLDialogElement) {
+				dialog.showModal();
+			}
+		});
+	}
+
+	for (const closer of document.querySelectorAll<HTMLButtonElement>("[data-wf1-dialog-close]")) {
+		closer.addEventListener("click", () => {
+			const id = closer.dataset.wf1DialogClose;
+			const dialog = id ? document.getElementById(id) : null;
+
+			if (dialog instanceof HTMLDialogElement) {
+				dialog.close();
+			}
+		});
+	}
+
+	for (const dialog of document.querySelectorAll<HTMLDialogElement>(".wf1-media-dialog")) {
+		dialog.addEventListener("click", (event) => {
+			if (event.target === dialog) {
+				dialog.close();
+			}
+		});
+	}
+</script>
+
+<style>
+	.wf1-card {
+		display: grid;
+		gap: 8px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 14px;
+		background: var(--r-bg);
+	}
+
+	.wf1-card-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+
+	.wf1-responses {
+		display: grid;
+		gap: 12px;
+	}
+
+	.wf1-response {
+		display: grid;
+		gap: 10px;
+	}
+
+	.wf1-attachments {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+		gap: 12px;
+	}
+
+	.wf1-attachment {
+		display: grid;
+		grid-template-columns: 84px minmax(0, 1fr);
+		gap: 10px;
+		align-items: center;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		background: var(--r-panel);
+		padding: 8px;
+	}
+
+	.wf1-attachment-thumb {
+		width: 84px;
+		height: 64px;
+		border: 1px solid var(--r-border);
+		border-radius: 12px;
+		background: var(--r-panel-soft);
+		color: var(--r-muted);
+		font-weight: 900;
+		cursor: pointer;
+		overflow: hidden;
+		padding: 0;
+	}
+
+	.wf1-attachment-thumb img {
+		width: 100%;
+		height: 100%;
+		display: block;
+		object-fit: cover;
+	}
+
+	.wf1-attachment-meta {
+		display: grid;
+		gap: 4px;
+		min-width: 0;
+		font-size: 0.86rem;
+	}
+
+	.wf1-attachment-meta strong {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.wf1-attachment-meta a {
+		color: var(--r-accent);
+		font-weight: 850;
+		text-decoration: none;
+	}
+
+	.wf1-media-dialog {
+		width: min(980px, calc(100vw - 32px));
+		max-height: calc(100vh - 32px);
+		border: 1px solid var(--r-border);
+		border-radius: 20px;
+		background: var(--r-bg);
+		color: var(--r-text);
+		padding: 16px;
+		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+	}
+
+	.wf1-media-dialog::backdrop {
+		background: rgba(0, 0, 0, 0.56);
+	}
+
+	.wf1-dialog-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 14px;
+	}
+
+	.wf1-dialog-image {
+		display: block;
+		width: 100%;
+		max-height: calc(100vh - 150px);
+		object-fit: contain;
+		border-radius: var(--r-radius);
+		background: var(--r-panel-soft);
+	}
+
+	.wf1-dialog-file {
+		display: grid;
+		gap: 16px;
+		place-items: center;
+		min-height: 220px;
+		border: 1px dashed var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 24px;
+		text-align: center;
+	}
+</style>

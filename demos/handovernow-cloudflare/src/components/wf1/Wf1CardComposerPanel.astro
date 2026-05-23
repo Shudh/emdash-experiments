@@ -1,0 +1,310 @@
+---
+import ActionForm from "../rental/ActionForm.astro";
+
+interface Props {
+	availableCardTypes: Array<Record<string, unknown>>;
+	workflowInstanceId: string;
+	workspaceHref: string;
+}
+
+type McqOption = {
+	value: string;
+	label: string;
+};
+
+const { availableCardTypes, workflowInstanceId, workspaceHref } = Astro.props;
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? value as Record<string, unknown>
+		: {};
+}
+
+function uiFor(cardType: Record<string, unknown>) {
+	return objectValue(cardType.ui);
+}
+
+function answerSchemaFor(cardType: Record<string, unknown>) {
+	return objectValue(cardType.answerSchema);
+}
+
+function isCustomMcqTask(cardTypeId: string): boolean {
+	return cardTypeId === "mcq_single" ||
+		cardTypeId === "mcq_single_required_evidence" ||
+		cardTypeId === "mcq_multi" ||
+		cardTypeId === "mcq_multi_required_evidence";
+}
+
+function isRequiredEvidenceTask(cardTypeId: string): boolean {
+	return cardTypeId.includes("required_evidence");
+}
+
+function shortHelpFor(cardTypeId: string, fallback: unknown): string {
+	if (cardTypeId === "info_ack_to_counterparty" || cardTypeId === "info_ack_to_owner") {
+		return "Send plain information. The other side only acknowledges it.";
+	}
+
+	if (cardTypeId === "mcq_single") {
+		return "Ask one question. The other side chooses one answer.";
+	}
+
+	if (cardTypeId === "mcq_single_required_evidence") {
+		return "Ask one question. The other side chooses one answer and attaches evidence.";
+	}
+
+	if (cardTypeId === "mcq_multi") {
+		return "Ask one question. The other side can choose multiple answers.";
+	}
+
+	if (cardTypeId === "mcq_multi_required_evidence") {
+		return "Ask one question. The other side chooses multiple answers and attaches evidence.";
+	}
+
+	if (cardTypeId === "free_text") {
+		return "Ask for a written answer.";
+	}
+
+	if (cardTypeId === "free_text_required_evidence") {
+		return "Ask for a written answer with image/PDF evidence.";
+	}
+
+	return String(fallback ?? "Create a generic task card.");
+}
+
+function promptPlaceholderFor(cardTypeId: string, fallback: unknown): string {
+	if (cardTypeId === "mcq_single" || cardTypeId === "mcq_single_required_evidence") {
+		return "Example: If you do not stay for 11 months, then 6 months rent will be deducted from security deposit. Do you agree?";
+	}
+
+	if (cardTypeId === "mcq_multi" || cardTypeId === "mcq_multi_required_evidence") {
+		return "Example: Which items have you received in working condition?";
+	}
+
+	if (cardTypeId === "info_ack_to_counterparty" || cardTypeId === "info_ack_to_owner") {
+		return "Example: Please note that society move-in timing is 9 AM to 5 PM.";
+	}
+
+	if (cardTypeId === "free_text" || cardTypeId === "free_text_required_evidence") {
+		return "Example: Please confirm your planned move-in date.";
+	}
+
+	return String(fallback ?? "Write the task clearly.");
+}
+
+function mcqOptionsFor(cardType: Record<string, unknown>): McqOption[] {
+	const schema = answerSchemaFor(cardType);
+	const options = Array.isArray(schema.options)
+		? schema.options
+				.filter((option) => option && typeof option === "object")
+				.map((option) => {
+					const row = option as Record<string, unknown>;
+					const value = String(row.value ?? "").trim();
+					const label = String(row.label ?? value).trim();
+
+					return { value, label };
+				})
+				.filter((option) => option.value && option.label)
+		: [];
+
+	const yes = options.find((option) => option.value === "yes") ?? { value: "yes", label: "Yes" };
+	const no = options.find((option) => option.value === "no") ?? { value: "no", label: "No" };
+
+	return [yes, no];
+}
+
+const initialCardTypeId = String(availableCardTypes[0]?.id ?? "");
+---
+
+<section class="rental-panel wf1-panel" data-testid="wf1-card-composer">
+	<div class="wf1-composer-head">
+		<div>
+			<h2>Task cards</h2>
+			<p class="rental-muted">
+				Create one task at a time. Choose the task type, write the question, then send it.
+			</p>
+		</div>
+		{availableCardTypes.length ? (
+			<button class="rental-button" type="button" data-wf1-open-composer>
+				Create new task
+			</button>
+		) : null}
+	</div>
+
+	{availableCardTypes.length ? (
+		<div class="wf1-task-builder" data-wf1-task-builder hidden>
+			<div class="rental-field full">
+				<label for="wf1-task-type">Task type</label>
+				<select id="wf1-task-type" data-wf1-task-type>
+					{availableCardTypes.map((cardType) => {
+						const cardTypeId = String(cardType.id ?? "");
+
+						return (
+							<option value={cardTypeId} selected={cardTypeId === initialCardTypeId}>
+								{String(cardType.label ?? cardTypeId)}
+							</option>
+						);
+					})}
+				</select>
+			</div>
+
+			<div class="wf1-compose-forms">
+				{availableCardTypes.map((cardType) => {
+					const cardTypeId = String(cardType.id ?? "");
+					const ui = uiFor(cardType);
+					const customMcqTask = isCustomMcqTask(cardTypeId);
+					const options = mcqOptionsFor(cardType);
+					const evidenceText = isRequiredEvidenceTask(cardTypeId)
+						? "This task blocks the next stage until the other side answers and attaches image/PDF evidence."
+						: "";
+
+					return (
+						<div
+							class="wf1-compose-form"
+							data-wf1-compose-form={cardTypeId}
+							hidden={cardTypeId !== initialCardTypeId}
+						>
+							<ActionForm
+								title={String(cardType.label ?? cardTypeId)}
+								action="/api/wf1-rental/workflow/cards"
+								submitLabel={String(ui.submitLabel ?? "Create task")}
+								successRedirect={workspaceHref}
+							>
+								<input type="hidden" name="workflowInstanceId" value={workflowInstanceId} />
+								<input type="hidden" name="cardType" value={cardTypeId} />
+
+								<div class="rental-field full">
+									<label for={`prompt-${cardTypeId}`}>{String(ui.promptLabel ?? "Question")}</label>
+									<textarea
+										id={`prompt-${cardTypeId}`}
+										name="prompt"
+										required
+										placeholder={promptPlaceholderFor(cardTypeId, ui.defaultPrompt)}
+									></textarea>
+								</div>
+
+								{customMcqTask ? (
+									<fieldset class="rental-field full wf1-option-editor">
+										<legend>Answer options</legend>
+										<p class="rental-muted">
+											Keep this simple. For agreement questions, use Yes and No.
+										</p>
+
+										{options.map((option, index) => (
+											<div class="wf1-option-row">
+												<input type="hidden" name={`cardSpec.options.${index}.value`} value={option.value} />
+												<label for={`option-${cardTypeId}-${index}`}>Option {index + 1}</label>
+												<input
+													id={`option-${cardTypeId}-${index}`}
+													name={`cardSpec.options.${index}.label`}
+													value={option.label}
+													required
+												/>
+											</div>
+										))}
+									</fieldset>
+								) : null}
+
+								{evidenceText ? <p class="rental-muted wf1-evidence-note">{evidenceText}</p> : null}
+								<p class="rental-muted">{shortHelpFor(cardTypeId, ui.helpText)}</p>
+							</ActionForm>
+						</div>
+					);
+				})}
+			</div>
+		</div>
+	) : (
+		<p class="rental-muted">No card types are available for your role now.</p>
+	)}
+</section>
+
+<script>
+	const builder = document.querySelector<HTMLElement>("[data-wf1-task-builder]");
+	const openButton = document.querySelector<HTMLButtonElement>("[data-wf1-open-composer]");
+	const taskType = document.querySelector<HTMLSelectElement>("[data-wf1-task-type]");
+	const forms = [...document.querySelectorAll<HTMLElement>("[data-wf1-compose-form]")];
+
+	function showSelectedComposer() {
+		const selected = taskType?.value ?? "";
+
+		for (const form of forms) {
+			form.hidden = form.dataset.wf1ComposeForm !== selected;
+		}
+	}
+
+	openButton?.addEventListener("click", () => {
+		if (!builder) return;
+
+		builder.hidden = false;
+		openButton.hidden = true;
+		showSelectedComposer();
+		taskType?.focus();
+	});
+
+	taskType?.addEventListener("change", showSelectedComposer);
+	showSelectedComposer();
+</script>
+
+<style>
+	.wf1-panel {
+		display: grid;
+		gap: 14px;
+	}
+
+	.wf1-composer-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: start;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.wf1-task-builder,
+	.wf1-compose-forms,
+	.wf1-compose-form {
+		display: grid;
+		gap: 14px;
+	}
+
+	.wf1-option-editor {
+		display: grid;
+		gap: 10px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 12px;
+	}
+
+	.wf1-option-editor legend {
+		color: var(--r-text);
+		font-size: 0.94rem;
+		font-weight: 850;
+		padding: 0 6px;
+	}
+
+	.wf1-option-row {
+		display: grid;
+		gap: 6px;
+	}
+
+	.wf1-option-row label {
+		color: var(--r-muted);
+		font-size: 0.84rem;
+		font-weight: 800;
+	}
+
+	.wf1-evidence-note {
+		padding: 10px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		background: var(--r-panel-soft);
+	}
+
+	@media (max-width: 760px) {
+		.wf1-composer-head {
+			display: grid;
+		}
+
+		.wf1-composer-head .rental-button {
+			width: 100%;
+		}
+	}
+</style>

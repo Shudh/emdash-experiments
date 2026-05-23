@@ -1,0 +1,37 @@
+---
+interface Props {
+	events: Array<Record<string, unknown>>;
+}
+
+const { events } = Astro.props;
+---
+
+<section class="rental-panel wf1-timeline" data-testid="wf1-timeline">
+	<h2>Timeline / Events</h2>
+	{events.length ? (
+		<ol>
+			{events.map((event) => (
+				<li>
+					<strong>{String(event.event_kind ?? "event")}</strong>
+					<span>{String(event.created_at ?? "")}</span>
+					<span>{String(event.from_workflow_state ?? "")} → {String(event.to_workflow_state ?? "")}</span>
+				</li>
+			))}
+		</ol>
+	) : <p class="rental-muted">No events yet.</p>}
+</section>
+
+<style>
+	.wf1-timeline,
+	.wf1-timeline ol {
+		display: grid;
+		gap: 10px;
+	}
+
+	.wf1-timeline li {
+		display: grid;
+		gap: 3px;
+		border-bottom: 1px solid var(--r-border);
+		padding-block: 8px;
+	}
+</style>

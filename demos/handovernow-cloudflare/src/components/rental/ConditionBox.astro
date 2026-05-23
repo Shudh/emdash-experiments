@@ -1,0 +1,173 @@
+---
+interface Props {
+	conditions?: {
+		version?: unknown;
+		hash?: unknown;
+		spec?: Record<string, unknown> | null;
+	} | null;
+}
+
+const { conditions } = Astro.props;
+const spec = conditions?.spec && typeof conditions.spec === "object" ? conditions.spec : {};
+const CAMEL_BOUNDARY_PATTERN = /([a-z])([A-Z])/g;
+const documentsValue =
+	"documentsRequired" in spec ? spec.documentsRequired : "documents_required" in spec ? spec.documents_required : [];
+const documentRows = Array.isArray(documentsValue) ? documentsValue : [];
+const conditionRows = Object.entries(spec).filter(
+	([key]) => key !== "documentsRequired" && key !== "documents_required",
+);
+
+function labelFor(key: string) {
+	return key.replaceAll("_", " ").replaceAll(CAMEL_BOUNDARY_PATTERN, "$1 $2");
+}
+
+function documentKey(document: unknown, index: number) {
+	if (document && typeof document === "object") {
+		return String((document as Record<string, unknown>).key ?? (document as Record<string, unknown>).label ?? index);
+	}
+	return String(document);
+}
+
+function documentLabel(document: unknown) {
+	if (document && typeof document === "object") {
+		const entry = document as Record<string, unknown>;
+		return String(entry.label ?? entry.key ?? "Document");
+	}
+	return labelFor(String(document));
+}
+
+function documentMeta(document: unknown) {
+	if (!document || typeof document !== "object") return [];
+	const entry = document as Record<string, unknown>;
+	return [
+		entry.required === false ? "optional" : "required",
+		entry.attachmentRequired || entry.attachment_required ? "attachment required" : "free text accepted",
+		entry.acceptedFileTypes ? `accepted: ${String(entry.acceptedFileTypes)}` : "",
+	].filter(Boolean);
+}
+
+function documentDescription(document: unknown) {
+	if (!document || typeof document !== "object") return "";
+	const description = (document as Record<string, unknown>).description;
+	return typeof description === "string" ? description : "";
+}
+---
+
+<section class="condition-box rental-panel">
+	<div class="condition-head">
+		<div>
+			<p class="rental-kicker">Owner conditions</p>
+			<h2>Current terms to accept</h2>
+		</div>
+		<span class="rental-badge">v{String(conditions?.version ?? "0")}</span>
+	</div>
+	{
+		conditionRows.length || documentRows.length ? (
+			<div class="condition-body">
+				{conditionRows.length ? (
+					<ul>
+				{conditionRows.map(([key, value]) => (
+					<li>
+						<strong>{labelFor(key)}:</strong>{" "}
+						<span>{Array.isArray(value) ? value.join(", ") : String(value)}</span>
+					</li>
+				))}
+					</ul>
+				) : null}
+				{documentRows.length ? (
+					<div class="documents-list" aria-label="Document requirements">
+						{documentRows.map((document, index) => (
+							<article class="document-row">
+									<div>
+										<strong>{documentLabel(document)}</strong>
+										{documentDescription(document) ? (
+											<p>{documentDescription(document)}</p>
+										) : null}
+									</div>
+								<div class="rental-badges">
+									{documentMeta(document).map((meta) => (
+										<span class="rental-badge">{meta}</span>
+									))}
+									<span class="rental-badge">{documentKey(document, index)}</span>
+								</div>
+							</article>
+						))}
+					</div>
+				) : null}
+			</div>
+		) : (
+			<p class="rental-muted">No owner conditions have been added.</p>
+		)
+	}
+	{conditions?.hash && <p class="condition-hash">Hash {String(conditions.hash)}</p>}
+</section>
+
+<style>
+	.condition-box {
+		display: grid;
+		gap: 16px;
+	}
+
+	.condition-head {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	.condition-box h2 {
+		font-size: 1.2rem;
+	}
+
+	.condition-box ul {
+		display: grid;
+		gap: 10px;
+		margin: 0;
+		padding-left: 18px;
+	}
+
+	.condition-box strong {
+		text-transform: capitalize;
+	}
+
+	.condition-hash {
+		margin: 0;
+		color: var(--r-muted);
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.78rem;
+		overflow-wrap: anywhere;
+	}
+
+	.condition-body {
+		display: grid;
+		gap: 14px;
+	}
+
+	.documents-list {
+		display: grid;
+		gap: 10px;
+	}
+
+	.document-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 12px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 12px;
+		background: var(--r-bg);
+	}
+
+	.document-row p {
+		margin: 4px 0 0;
+		color: var(--r-muted);
+	}
+
+	@media (max-width: 640px) {
+		.condition-head,
+		.document-row {
+			grid-template-columns: 1fr;
+			display: grid;
+		}
+	}
+</style>
