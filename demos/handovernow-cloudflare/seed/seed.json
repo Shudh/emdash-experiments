@@ -6,12 +6,10 @@
 		"description": "A blog with posts and pages",
 		"author": "EmDash"
 	},
-
 	"settings": {
 		"title": "My Blog",
 		"tagline": "Thoughts on building for the web"
 	},
-
 	"collections": [
 		{
 			"slug": "posts",
@@ -65,9 +63,701 @@
 					"searchable": true
 				}
 			]
+		},
+		{
+			"slug": "wf_assets",
+			"label": "WF1 Assets",
+			"labelSingular": "WF1 Asset",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "title",
+					"label": "Title",
+					"type": "string"
+				},
+				{
+					"slug": "asset_kind",
+					"label": "Asset Kind",
+					"type": "string"
+				},
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User Id",
+					"type": "string"
+				},
+				{
+					"slug": "business_state",
+					"label": "Business State",
+					"type": "string"
+				},
+				{
+					"slug": "visibility_state",
+					"label": "Visibility State",
+					"type": "string"
+				},
+				{
+					"slug": "public_price",
+					"label": "Public Price",
+					"type": "number"
+				},
+				{
+					"slug": "currency",
+					"label": "Currency",
+					"type": "string"
+				},
+				{
+					"slug": "location_label",
+					"label": "Location Label",
+					"type": "string"
+				},
+				{
+					"slug": "minimum_months",
+					"label": "Minimum Months",
+					"type": "number"
+				},
+				{
+					"slug": "active_interest_id",
+					"label": "Active Interest Id",
+					"type": "string"
+				},
+				{
+					"slug": "active_workflow_instance_id",
+					"label": "Active Workflow Instance Id",
+					"type": "string"
+				},
+				{
+					"slug": "active_renter_user_id",
+					"label": "Active Renter User Id",
+					"type": "string"
+				},
+				{
+					"slug": "config_spec",
+					"label": "Config Spec",
+					"type": "json"
+				},
+				{
+					"slug": "condition_spec",
+					"label": "Condition Spec",
+					"type": "json"
+				},
+				{
+					"slug": "config_version",
+					"label": "Config Version",
+					"type": "integer"
+				},
+				{
+					"slug": "owner_conditions_spec",
+					"label": "Owner Conditions Spec",
+					"type": "json"
+				},
+				{
+					"slug": "conditions_version",
+					"label": "Conditions Version",
+					"type": "integer"
+				},
+				{
+					"slug": "conditions_hash",
+					"label": "Conditions Hash",
+					"type": "string"
+				}
+			]
+		},
+		{
+			"slug": "wf_asset_config_items",
+			"label": "WF1 Asset Config Items",
+			"labelSingular": "WF1 Asset Config Item",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset Id",
+					"type": "string"
+				},
+				{
+					"slug": "item_kind",
+					"label": "Item Kind",
+					"type": "string"
+				},
+				{
+					"slug": "item_group",
+					"label": "Item Group",
+					"type": "string"
+				},
+				{
+					"slug": "item_label",
+					"label": "Item Label",
+					"type": "string"
+				},
+				{
+					"slug": "item_state",
+					"label": "Item State",
+					"type": "string"
+				},
+				{
+					"slug": "owner_declared_state",
+					"label": "Owner Declared State",
+					"type": "string"
+				},
+				{
+					"slug": "item_spec",
+					"label": "Item Spec",
+					"type": "json"
+				},
+				{
+					"slug": "media_refs",
+					"label": "Media Refs",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "wf_asset_interests",
+			"label": "WF1 Asset Interests",
+			"labelSingular": "WF1 Asset Interest",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset Id",
+					"type": "string"
+				},
+				{
+					"slug": "asset_title",
+					"label": "Asset Title",
+					"type": "string"
+				},
+				{
+					"slug": "asset_slug",
+					"label": "Asset Slug",
+					"type": "string"
+				},
+				{
+					"slug": "asset_kind",
+					"label": "Asset Kind",
+					"type": "string"
+				},
+				{
+					"slug": "asset_location_label",
+					"label": "Asset Location Label",
+					"type": "string"
+				},
+				{
+					"slug": "asset_public_price",
+					"label": "Asset Public Price",
+					"type": "number"
+				},
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User Id",
+					"type": "string"
+				},
+				{
+					"slug": "interested_user_id",
+					"label": "Interested User Id",
+					"type": "string"
+				},
+				{
+					"slug": "workflow_instance_id",
+					"label": "Workflow Instance Id",
+					"type": "string"
+				},
+				{
+					"slug": "interest_state",
+					"label": "Interest State",
+					"type": "string"
+				},
+				{
+					"slug": "name",
+					"label": "Name",
+					"type": "string"
+				},
+				{
+					"slug": "official_email",
+					"label": "Official Email",
+					"type": "string"
+				},
+				{
+					"slug": "phone",
+					"label": "Phone",
+					"type": "string"
+				},
+				{
+					"slug": "employer_name",
+					"label": "Employer Name",
+					"type": "string"
+				},
+				{
+					"slug": "offered_price",
+					"label": "Offered Price",
+					"type": "number"
+				},
+				{
+					"slug": "requested_start_date",
+					"label": "Requested Start Date",
+					"type": "string"
+				},
+				{
+					"slug": "requested_minimum_months",
+					"label": "Requested Minimum Months",
+					"type": "number"
+				},
+				{
+					"slug": "message",
+					"label": "Message",
+					"type": "text"
+				},
+				{
+					"slug": "interest_spec",
+					"label": "Interest Spec",
+					"type": "json"
+				},
+				{
+					"slug": "accepted_conditions_version",
+					"label": "Accepted Conditions Version",
+					"type": "integer"
+				},
+				{
+					"slug": "accepted_conditions_hash",
+					"label": "Accepted Conditions Hash",
+					"type": "string"
+				},
+				{
+					"slug": "accepted_conditions_at",
+					"label": "Accepted Conditions At",
+					"type": "string"
+				},
+				{
+					"slug": "accepted_conditions_snapshot",
+					"label": "Accepted Conditions Snapshot",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "wf_workflow_definitions",
+			"label": "WF1 Workflow Definitions",
+			"labelSingular": "WF1 Workflow Definition",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "definition_id",
+					"label": "Definition Id",
+					"type": "string"
+				},
+				{
+					"slug": "definition_version",
+					"label": "Definition Version",
+					"type": "integer"
+				},
+				{
+					"slug": "scope_kind",
+					"label": "Scope Kind",
+					"type": "string"
+				},
+				{
+					"slug": "definition_spec",
+					"label": "Definition Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "wf_workflow_instances",
+			"label": "WF1 Workflow Instances",
+			"labelSingular": "WF1 Workflow Instance",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "definition_id",
+					"label": "Definition Id",
+					"type": "string"
+				},
+				{
+					"slug": "definition_version",
+					"label": "Definition Version",
+					"type": "integer"
+				},
+				{
+					"slug": "scope_kind",
+					"label": "Scope Kind",
+					"type": "string"
+				},
+				{
+					"slug": "asset_id",
+					"label": "Asset Id",
+					"type": "string"
+				},
+				{
+					"slug": "interest_id",
+					"label": "Interest Id",
+					"type": "string"
+				},
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User Id",
+					"type": "string"
+				},
+				{
+					"slug": "applicant_user_id",
+					"label": "Applicant User Id",
+					"type": "string"
+				},
+				{
+					"slug": "workflow_state",
+					"label": "Workflow State",
+					"type": "string"
+				},
+				{
+					"slug": "instance_spec",
+					"label": "Instance Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "wf_workflow_cards",
+			"label": "WF1 Workflow Cards",
+			"labelSingular": "WF1 Workflow Card",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "workflow_instance_id",
+					"label": "Workflow Instance Id",
+					"type": "string"
+				},
+				{
+					"slug": "asset_id",
+					"label": "Asset Id",
+					"type": "string"
+				},
+				{
+					"slug": "interest_id",
+					"label": "Interest Id",
+					"type": "string"
+				},
+				{
+					"slug": "card_type",
+					"label": "Card Type",
+					"type": "string"
+				},
+				{
+					"slug": "card_state",
+					"label": "Card State",
+					"type": "string"
+				},
+				{
+					"slug": "created_by_user_id",
+					"label": "Created By User Id",
+					"type": "string"
+				},
+				{
+					"slug": "created_by_role",
+					"label": "Created By Role",
+					"type": "string"
+				},
+				{
+					"slug": "prompt",
+					"label": "Prompt",
+					"type": "text"
+				},
+				{
+					"slug": "answer_schema",
+					"label": "Answer Schema",
+					"type": "json"
+				},
+				{
+					"slug": "evidence_policy",
+					"label": "Evidence Policy",
+					"type": "json"
+				},
+				{
+					"slug": "decision_policy",
+					"label": "Decision Policy",
+					"type": "json"
+				},
+				{
+					"slug": "card_spec",
+					"label": "Card Spec",
+					"type": "json"
+				},
+				{
+					"slug": "decided_at",
+					"label": "Decided At",
+					"type": "string"
+				},
+				{
+					"slug": "decision",
+					"label": "Decision",
+					"type": "string"
+				}
+			]
+		},
+		{
+			"slug": "wf_workflow_card_responses",
+			"label": "WF1 Workflow Card Responses",
+			"labelSingular": "WF1 Workflow Card Response",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "workflow_instance_id",
+					"label": "Workflow Instance Id",
+					"type": "string"
+				},
+				{
+					"slug": "card_id",
+					"label": "Card Id",
+					"type": "string"
+				},
+				{
+					"slug": "asset_id",
+					"label": "Asset Id",
+					"type": "string"
+				},
+				{
+					"slug": "interest_id",
+					"label": "Interest Id",
+					"type": "string"
+				},
+				{
+					"slug": "responded_by_user_id",
+					"label": "Responded By User Id",
+					"type": "string"
+				},
+				{
+					"slug": "responded_by_role",
+					"label": "Responded By Role",
+					"type": "string"
+				},
+				{
+					"slug": "answer_value",
+					"label": "Answer Value",
+					"type": "json"
+				},
+				{
+					"slug": "message",
+					"label": "Message",
+					"type": "text"
+				}
+			]
+		},
+		{
+			"slug": "wf_tenant_documents",
+			"label": "WF1 Tenant Documents",
+			"labelSingular": "WF1 Tenant Document",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User Id",
+					"type": "string"
+				},
+				{
+					"slug": "document_kind",
+					"label": "Document Kind",
+					"type": "string"
+				},
+				{
+					"slug": "document_label",
+					"label": "Document Label",
+					"type": "string"
+				},
+				{
+					"slug": "storage_key",
+					"label": "Storage Key",
+					"type": "string"
+				},
+				{
+					"slug": "mime_type",
+					"label": "Mime Type",
+					"type": "string"
+				},
+				{
+					"slug": "document_spec",
+					"label": "Document Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "wf_evidence_attachments",
+			"label": "WF1 Evidence Attachments",
+			"labelSingular": "WF1 Evidence Attachment",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "tenant_document_id",
+					"label": "Tenant Document Id",
+					"type": "string"
+				},
+				{
+					"slug": "asset_id",
+					"label": "Asset Id",
+					"type": "string"
+				},
+				{
+					"slug": "interest_id",
+					"label": "Interest Id",
+					"type": "string"
+				},
+				{
+					"slug": "workflow_instance_id",
+					"label": "Workflow Instance Id",
+					"type": "string"
+				},
+				{
+					"slug": "card_id",
+					"label": "Card Id",
+					"type": "string"
+				},
+				{
+					"slug": "response_id",
+					"label": "Response Id",
+					"type": "string"
+				},
+				{
+					"slug": "owner_user_id",
+					"label": "Owner User Id",
+					"type": "string"
+				},
+				{
+					"slug": "applicant_user_id",
+					"label": "Applicant User Id",
+					"type": "string"
+				},
+				{
+					"slug": "document_kind",
+					"label": "Document Kind",
+					"type": "string"
+				},
+				{
+					"slug": "storage_key",
+					"label": "Storage Key",
+					"type": "string"
+				},
+				{
+					"slug": "mime_type",
+					"label": "Mime Type",
+					"type": "string"
+				},
+				{
+					"slug": "attachment_label",
+					"label": "Attachment Label",
+					"type": "string"
+				},
+				{
+					"slug": "attachment_spec",
+					"label": "Attachment Spec",
+					"type": "json"
+				}
+			]
+		},
+		{
+			"slug": "wf_asset_access",
+			"label": "WF1 Asset Access",
+			"labelSingular": "WF1 Asset Access Row",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset Id",
+					"type": "string"
+				},
+				{
+					"slug": "user_id",
+					"label": "User Id",
+					"type": "string"
+				},
+				{
+					"slug": "access_role",
+					"label": "Access Role",
+					"type": "string"
+				},
+				{
+					"slug": "access_state",
+					"label": "Access State",
+					"type": "string"
+				},
+				{
+					"slug": "granted_at",
+					"label": "Granted At",
+					"type": "string"
+				},
+				{
+					"slug": "revoked_at",
+					"label": "Revoked At",
+					"type": "string"
+				}
+			]
+		},
+		{
+			"slug": "wf_asset_events",
+			"label": "WF1 Asset Events",
+			"labelSingular": "WF1 Asset Event",
+			"supports": [],
+			"fields": [
+				{
+					"slug": "asset_id",
+					"label": "Asset Id",
+					"type": "string"
+				},
+				{
+					"slug": "interest_id",
+					"label": "Interest Id",
+					"type": "string"
+				},
+				{
+					"slug": "workflow_instance_id",
+					"label": "Workflow Instance Id",
+					"type": "string"
+				},
+				{
+					"slug": "card_id",
+					"label": "Card Id",
+					"type": "string"
+				},
+				{
+					"slug": "event_kind",
+					"label": "Event Kind",
+					"type": "string"
+				},
+				{
+					"slug": "actor_user_id",
+					"label": "Actor User Id",
+					"type": "string"
+				},
+				{
+					"slug": "actor_role",
+					"label": "Actor Role",
+					"type": "string"
+				},
+				{
+					"slug": "from_workflow_state",
+					"label": "From Workflow State",
+					"type": "string"
+				},
+				{
+					"slug": "to_workflow_state",
+					"label": "To Workflow State",
+					"type": "string"
+				},
+				{
+					"slug": "from_asset_state",
+					"label": "From Asset State",
+					"type": "string"
+				},
+				{
+					"slug": "to_asset_state",
+					"label": "To Asset State",
+					"type": "string"
+				},
+				{
+					"slug": "event_spec",
+					"label": "Event Spec",
+					"type": "json"
+				}
+			]
 		}
 	],
-
 	"taxonomies": [
 		{
 			"name": "category",
@@ -76,9 +766,18 @@
 			"hierarchical": true,
 			"collections": ["posts"],
 			"terms": [
-				{ "slug": "development", "label": "Development" },
-				{ "slug": "design", "label": "Design" },
-				{ "slug": "notes", "label": "Notes" }
+				{
+					"slug": "development",
+					"label": "Development"
+				},
+				{
+					"slug": "design",
+					"label": "Design"
+				},
+				{
+					"slug": "notes",
+					"label": "Notes"
+				}
 			]
 		},
 		{
@@ -88,14 +787,25 @@
 			"hierarchical": false,
 			"collections": ["posts"],
 			"terms": [
-				{ "slug": "webdev", "label": "Web Development" },
-				{ "slug": "opinion", "label": "Opinion" },
-				{ "slug": "tools", "label": "Tools" },
-				{ "slug": "creativity", "label": "Creativity" }
+				{
+					"slug": "webdev",
+					"label": "Web Development"
+				},
+				{
+					"slug": "opinion",
+					"label": "Opinion"
+				},
+				{
+					"slug": "tools",
+					"label": "Tools"
+				},
+				{
+					"slug": "creativity",
+					"label": "Creativity"
+				}
 			]
 		}
 	],
-
 	"bylines": [
 		{
 			"id": "byline-editorial",
@@ -109,19 +819,29 @@
 			"isGuest": true
 		}
 	],
-
 	"menus": [
 		{
 			"name": "primary",
 			"label": "Primary Navigation",
 			"items": [
-				{ "type": "custom", "label": "Home", "url": "/" },
-				{ "type": "custom", "label": "About", "url": "/pages/about" },
-				{ "type": "custom", "label": "Posts", "url": "/posts" }
+				{
+					"type": "custom",
+					"label": "Home",
+					"url": "/"
+				},
+				{
+					"type": "custom",
+					"label": "About",
+					"url": "/pages/about"
+				},
+				{
+					"type": "custom",
+					"label": "Posts",
+					"url": "/posts"
+				}
 			]
 		}
 	],
-
 	"widgetAreas": [
 		{
 			"name": "sidebar",
@@ -187,7 +907,6 @@
 			]
 		}
 	],
-
 	"sections": [
 		{
 			"slug": "newsletter-signup",
@@ -199,7 +918,12 @@
 				{
 					"_type": "block",
 					"style": "h3",
-					"children": [{ "_type": "span", "text": "Stay in the loop" }]
+					"children": [
+						{
+							"_type": "span",
+							"text": "Stay in the loop"
+						}
+					]
 				},
 				{
 					"_type": "block",
@@ -233,7 +957,6 @@
 			]
 		}
 	],
-
 	"content": {
 		"pages": [
 			{
@@ -306,7 +1029,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "What survives" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "What survives"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -341,8 +1069,13 @@
 					]
 				},
 				"bylines": [
-					{ "byline": "byline-editorial" },
-					{ "byline": "byline-guest", "roleLabel": "Guest essay" }
+					{
+						"byline": "byline-editorial"
+					},
+					{
+						"byline": "byline-guest",
+						"roleLabel": "Guest essay"
+					}
 				],
 				"taxonomies": {
 					"category": ["development"],
@@ -387,7 +1120,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "The performance argument" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "The performance argument"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -411,7 +1149,11 @@
 						}
 					]
 				},
-				"bylines": [{ "byline": "byline-editorial" }],
+				"bylines": [
+					{
+						"byline": "byline-editorial"
+					}
+				],
 				"taxonomies": {
 					"category": ["development"],
 					"tag": ["webdev", "opinion"]
@@ -455,7 +1197,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "The fear of being wrong" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "The fear of being wrong"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -522,7 +1269,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "The Unix philosophy, revisited" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "The Unix philosophy, revisited"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -589,7 +1341,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "Embracing the box" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "Embracing the box"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -656,7 +1413,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "Why side projects matter" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "Why side projects matter"
+								}
+							]
 						},
 						{
 							"_type": "block",
@@ -723,7 +1485,12 @@
 						{
 							"_type": "block",
 							"style": "h2",
-							"children": [{ "_type": "span", "text": "Removing as a feature" }]
+							"children": [
+								{
+									"_type": "span",
+									"text": "Removing as a feature"
+								}
+							]
 						},
 						{
 							"_type": "block",

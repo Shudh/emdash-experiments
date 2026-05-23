@@ -5,15 +5,23 @@
 	"type": "module",
 	"scripts": {
 		"dev": "astro dev",
+		"dev:local-db": "HANDOVERNOW_DB_TARGET=local astro dev",
+		"dev:d1-cloud": "astro dev",
 		"build": "astro build",
+		"build:local-db": "HANDOVERNOW_DB_TARGET=local astro build",
+		"build:d1-cloud": "astro build",
 		"build:all": "pnpm run --filter @handovernow/cms-cloudflare... build",
 		"preview": "astro preview",
 		"deploy": "pnpm build:all && wrangler deploy",
+		"deploy:d1-cloud": "pnpm build:d1-cloud && wrangler deploy",
 		"db:reset:remote": "./scripts/reset-db.sh",
-		"typecheck": "astro check"
+		"typecheck": "astro check",
+		"typecheck:local-db": "HANDOVERNOW_DB_TARGET=local astro check",
+		"typecheck:d1-cloud": "astro check"
 	},
 	"dependencies": {
 		"@astrojs/cloudflare": "catalog:",
+		"@astrojs/node": "catalog:",
 		"@astrojs/react": "catalog:",
 		"@emdash-cms/cloudflare": "workspace:*",
 		"astro": "catalog:",
@@ -24,7 +32,11 @@
 	"devDependencies": {
 		"@astrojs/check": "catalog:",
 		"@cloudflare/workers-types": "catalog:",
+		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "catalog:",
+		"better-sqlite3": "catalog:",
+		"kysely": "^0.27.0",
+		"vitest": "catalog:",
 		"wrangler": "catalog:"
 	},
 	"emdash": {

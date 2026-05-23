@@ -1,0 +1,11 @@
+db/*.db
+db/*.db-shm
+db/*.db-wal
+.local/
+.tmp/
+test-results/
+playwright-report/
+.astro/
+dist/
+.wrangler/
+uploads/

@@ -1,17 +1,24 @@
 // @ts-check
 
 import cloudflare from "@astrojs/cloudflare";
+import node from "@astrojs/node";
 import react from "@astrojs/react";
-import { d1, r2, cloudflareCache } from "@emdash-cms/cloudflare";
 import { defineConfig, fontProviders } from "astro/config";
-import emdash from "emdash/astro";
+import emdash, { local } from "emdash/astro";
+import { sqlite } from "emdash/db";
+
+const dbTarget = process.env.HANDOVERNOW_DB_TARGET ?? "d1";
+const useLocalDb = dbTarget === "local";
+const cloudflareEmDash = useLocalDb ? null : await import("@emdash-cms/cloudflare");
 
 export default defineConfig({
 	output: "server",
 
-	adapter: cloudflare({
-		imageService: "cloudflare",
-	}),
+	adapter: useLocalDb
+		? node({ mode: "standalone" })
+		: cloudflare({
+				imageService: "cloudflare",
+			}),
 
 	i18n: {
 		defaultLocale: "en",
@@ -31,32 +38,41 @@ export default defineConfig({
 		react(),
 
 		emdash({
-			database: d1({
-				binding: "handovernow_cms",
-				session: "auto",
-			}),
+			database: useLocalDb
+				? sqlite({ url: "file:./db/handovernow_cms_local.db" })
+				: cloudflareEmDash.d1({
+						binding: "handovernow_cms",
+						session: "auto",
+					}),
 
-			storage: r2({
-				binding: "handovernow_cms_media",
-			}),
+			storage: useLocalDb
+				? local({
+						directory: "./uploads",
+						baseUrl: "/_emdash/api/media/file",
+					})
+				: cloudflareEmDash.r2({
+						binding: "handovernow_cms_media",
+					}),
 		}),
 	],
 
-	experimental: {
-		cache: {
-			provider: cloudflareCache(),
-		},
-		routeRules: {
-			"/": {
-				maxAge: 3600,
-				swr: 864000,
+	experimental: useLocalDb
+		? {}
+		: {
+				cache: {
+					provider: cloudflareEmDash.cloudflareCache(),
+				},
+				routeRules: {
+					"/": {
+						maxAge: 3600,
+						swr: 864000,
+					},
+					"/[...slug]": {
+						maxAge: 3600,
+						swr: 864000,
+					},
+				},
 			},
-			"/[...slug]": {
-				maxAge: 3600,
-				swr: 864000,
-			},
-		},
-	},
 
 	fonts: [
 		{
