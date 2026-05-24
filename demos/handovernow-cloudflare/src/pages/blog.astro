@@ -1,0 +1,249 @@
+---
+import { getEmDashCollection } from "emdash";
+import { Image } from "emdash/ui";
+import Wf1Base from "../components/wf1/Wf1Base.astro";
+import { getReadingTime } from "../utils/reading-time";
+
+export const prerender = false;
+
+const POSTS_PER_PAGE = 12;
+
+const { entries: posts, cacheHint } = await getEmDashCollection("posts", {
+	orderBy: { published_at: "desc" },
+	limit: POSTS_PER_PAGE,
+});
+
+Astro.cache.set(cacheHint);
+
+function formatDate(date: Date | null | undefined): string {
+	if (!date) return "";
+	return date.toLocaleDateString("en-IN", {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+	});
+}
+---
+
+<Wf1Base
+	title="Rental handover guides"
+	description="Practical guides for owners and tenants on move-in checks, repair costs, deposit deductions, documents, and move-out settlement."
+>
+	<section class="guides-hero">
+		<div class="rental-shell guides-hero-panel">
+			<p class="rental-kicker">Guides</p>
+			<h1>Rental handover guides</h1>
+			<p>
+				Practical writing for Bangalore owners and tenants on move-in checks, repair costs,
+				security deposit deductions, furnished-flat records, documents, and move-out
+				settlement.
+			</p>
+			<div class="guides-actions">
+				<a class="rental-button" href="/">Landing</a>
+				<a class="rental-button secondary" href="/wf1">Home</a>
+				<a class="rental-button secondary" href="/wf1/marketplace">Available flats</a>
+			</div>
+		</div>
+	</section>
+
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">Latest</p>
+					<h2>Latest rental guides</h2>
+				</div>
+				<p class="rental-muted guides-section-copy">
+					Move-in proof, repair expectations, furnished inventory, painting costs, and
+					deposit deductions should be discussed before they become disputes.
+				</p>
+			</div>
+
+			{
+				posts.length === 0 ? (
+					<div class="rental-panel guides-empty">
+						<p class="rental-kicker">No guides yet</p>
+						<h2>Publish the first rental guide from EmDash admin.</h2>
+						<p>
+							Start with a flat handover checklist, deposit dispute guide, or move-in photo
+							record.
+						</p>
+						<a class="rental-button" href="/_emdash/admin/content/posts/new">
+							Create guide
+						</a>
+					</div>
+				) : (
+					<div class="guides-grid">
+						{posts.map((post) => (
+							<article class="rental-panel guide-card">
+								<a href={`/posts/${post.id}`} class="guide-card-link">
+									{
+										post.data.featured_image ? (
+											<div class="guide-card-image">
+												<Image image={post.data.featured_image} />
+											</div>
+										) : (
+											<div class="guide-card-placeholder" />
+										)
+									}
+
+									<div class="guide-card-body">
+										<div class="guide-card-meta">
+											{formatDate(post.data.publishedAt) && (
+												<time>{formatDate(post.data.publishedAt)}</time>
+											)}
+											<span>{getReadingTime(post.data.content)} min read</span>
+										</div>
+										<h2>{post.data.title ?? "Untitled guide"}</h2>
+										{post.data.excerpt && <p>{post.data.excerpt}</p>}
+									</div>
+								</a>
+							</article>
+						))}
+					</div>
+				)
+			}
+		</div>
+	</section>
+
+	<style>
+		.guides-hero {
+			padding: 54px 0 30px;
+		}
+
+		.guides-hero-panel {
+			border: 1px solid var(--r-border);
+			border-radius: 28px;
+			background:
+				radial-gradient(circle at 92% 0%, rgba(234, 88, 12, 0.18), transparent 18rem),
+				linear-gradient(135deg, rgba(255, 250, 243, 0.98), rgba(255, 237, 213, 0.82));
+			box-shadow: var(--r-shadow);
+			padding: clamp(28px, 5vw, 52px);
+		}
+
+		.guides-hero-panel h1 {
+			max-width: 850px;
+			font-size: clamp(3rem, 7vw, 5.8rem);
+			line-height: 0.98;
+			letter-spacing: -0.055em;
+		}
+
+		.guides-hero-panel > p:not(.rental-kicker) {
+			max-width: 760px;
+			color: var(--r-muted);
+			font-size: clamp(1.05rem, 2vw, 1.22rem);
+		}
+
+		.guides-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 12px;
+			margin-top: 24px;
+		}
+
+		.guides-section-copy {
+			max-width: 620px;
+		}
+
+		.guides-empty {
+			display: grid;
+			gap: 12px;
+			max-width: 680px;
+		}
+
+		.guides-empty h2 {
+			font-size: clamp(1.8rem, 4vw, 3rem);
+			letter-spacing: -0.04em;
+		}
+
+		.guides-empty p {
+			color: var(--r-muted);
+		}
+
+		.guides-grid {
+			display: grid;
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: 18px;
+		}
+
+		.guide-card {
+			padding: 0;
+			overflow: hidden;
+		}
+
+		.guide-card-link {
+			display: grid;
+			height: 100%;
+			color: inherit;
+			text-decoration: none;
+		}
+
+		.guide-card-image,
+		.guide-card-placeholder {
+			aspect-ratio: 16 / 10;
+			background: var(--r-panel-soft);
+			overflow: hidden;
+		}
+
+		.guide-card-image img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			transition: transform 220ms ease;
+		}
+
+		.guide-card:hover .guide-card-image img {
+			transform: scale(1.03);
+		}
+
+		.guide-card-body {
+			display: grid;
+			gap: 10px;
+			padding: 18px;
+		}
+
+		.guide-card-meta {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px;
+			color: var(--r-muted);
+			font-size: 0.84rem;
+			font-weight: 750;
+		}
+
+		.guide-card h2 {
+			font-size: 1.25rem;
+			line-height: 1.18;
+			letter-spacing: -0.025em;
+		}
+
+		.guide-card p {
+			margin: 0;
+			color: var(--r-muted);
+		}
+
+		.guide-card:hover h2 {
+			color: var(--r-brand-strong);
+		}
+
+		@media (max-width: 980px) {
+			.guides-grid {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+		}
+
+		@media (max-width: 620px) {
+			.guides-grid {
+				grid-template-columns: 1fr;
+			}
+
+			.guides-hero {
+				padding-top: 28px;
+			}
+
+			.guides-hero-panel {
+				border-radius: 18px;
+			}
+		}
+	</style>
+</Wf1Base>

@@ -1,0 +1,619 @@
+---
+import RentalBase from "../layouts/RentalBase.astro";
+
+export const prerender = false;
+
+const DEFAULT_MARKETPLACE = "/wf1/marketplace";
+const WF1_HOME = "/wf1";
+const WF1_MARKETPLACE = "/wf1/marketplace";
+
+const user = Astro.locals.user as { email?: string | null } | undefined;
+const redirectRaw = Astro.url.searchParams.get("redirect") ?? DEFAULT_MARKETPLACE;
+
+function safeRedirect(value: string): string {
+	const trimmed = value.trim();
+
+	if (!trimmed) return DEFAULT_MARKETPLACE;
+	if (!trimmed.startsWith("/")) return DEFAULT_MARKETPLACE;
+	if (trimmed.startsWith("//")) return DEFAULT_MARKETPLACE;
+	if (trimmed.startsWith("/_emdash")) return DEFAULT_MARKETPLACE;
+	if (trimmed.includes("\\")) return DEFAULT_MARKETPLACE;
+
+	return trimmed;
+}
+
+const redirect = safeRedirect(redirectRaw);
+const isWf1Redirect = redirect === WF1_HOME || redirect.startsWith(`${WF1_HOME}/`);
+const marketplaceHref = isWf1Redirect ? WF1_MARKETPLACE : DEFAULT_MARKETPLACE;
+const loginKicker = isWf1Redirect ? "WF1 login" : "ALM Rentals";
+const loginDescription = isWf1Redirect
+	? "This login was opened from the isolated WF1 workflow route. After login, you return to the WF1 task flow."
+	: "This is the rental-facing account page for owners and tenants. It uses EmDash auth APIs underneath, but it is not the EmDash backend admin login.";
+const isDev = import.meta.env.DEV;
+---
+
+<RentalBase title="Login" description="Rental-facing login for ALM Rentals">
+	{
+		isWf1Redirect ? (
+			<section class="wf1-login-boundary">
+				<div class="rental-shell wf1-login-boundary-inner">
+					<a class="wf1-login-brand" href="/wf1">
+						<span class="wf1-login-mark">WF1</span>
+						<span>
+							<strong>Clean workflow engine login</strong>
+							<small>Orange route family. Continue safely into /wf1.</small>
+						</span>
+					</a>
+					<nav aria-label="WF1 login navigation">
+						<a href="/wf1">Home</a>
+						<a href="/wf1/marketplace">Marketplace</a>
+						<a href={redirect}>Requested page</a>
+					</nav>
+				</div>
+			</section>
+		) : null
+	}
+
+	<section class="rental-section">
+		<div class="rental-shell alm-login-grid">
+			<article class="rental-panel alm-login-hero">
+				<p class="rental-kicker">{loginKicker}</p>
+				<h1>{user?.email ? "You are already logged in." : "Login or register to continue."}</h1>
+				<p class="rental-muted">{loginDescription}</p>
+
+				<div class="alm-login-actions">
+					<a class="rental-button secondary" href={marketplaceHref}>Back to marketplace</a>
+					<a class="rental-button" href={redirect}>Back to requested page</a>
+				</div>
+			</article>
+
+			<article class="rental-panel alm-login-card">
+				<p class="rental-kicker">Passkey login</p>
+				<h2>Use your device passkey</h2>
+				<p class="rental-muted">
+					Use this if your owner or tenant account already has a passkey.
+				</p>
+
+				<form id="alm-passkey-login" class="rental-form-grid" data-redirect={redirect}>
+					<div class="rental-field full">
+						<label for="passkey-email">Email</label>
+						<input
+							id="passkey-email"
+							name="email"
+							type="email"
+							autocomplete="email webauthn"
+							placeholder="you@example.com"
+							required
+						/>
+					</div>
+
+					<div class="rental-field full">
+						<button class="rental-button" type="submit">Login with passkey</button>
+					</div>
+
+					<p id="alm-passkey-status" class="rental-status"></p>
+				</form>
+			</article>
+
+			<article class="rental-panel alm-login-card">
+				<p class="rental-kicker">Magic link</p>
+				<h2>Email me a login link</h2>
+				<p class="rental-muted">
+					If your account exists, EmDash will send a login link. The response is intentionally
+					generic to protect account privacy.
+				</p>
+
+				<form id="alm-magic-link" class="rental-form-grid">
+					<div class="rental-field full">
+						<label for="magic-email">Email</label>
+						<input
+							id="magic-email"
+							name="email"
+							type="email"
+							autocomplete="email"
+							placeholder="you@example.com"
+							required
+						/>
+					</div>
+
+					<div class="rental-field full">
+						<button class="rental-button secondary" type="submit">Send magic link</button>
+					</div>
+
+					<p id="alm-magic-status" class="rental-status"></p>
+				</form>
+			</article>
+
+			<article id="signup-request" class="rental-panel alm-login-card">
+				<p class="rental-kicker">New user</p>
+				<h2>Request signup</h2>
+				<p class="rental-muted">
+					Enter your email to request signup. If your email domain is allowed, you will receive
+					a verification email.
+				</p>
+
+				<form id="alm-signup-request" class="rental-form-grid">
+					<div class="rental-field full">
+						<label for="signup-email">Email</label>
+						<input
+							id="signup-email"
+							name="email"
+							type="email"
+							autocomplete="email"
+							placeholder="you@example.com"
+							required
+						/>
+					</div>
+
+					<div class="rental-field full">
+						<button class="rental-button secondary" type="submit">Request signup</button>
+					</div>
+
+					<p id="alm-signup-status" class="rental-status"></p>
+				</form>
+			</article>
+
+			{
+				isDev ? (
+					<article class="rental-panel alm-login-card alm-dev-card">
+						<p class="rental-kicker">Local sandbox only</p>
+						<h2>Continue as saved Eva/Rakesh user</h2>
+						<p class="rental-muted">
+							This helper appears only in development. It is for the local rental sandbox and must
+							not be used as production authentication.
+						</p>
+
+						<form id="alm-dev-login" class="rental-form-grid" data-redirect={redirect}>
+							<div class="rental-field full">
+								<label for="dev-email">Saved local user email</label>
+								<input
+									id="dev-email"
+									name="email"
+									type="email"
+									autocomplete="email"
+									placeholder="owner_manual_created_1@example.com"
+									required
+								/>
+							</div>
+
+							<div class="rental-field full">
+								<button class="rental-button secondary" type="submit">
+									Continue in local sandbox
+								</button>
+							</div>
+
+							<p id="alm-dev-status" class="rental-status"></p>
+						</form>
+					</article>
+				) : null
+			}
+		</div>
+	</section>
+</RentalBase>
+
+<script is:inline define:vars={{ fallbackRedirect: marketplaceHref }}>
+	function setStatus(element, message, state) {
+		if (!element) return;
+
+		element.textContent = message;
+
+		if (state) {
+			element.setAttribute("data-state", state);
+		} else {
+			element.removeAttribute("data-state");
+		}
+	}
+
+	function setFormDisabled(form, disabled) {
+		const controls = form.querySelectorAll("button, input");
+
+		for (const control of controls) {
+			if (disabled) {
+				control.setAttribute("disabled", "disabled");
+			} else {
+				control.removeAttribute("disabled");
+			}
+		}
+	}
+
+	function base64UrlToBuffer(value) {
+		const padding = "=".repeat((4 - (value.length % 4)) % 4);
+		const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+		const binary = atob(base64);
+		const bytes = new Uint8Array(binary.length);
+
+		for (let index = 0; index < binary.length; index += 1) {
+			bytes[index] = binary.charCodeAt(index);
+		}
+
+		return bytes.buffer;
+	}
+
+	function bufferToBase64Url(buffer) {
+		const bytes = new Uint8Array(buffer);
+		let binary = "";
+
+		for (const byte of bytes) {
+			binary += String.fromCharCode(byte);
+		}
+
+		return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+	}
+
+	function toPublicKeyCredentialRequestOptions(options) {
+		return {
+			...options,
+			challenge: base64UrlToBuffer(options.challenge),
+			allowCredentials: Array.isArray(options.allowCredentials)
+				? options.allowCredentials.map((credential) => ({
+						...credential,
+						id: base64UrlToBuffer(credential.id),
+					}))
+				: undefined,
+		};
+	}
+
+	function serializeAssertionCredential(credential) {
+		const response = credential.response;
+
+		return {
+			id: credential.id,
+			rawId: bufferToBase64Url(credential.rawId),
+			type: credential.type,
+			authenticatorAttachment: credential.authenticatorAttachment || undefined,
+			response: {
+				clientDataJSON: bufferToBase64Url(response.clientDataJSON),
+				authenticatorData: bufferToBase64Url(response.authenticatorData),
+				signature: bufferToBase64Url(response.signature),
+				...(response.userHandle ? { userHandle: bufferToBase64Url(response.userHandle) } : {}),
+			},
+		};
+	}
+
+	async function readApiJson(response, fallbackMessage) {
+		const payload = await response.json().catch(() => ({}));
+
+		if (!response.ok) {
+			throw new Error(payload?.error?.message || fallbackMessage);
+		}
+
+		return payload;
+	}
+
+	const passkeyForm = document.getElementById("alm-passkey-login");
+	const passkeyStatus = document.getElementById("alm-passkey-status");
+
+	passkeyForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+
+		const email = new FormData(passkeyForm).get("email")?.toString().trim();
+		const redirect = passkeyForm.dataset.redirect || fallbackRedirect;
+
+		if (!email) {
+			setStatus(passkeyStatus, "Email is required.", "error");
+			return;
+		}
+
+		if (!window.PublicKeyCredential || !navigator.credentials) {
+			setStatus(passkeyStatus, "This browser does not support passkeys.", "error");
+			return;
+		}
+
+		setFormDisabled(passkeyForm, true);
+		setStatus(passkeyStatus, "Opening passkey prompt…", null);
+
+		try {
+			const optionsResponse = await fetch("/_emdash/api/auth/passkey/options", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"X-EmDash-Request": "1",
+				},
+				body: JSON.stringify({ email }),
+			});
+
+			const optionsJson = await readApiJson(
+				optionsResponse,
+				"Could not start passkey login.",
+			);
+
+			const rawOptions =
+				optionsJson?.data?.options || optionsJson?.options || optionsJson?.data;
+
+			if (!rawOptions?.challenge) {
+				throw new Error("Passkey login options were not returned.");
+			}
+
+			const credential = await navigator.credentials.get({
+				publicKey: toPublicKeyCredentialRequestOptions(rawOptions),
+			});
+
+			if (!credential) {
+				throw new Error("No passkey credential was returned.");
+			}
+
+			setStatus(passkeyStatus, "Verifying passkey…", null);
+
+			const verifyResponse = await fetch("/_emdash/api/auth/passkey/verify", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"X-EmDash-Request": "1",
+				},
+				body: JSON.stringify({
+					credential: serializeAssertionCredential(credential),
+				}),
+			});
+
+			await readApiJson(verifyResponse, "Could not verify passkey login.");
+
+			window.location.assign(redirect);
+		} catch (error) {
+			setStatus(
+				passkeyStatus,
+				error instanceof Error ? error.message : "Passkey login failed.",
+				"error",
+			);
+			setFormDisabled(passkeyForm, false);
+		}
+	});
+
+	const magicForm = document.getElementById("alm-magic-link");
+	const magicStatus = document.getElementById("alm-magic-status");
+
+	magicForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+
+		const email = new FormData(magicForm).get("email")?.toString().trim();
+
+		if (!email) {
+			setStatus(magicStatus, "Email is required.", "error");
+			return;
+		}
+
+		setFormDisabled(magicForm, true);
+		setStatus(magicStatus, "Sending magic link…", null);
+
+		try {
+			const response = await fetch("/_emdash/api/auth/magic-link/send", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"X-EmDash-Request": "1",
+				},
+				body: JSON.stringify({ email }),
+			});
+
+			await readApiJson(response, "Could not send magic link.");
+
+			setStatus(
+				magicStatus,
+				"If an account exists for this email, a magic link has been sent.",
+				"success",
+			);
+		} catch (error) {
+			setStatus(
+				magicStatus,
+				error instanceof Error ? error.message : "Could not send magic link.",
+				"error",
+			);
+			setFormDisabled(magicForm, false);
+		}
+	});
+
+	const signupForm = document.getElementById("alm-signup-request");
+	const signupStatus = document.getElementById("alm-signup-status");
+
+	signupForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+
+		const email = new FormData(signupForm).get("email")?.toString().trim();
+
+		if (!email) {
+			setStatus(signupStatus, "Email is required.", "error");
+			return;
+		}
+
+		setFormDisabled(signupForm, true);
+		setStatus(signupStatus, "Requesting signup…", null);
+
+		try {
+			const response = await fetch("/_emdash/api/auth/signup/request", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"X-EmDash-Request": "1",
+				},
+				body: JSON.stringify({ email }),
+			});
+
+			await readApiJson(response, "Could not request signup.");
+
+			setStatus(
+				signupStatus,
+				"If this email is eligible, a signup verification email has been sent.",
+				"success",
+			);
+		} catch (error) {
+			setStatus(
+				signupStatus,
+				error instanceof Error ? error.message : "Could not request signup.",
+				"error",
+			);
+			setFormDisabled(signupForm, false);
+		}
+	});
+
+	const devForm = document.getElementById("alm-dev-login");
+	const devStatus = document.getElementById("alm-dev-status");
+
+	devForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+
+		const email = new FormData(devForm).get("email")?.toString().trim();
+		const redirect = devForm.dataset.redirect || fallbackRedirect;
+
+		if (!email) {
+			setStatus(devStatus, "Email is required.", "error");
+			return;
+		}
+
+		setFormDisabled(devForm, true);
+		setStatus(devStatus, "Logging in through local sandbox helper…", null);
+
+		try {
+			const response = await fetch("/api/setup/dev-login-as", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"X-EmDash-Request": "1",
+				},
+				body: JSON.stringify({ email }),
+			});
+
+			await readApiJson(response, "Could not login as local sandbox user.");
+
+			window.location.assign(redirect);
+		} catch (error) {
+			setStatus(
+				devStatus,
+				error instanceof Error ? error.message : "Could not login as local sandbox user.",
+				"error",
+			);
+			setFormDisabled(devForm, false);
+		}
+	});
+</script>
+
+<style is:global>
+	.rental-topbar {
+		display: none;
+	}
+</style>
+
+<style>
+	.wf1-login-boundary {
+		border-bottom: 1px solid rgba(194, 65, 12, 0.24);
+		background: linear-gradient(90deg, rgba(234, 88, 12, 0.18), rgba(251, 146, 60, 0.10));
+	}
+
+	.wf1-login-boundary-inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 18px;
+		padding-block: 14px;
+	}
+
+	.wf1-login-brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		color: #9a3412;
+		text-decoration: none;
+	}
+
+	.wf1-login-mark {
+		display: inline-grid;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+		border-radius: 14px;
+		background: #ea580c;
+		color: white;
+		font-weight: 950;
+		letter-spacing: -0.04em;
+	}
+
+	.wf1-login-brand strong,
+	.wf1-login-brand small {
+		display: block;
+	}
+
+	.wf1-login-brand strong {
+		font-size: 1rem;
+		font-weight: 950;
+	}
+
+	.wf1-login-brand small {
+		color: var(--r-muted);
+		font-size: 0.78rem;
+		font-weight: 750;
+	}
+
+	.wf1-login-boundary nav {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 10px;
+	}
+
+	.wf1-login-boundary nav a {
+		border: 1px solid rgba(194, 65, 12, 0.22);
+		border-radius: 999px;
+		padding: 8px 12px;
+		background: var(--r-panel);
+		color: var(--r-text);
+		font-size: 0.88rem;
+		font-weight: 850;
+		line-height: 1;
+		text-decoration: none;
+	}
+
+	.alm-login-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+		gap: 18px;
+		align-items: start;
+	}
+
+	.alm-login-hero,
+	.alm-login-card {
+		display: grid;
+		gap: 16px;
+	}
+
+	.alm-login-hero h1 {
+		font-size: clamp(2rem, 5vw, 4rem);
+	}
+
+	.alm-login-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+
+	.rental-status {
+		margin: 0;
+		color: var(--r-muted);
+		font-weight: 700;
+	}
+
+	.rental-status[data-state="success"] {
+		color: #166534;
+	}
+
+	.rental-status[data-state="error"] {
+		color: #b91c1c;
+	}
+
+	.alm-dev-card {
+		border-style: dashed;
+	}
+
+	@media (max-width: 900px) {
+		.wf1-login-boundary-inner,
+		.alm-login-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.wf1-login-boundary-inner {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+
+		.wf1-login-boundary nav {
+			justify-content: flex-start;
+		}
+	}
+</style>

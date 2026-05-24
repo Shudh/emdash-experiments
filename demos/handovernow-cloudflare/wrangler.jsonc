@@ -15,11 +15,21 @@
 		"not_found_handling": "404-page"
 	},
 	"routes": [
-		{
-			"pattern": "cms.handovernow.com",
-			"zone_name": "handovernow.com",
-			"custom_domain": true
-		}
+	{
+		"pattern": "handovernow.com",
+		"zone_name": "handovernow.com",
+		"custom_domain": true
+	},
+	{
+		"pattern": "www.handovernow.com",
+		"zone_name": "handovernow.com",
+		"custom_domain": true
+	},
+	{
+		"pattern": "cms.handovernow.com",
+		"zone_name": "handovernow.com",
+		"custom_domain": true
+	}
 	],
 	"d1_databases": [
 		{
