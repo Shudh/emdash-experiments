@@ -574,6 +574,48 @@ const isLoggedIn = !!Astro.locals.user;
 					color: white;
 				}
 			}
+			/*
+				HandoverNow visual palette for the EmDash public blog shell.
+
+				This belongs in Base.astro because Base owns:
+				- system/dark/light theme variables
+				- blog/post/page/search/tag/category shared shell
+				- header, search, footer, theme switcher
+			*/
+			:root,
+			:root.light,
+			:root.dark,
+			:root:not(.light) {
+				color-scheme: light;
+
+				--color-bg: #fffaf3;
+				--color-bg-subtle: #fff1df;
+				--color-text: #1b1b18;
+				--color-text-secondary: #6f5f4f;
+				--color-muted: #7b6757;
+				--color-border: #e8d8c6;
+				--color-border-subtle: rgba(232, 216, 198, 0.72);
+				--color-surface: #ffffff;
+				--color-accent: #ea580c;
+				--color-accent-hover: #9a3412;
+				--color-on-accent: #ffffff;
+				--color-accent-ring: rgba(234, 88, 12, 0.22);
+
+				--emdash-search-bg: #ffffff;
+				--emdash-search-text: #1b1b18;
+				--emdash-search-muted: #7b6757;
+				--emdash-search-border: #e8d8c6;
+				--emdash-search-hover: #fff1df;
+				--emdash-search-highlight: #1b1b18;
+			}
+
+			body {
+				background:
+					linear-gradient(180deg, rgba(234, 88, 12, 0.11), transparent 34rem),
+					var(--color-bg);
+				color: var(--color-text);
+			}
+
 		</style>
 
 		<style>
