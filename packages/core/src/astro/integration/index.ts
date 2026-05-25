@@ -183,6 +183,7 @@ export function emdash(config: EmDashConfig = {}): AstroIntegration {
 		marketplace: resolvedConfig.marketplace,
 		experimental: resolvedConfig.experimental,
 		siteUrl: resolvedConfig.siteUrl,
+		allowedOrigins: resolvedConfig.allowedOrigins,
 		trustedProxyHeaders: resolvedConfig.trustedProxyHeaders,
 		maxUploadSize: resolvedConfig.maxUploadSize,
 		admin: resolvedConfig.admin,

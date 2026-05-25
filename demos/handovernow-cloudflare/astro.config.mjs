@@ -38,6 +38,12 @@ export default defineConfig({
 		react(),
 
 		emdash({
+				siteUrl: "https://handovernow.com",
+			allowedOrigins: [
+			"https://www.handovernow.com",
+			"https://cms.handovernow.com",
+		],
+
 			database: useLocalDb
 				? sqlite({ url: "file:./db/handovernow_cms_local.db" })
 				: cloudflareEmDash.d1({
