@@ -257,7 +257,8 @@ export const GET: APIRoute = async ({ params, request, locals, session, redirect
 				// The app does not currently rely on EmDash CMS roles for WF1 workflow permissions,
 				// so new Google users get the existing practical default role: Author.
 				if (provider === "google") {
-					return { allowed: true, role: Role.AUTHOR };
+					return { allowed: true, role: Role.SUBSCRIBER };
+					// return { allowed: true, role: Role.AUTHOR };
 				}
 
 				return null;

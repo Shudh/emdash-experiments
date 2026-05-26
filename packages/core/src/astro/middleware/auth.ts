@@ -53,7 +53,11 @@ declare global {
 // Role level constants (matching @emdash-cms/auth)
 const ROLE_ADMIN = 50;
 const MCP_ENDPOINT_PATH = "/_emdash/api/mcp";
-const DEFAULT_ALM_SUPERADMIN_EMAIL = "dev@emdash.local";
+// const DEFAULT_ALM_SUPERADMIN_EMAIL = "dev@emdash.local";
+const HANDOVERNOW_EMDASH_ADMIN_EMAILS = new Set([
+	"shudh.datta@gmail.com",
+	"aparna.biswas.phil@gmail.com",
+]);
 
 function isUnsafeMethod(method: string): boolean {
 	return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
@@ -86,27 +90,24 @@ function mcpUnauthorizedResponse(
 	);
 }
 
-function almAdminGuardEnabled(): boolean {
-	const env = typeof process !== "undefined" && process.env ? process.env : {};
-	return (
-		env.ALM_ADMIN_SAFETY === "1" ||
-		typeof env.ALM_SUPERADMIN_EMAILS === "string"
-	);
+function canAccessHandoverNowEmDashAdmin(user: User): boolean {
+	const email = user.email?.trim().toLowerCase();
+	return !!email && HANDOVERNOW_EMDASH_ADMIN_EMAILS.has(email);
 }
 
-function almSuperadminEmails(): Set<string> {
-	const env = typeof process !== "undefined" && process.env ? process.env : {};
-	return new Set(
-		[DEFAULT_ALM_SUPERADMIN_EMAIL, ...(env.ALM_SUPERADMIN_EMAILS ?? "").split(",")]
-			.map((email) => email.trim().toLowerCase())
-			.filter(Boolean),
+function handoverNowPrivateEmDashApiRejectedResponse(): Response {
+	return new Response(
+		JSON.stringify({
+			error: {
+				code: "HANDOVERNOW_EMDASH_ADMIN_ONLY",
+				message: "This EmDash admin surface is restricted.",
+			},
+		}),
+		{
+			status: 403,
+			headers: { "Content-Type": "application/json", ...MW_CACHE_HEADERS },
+		},
 	);
-}
-
-function canAccessAlmAdmin(user: User): boolean {
-	if (user.role >= ROLE_ADMIN) return true;
-	const email = user.email?.toLowerCase();
-	return !!email && almSuperadminEmails().has(email);
 }
 
 function almAdminRedirectIfNeeded(
@@ -114,12 +115,20 @@ function almAdminRedirectIfNeeded(
 	user: User,
 	isApiRoute: boolean,
 ): Response | null {
-	if (isApiRoute || !almAdminGuardEnabled()) return null;
-	if (!context.url.pathname.startsWith("/_emdash/admin")) return null;
-	if (canAccessAlmAdmin(user)) return null;
+	const pathname = context.url.pathname;
+	const isAdminUiRoute = pathname.startsWith("/_emdash/admin");
+	const isPrivateEmDashApiRoute =
+		pathname.startsWith("/_emdash/api") && !isPublicEmDashRoute(pathname);
+
+	if (!isAdminUiRoute && !isPrivateEmDashApiRoute) return null;
+	if (canAccessHandoverNowEmDashAdmin(user)) return null;
+
+	if (isApiRoute) {
+		return handoverNowPrivateEmDashApiRejectedResponse();
+	}
+
 	return context.redirect("/");
 }
-
 /**
  * API routes that skip auth — each handles its own access control.
  *
