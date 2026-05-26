@@ -5,6 +5,7 @@ import node from "@astrojs/node";
 import react from "@astrojs/react";
 import { defineConfig, fontProviders } from "astro/config";
 import emdash, { local } from "emdash/astro";
+import { google } from "emdash/auth/providers/google";
 import { sqlite } from "emdash/db";
 
 const dbTarget = process.env.HANDOVERNOW_DB_TARGET ?? "d1";
@@ -38,11 +39,9 @@ export default defineConfig({
 		react(),
 
 		emdash({
-				siteUrl: "https://handovernow.com",
-			allowedOrigins: [
-			"https://www.handovernow.com",
-			"https://cms.handovernow.com",
-		],
+			siteUrl: "https://handovernow.com",
+			allowedOrigins: ["https://www.handovernow.com", "https://cms.handovernow.com"],
+			authProviders: [google()],
 
 			database: useLocalDb
 				? sqlite({ url: "file:./db/handovernow_cms_local.db" })

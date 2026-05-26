@@ -5,7 +5,7 @@
  */
 
 import type { APIRoute } from "astro";
-
+import { env as cloudflareEnv } from "cloudflare:workers";
 export const prerender = false;
 
 import {
@@ -13,6 +13,7 @@ import {
 	OAuthError,
 	Role,
 	type OAuthConsumerConfig,
+	type OAuthState,
 	type RoleLevel,
 } from "@emdash-cms/auth";
 import { createKyselyAdapter } from "@emdash-cms/auth/adapters/kysely";
@@ -23,6 +24,11 @@ import { createOAuthStateStore } from "#auth/oauth-state-store.js";
 import { OptionsRepository } from "#db/repositories/options.js";
 
 type ProviderName = "github" | "google";
+
+type OAuthStateWithPublicRedirect = OAuthState & {
+	redirectTo?: string;
+	errorRedirectBase?: string;
+};
 
 const VALID_PROVIDERS = new Set<string>(["github", "google"]);
 
@@ -36,9 +42,65 @@ function envString(env: Record<string, unknown>, ...keys: string[]): string | un
 		const val = env[key];
 		if (typeof val === "string" && val) return val;
 	}
+
 	return undefined;
 }
 
+function safePublicRedirect(value: string | undefined | null): string | null {
+	if (!value) return null;
+
+	const trimmed = value.trim();
+
+	if (!trimmed) return null;
+	if (!trimmed.startsWith("/")) return null;
+	if (trimmed.startsWith("//")) return null;
+	if (trimmed.startsWith("/_emdash")) return null;
+	if (trimmed.includes("\\")) return null;
+
+	return trimmed;
+}
+
+function readStoredRedirect(state: OAuthState | null): {
+	redirectTo: string | null;
+	errorRedirectBase: string | null;
+} {
+	const publicState = state as OAuthStateWithPublicRedirect | null;
+	const redirectTo = safePublicRedirect(publicState?.redirectTo);
+	const errorRedirectBase =
+		redirectTo && typeof publicState?.errorRedirectBase === "string"
+			? publicState.errorRedirectBase
+			: null;
+
+	return {
+		redirectTo,
+		errorRedirectBase,
+	};
+}
+
+function errorRedirectTarget(redirectTo: string | null, errorRedirectBase: string | null): string {
+	if (redirectTo && errorRedirectBase) {
+		return errorRedirectBase;
+	}
+
+	if (redirectTo) {
+		return `/login?redirect=${encodeURIComponent(redirectTo)}`;
+	}
+
+	return "/_emdash/admin/login";
+}
+
+function appendAuthError(base: string, code: string, message: string): string {
+	const separator = base.includes("?") ? "&" : "?";
+
+	return `${base}${separator}error=${encodeURIComponent(code)}&message=${encodeURIComponent(message)}`;
+}
+
+function getRuntimeEnv(): Record<string, unknown> {
+	return {
+		...(import.meta.env as Record<string, unknown>),
+		...(cloudflareEnv as Record<string, unknown>),
+	};
+}
 /**
  * Get OAuth config from environment variables
  */
@@ -52,6 +114,7 @@ function getOAuthConfig(env: Record<string, unknown>): OAuthConsumerConfig["prov
 		"EMDASH_OAUTH_GITHUB_CLIENT_SECRET",
 		"GITHUB_CLIENT_SECRET",
 	);
+
 	if (githubClientId && githubClientSecret) {
 		providers.github = {
 			clientId: githubClientId,
@@ -66,6 +129,7 @@ function getOAuthConfig(env: Record<string, unknown>): OAuthConsumerConfig["prov
 		"EMDASH_OAUTH_GOOGLE_CLIENT_SECRET",
 		"GOOGLE_CLIENT_SECRET",
 	);
+
 	if (googleClientId && googleClientSecret) {
 		providers.google = {
 			clientId: googleClientId,
@@ -83,13 +147,13 @@ export const GET: APIRoute = async ({ params, request, locals, session, redirect
 	// Validate provider
 	if (!provider || !isValidProvider(provider)) {
 		return redirect(
-			`/_emdash/admin/login?error=invalid_provider&message=${encodeURIComponent("Invalid OAuth provider")}`,
+			appendAuthError("/_emdash/admin/login", "invalid_provider", "Invalid OAuth provider"),
 		);
 	}
 
 	if (!emdash?.db) {
 		return redirect(
-			`/_emdash/admin/login?error=server_error&message=${encodeURIComponent("Database not configured")}`,
+			appendAuthError("/_emdash/admin/login", "server_error", "Database not configured"),
 		);
 	}
 
@@ -99,40 +163,45 @@ export const GET: APIRoute = async ({ params, request, locals, session, redirect
 	const error = url.searchParams.get("error");
 	const errorDescription = url.searchParams.get("error_description");
 
+	const stateStore = createOAuthStateStore(emdash.db);
+	const storedStateForRedirect = state ? await stateStore.get(state) : null;
+	const { redirectTo, errorRedirectBase } = readStoredRedirect(storedStateForRedirect);
+	const finalRedirectTo = redirectTo ?? "/_emdash/admin";
+	const finalErrorRedirectTo = errorRedirectTarget(redirectTo, errorRedirectBase);
+
 	// Handle OAuth errors from provider
 	if (error) {
 		const message = errorDescription || error;
-		return redirect(
-			`/_emdash/admin/login?error=oauth_denied&message=${encodeURIComponent(message)}`,
-		);
+
+		return redirect(appendAuthError(finalErrorRedirectTo, "oauth_denied", message));
 	}
 
 	// Validate required params
 	if (!code || !state) {
 		return redirect(
-			`/_emdash/admin/login?error=invalid_callback&message=${encodeURIComponent("Missing code or state parameter")}`,
+			appendAuthError(finalErrorRedirectTo, "invalid_callback", "Missing code or state parameter"),
 		);
 	}
 
 	try {
-		// Get OAuth providers from environment
-		// eslint-disable-next-line typescript-eslint(no-unsafe-type-assertion) -- locals.runtime is injected by the Cloudflare adapter at runtime; not declared on App.Locals since the adapter is optional
-		const runtimeLocals = locals as unknown as { runtime?: { env?: Record<string, unknown> } };
-		// eslint-disable-next-line typescript-eslint(no-unsafe-type-assertion) -- import.meta.env is typed as ImportMetaEnv but we need Record<string, unknown> for getOAuthConfig
-		const env = runtimeLocals.runtime?.env ?? (import.meta.env as Record<string, unknown>);
-		const providers = getOAuthConfig(env);
+		// Get OAuth providers from runtime environment.
+		// Astro v6 removed Astro.locals.runtime; Cloudflare secrets are read from cloudflare:workers.
+		const providers = getOAuthConfig(getRuntimeEnv());
 
 		if (!providers[provider]) {
 			return redirect(
-				`/_emdash/admin/login?error=provider_not_configured&message=${encodeURIComponent(`OAuth provider ${provider} is not configured`)}`,
+				appendAuthError(
+					finalErrorRedirectTo,
+					"provider_not_configured",
+					`OAuth provider ${provider} is not configured`,
+				),
 			);
 		}
 
 		const adapter = createKyselyAdapter(emdash.db);
-		const stateStore = createOAuthStateStore(emdash.db);
 
 		const config: OAuthConsumerConfig = {
-			baseUrl: `${getPublicOrigin(url, emdash?.config)}/_emdash`,
+			baseUrl: `${getPublicOrigin(url, emdash.config)}/_emdash`,
 			providers,
 			canSelfSignup: async (email: string) => {
 				// During setup: first user becomes admin.
@@ -140,30 +209,18 @@ export const GET: APIRoute = async ({ params, request, locals, session, redirect
 				// a TOCTOU race where concurrent callbacks both see 0 users.
 				const options = new OptionsRepository(emdash.db);
 				const setupComplete = await options.get("emdash:setup_complete");
+
 				if (setupComplete !== true && setupComplete !== "true") {
 					return { allowed: true, role: Role.ADMIN };
 				}
 
-				// Extract domain from email
+				// Extract domain from email.
 				const domain = email.split("@")[1]?.toLowerCase();
+
 				if (!domain) {
 					return null;
 				}
 
-				// Check allowed_domains table for a matching, enabled entry
-				const entry = await emdash.db
-					.selectFrom("allowed_domains")
-					.selectAll()
-					.where("domain", "=", domain)
-					.where("enabled", "=", 1)
-					.executeTakeFirst();
-
-				if (!entry) {
-					return null;
-				}
-
-				// Map the stored role level to the Role enum
-				const roleLevel = entry.default_role;
 				const roleMap: Record<number, RoleLevel> = {
 					50: Role.ADMIN,
 					40: Role.EDITOR,
@@ -171,14 +228,39 @@ export const GET: APIRoute = async ({ params, request, locals, session, redirect
 					20: Role.CONTRIBUTOR,
 					10: Role.SUBSCRIBER,
 				};
-				const role = roleMap[roleLevel] ?? Role.CONTRIBUTOR;
-				if (!roleMap[roleLevel]) {
-					console.warn(
-						`[oauth] Unknown role level ${roleLevel} for domain ${domain}, defaulting to CONTRIBUTOR`,
-					);
+
+				// Check allowed_domains table for a matching, enabled entry.
+				// If a domain policy exists, it remains the source of truth for the user's role.
+				const entry = await emdash.db
+					.selectFrom("allowed_domains")
+					.selectAll()
+					.where("domain", "=", domain)
+					.where("enabled", "=", 1)
+					.executeTakeFirst();
+
+				if (entry) {
+					const roleLevel = entry.default_role;
+					const role = roleMap[roleLevel] ?? Role.CONTRIBUTOR;
+
+					if (!roleMap[roleLevel]) {
+						console.warn(
+							`[oauth] Unknown role level ${roleLevel} for domain ${domain}, defaulting to CONTRIBUTOR`,
+						);
+					}
+
+					return { allowed: true, role };
 				}
 
-				return { allowed: true, role };
+				// HandoverNow no-email launch policy:
+				// Google OAuth is the public self-registration mechanism.
+				// There is no magic-link email, signup verification email, or invite email at this stage.
+				// The app does not currently rely on EmDash CMS roles for WF1 workflow permissions,
+				// so new Google users get the existing practical default role: Author.
+				if (provider === "google") {
+					return { allowed: true, role: Role.AUTHOR };
+				}
+
+				return null;
 			},
 		};
 
@@ -198,8 +280,7 @@ export const GET: APIRoute = async ({ params, request, locals, session, redirect
 			session.set("user", { id: user.id });
 		}
 
-		// Redirect to admin dashboard
-		return redirect("/_emdash/admin");
+		return redirect(finalRedirectTo);
 	} catch (callbackError) {
 		console.error("OAuth callback error:", callbackError);
 
@@ -231,10 +312,7 @@ export const GET: APIRoute = async ({ params, request, locals, session, redirect
 					break;
 			}
 		}
-		// For generic errors, keep the default "Authentication failed" message
 
-		return redirect(
-			`/_emdash/admin/login?error=${errorCode}&message=${encodeURIComponent(message)}`,
-		);
+		return redirect(appendAuthError(finalErrorRedirectTo, errorCode, message));
 	}
 };

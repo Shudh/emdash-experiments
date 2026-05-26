@@ -5,15 +5,25 @@
  */
 
 import type { APIRoute } from "astro";
-
+import { env as cloudflareEnv } from "cloudflare:workers";
 export const prerender = false;
 
-import { createAuthorizationUrl, type OAuthConsumerConfig } from "@emdash-cms/auth";
+import {
+	createAuthorizationUrl,
+	type OAuthConsumerConfig,
+	type OAuthState,
+	type StateStore,
+} from "@emdash-cms/auth";
 
 import { getPublicOrigin } from "#api/public-url.js";
 import { createOAuthStateStore } from "#auth/oauth-state-store.js";
 
 type ProviderName = "github" | "google";
+
+type OAuthStateWithPublicRedirect = OAuthState & {
+	redirectTo?: string;
+	errorRedirectBase?: string;
+};
 
 const VALID_PROVIDERS = new Set<string>(["github", "google"]);
 
@@ -28,6 +38,39 @@ function envString(env: Record<string, unknown>, ...keys: string[]): string | un
 		if (typeof val === "string" && val) return val;
 	}
 	return undefined;
+}
+
+function safePublicRedirect(value: string | null): string | null {
+	if (!value) return null;
+
+	const trimmed = value.trim();
+
+	if (!trimmed) return null;
+	if (!trimmed.startsWith("/")) return null;
+	if (trimmed.startsWith("//")) return null;
+	if (trimmed.startsWith("/_emdash")) return null;
+	if (trimmed.includes("\\")) return null;
+
+	return trimmed;
+}
+
+function publicLoginErrorRedirect(redirectTo: string | null): string | null {
+	if (!redirectTo) return null;
+
+	return `/login?redirect=${encodeURIComponent(redirectTo)}`;
+}
+
+function appendAuthError(base: string, code: string, message: string): string {
+	const separator = base.includes("?") ? "&" : "?";
+
+	return `${base}${separator}error=${encodeURIComponent(code)}&message=${encodeURIComponent(message)}`;
+}
+
+function getRuntimeEnv(): Record<string, unknown> {
+	return {
+		...(import.meta.env as Record<string, unknown>),
+		...(cloudflareEnv as Record<string, unknown>),
+	};
 }
 
 /**
@@ -67,43 +110,72 @@ function getOAuthConfig(env: Record<string, unknown>): OAuthConsumerConfig["prov
 	return providers;
 }
 
+function createPublicRedirectStateStore(
+	baseStateStore: StateStore,
+	redirectTo: string | null,
+	errorRedirectBase: string | null,
+): StateStore {
+	if (!redirectTo || !errorRedirectBase) {
+		return baseStateStore;
+	}
+
+	return {
+		async set(state: string, data: OAuthState): Promise<void> {
+			await baseStateStore.set(state, {
+				...data,
+				redirectTo,
+				errorRedirectBase,
+			} satisfies OAuthStateWithPublicRedirect);
+		},
+
+		async get(state: string): Promise<OAuthState | null> {
+			return baseStateStore.get(state);
+		},
+
+		async delete(state: string): Promise<void> {
+			await baseStateStore.delete(state);
+		},
+	};
+}
+
 export const GET: APIRoute = async ({ params, request, locals, redirect }) => {
 	const { emdash } = locals;
 	const provider = params.provider;
+	const url = new URL(request.url);
+	const redirectTo = safePublicRedirect(url.searchParams.get("redirect"));
+	const publicErrorRedirectBase = publicLoginErrorRedirect(redirectTo);
 
-	// Determine where to redirect errors (setup wizard or login page)
+	// Determine where to redirect errors.
+	// Public login gets public errors; admin/setup keeps upstream admin behavior.
 	const referer = request.headers.get("referer") ?? "";
-	const errorRedirectBase = referer.includes("/setup")
+	const adminErrorRedirectBase = referer.includes("/setup")
 		? "/_emdash/admin/setup"
 		: "/_emdash/admin/login";
+	const errorRedirectBase = publicErrorRedirectBase ?? adminErrorRedirectBase;
 
 	// Validate provider
 	if (!provider || !isValidProvider(provider)) {
 		return redirect(
-			`${errorRedirectBase}?error=invalid_provider&message=${encodeURIComponent("Invalid OAuth provider")}`,
+			appendAuthError(errorRedirectBase, "invalid_provider", "Invalid OAuth provider"),
 		);
 	}
 
 	if (!emdash?.db) {
-		return redirect(
-			`${errorRedirectBase}?error=server_error&message=${encodeURIComponent("Database not configured")}`,
-		);
+		return redirect(appendAuthError(errorRedirectBase, "server_error", "Database not configured"));
 	}
 
 	try {
-		const url = new URL(request.url);
-
-		// Get OAuth providers from environment
-		// Access via locals.runtime for Cloudflare, or import.meta.env for Node
-		// eslint-disable-next-line typescript-eslint(no-unsafe-type-assertion) -- locals.runtime is injected by the Cloudflare adapter at runtime; not declared on App.Locals since the adapter is optional
-		const runtimeLocals = locals as unknown as { runtime?: { env?: Record<string, unknown> } };
-		// eslint-disable-next-line typescript-eslint(no-unsafe-type-assertion) -- import.meta.env is typed as ImportMetaEnv but we need Record<string, unknown> for getOAuthConfig
-		const env = runtimeLocals.runtime?.env ?? (import.meta.env as Record<string, unknown>);
-		const providers = getOAuthConfig(env);
+		// Get OAuth providers from runtime environment.
+		// Astro v6 removed Astro.locals.runtime; Cloudflare secrets are read from cloudflare:workers.
+		const providers = getOAuthConfig(getRuntimeEnv());
 
 		if (!providers[provider]) {
 			return redirect(
-				`${errorRedirectBase}?error=provider_not_configured&message=${encodeURIComponent(`OAuth provider ${provider} is not configured. Set either EMDASH_OAUTH_${provider.toUpperCase()}_CLIENT_ID and EMDASH_OAUTH_${provider.toUpperCase()}_CLIENT_SECRET, or ${provider.toUpperCase()}_CLIENT_ID and ${provider.toUpperCase()}_CLIENT_SECRET.`)}`,
+				appendAuthError(
+					errorRedirectBase,
+					"provider_not_configured",
+					`OAuth provider ${provider} is not configured. Set either EMDASH_OAUTH_${provider.toUpperCase()}_CLIENT_ID and EMDASH_OAUTH_${provider.toUpperCase()}_CLIENT_SECRET, or ${provider.toUpperCase()}_CLIENT_ID and ${provider.toUpperCase()}_CLIENT_SECRET.`,
+				),
 			);
 		}
 
@@ -112,7 +184,12 @@ export const GET: APIRoute = async ({ params, request, locals, redirect }) => {
 			providers,
 		};
 
-		const stateStore = createOAuthStateStore(emdash.db);
+		const baseStateStore = createOAuthStateStore(emdash.db);
+		const stateStore = createPublicRedirectStateStore(
+			baseStateStore,
+			redirectTo,
+			publicErrorRedirectBase,
+		);
 
 		const { url: authUrl } = await createAuthorizationUrl(config, provider, stateStore);
 
@@ -120,7 +197,11 @@ export const GET: APIRoute = async ({ params, request, locals, redirect }) => {
 	} catch (error) {
 		console.error("OAuth initiation error:", error);
 		return redirect(
-			`${errorRedirectBase}?error=oauth_error&message=${encodeURIComponent("Failed to start OAuth flow. Please try again.")}`,
+			appendAuthError(
+				errorRedirectBase,
+				"oauth_error",
+				"Failed to start OAuth flow. Please try again.",
+			),
 		);
 	}
 };

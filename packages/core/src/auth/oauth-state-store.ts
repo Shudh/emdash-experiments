@@ -12,6 +12,11 @@ import type { Database } from "../database/types.js";
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+type OAuthStateWithPublicRedirect = OAuthState & {
+	redirectTo?: string;
+	errorRedirectBase?: string;
+};
+
 export function createOAuthStateStore(db: Kysely<Database>): StateStore {
 	return {
 		async set(state: string, data: OAuthState): Promise<void> {
@@ -78,6 +83,13 @@ export function createOAuthStateStore(db: Kysely<Database>): StateStore {
 				}
 				if ("nonce" in parsed && typeof parsed.nonce === "string") {
 					oauthState.nonce = parsed.nonce;
+				}
+				if ("redirectTo" in parsed && typeof parsed.redirectTo === "string") {
+					oauthState.redirectTo = parsed.redirectTo;
+				}
+
+				if ("errorRedirectBase" in parsed && typeof parsed.errorRedirectBase === "string") {
+					oauthState.errorRedirectBase = parsed.errorRedirectBase;
 				}
 				return oauthState;
 			} catch {

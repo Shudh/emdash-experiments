@@ -23,16 +23,19 @@ function safeRedirect(value: string): string {
 }
 
 const redirect = safeRedirect(redirectRaw);
+const googleLoginHref = `/_emdash/api/auth/oauth/google?redirect=${encodeURIComponent(redirect)}`;
+const oauthErrorCode = Astro.url.searchParams.get("error")?.trim() || null;
+const oauthErrorMessage = Astro.url.searchParams.get("message")?.trim() || null;
 const isWf1Redirect = redirect === WF1_HOME || redirect.startsWith(`${WF1_HOME}/`);
 const marketplaceHref = isWf1Redirect ? WF1_MARKETPLACE : DEFAULT_MARKETPLACE;
-const loginKicker = isWf1Redirect ? "WF1 login" : "ALM Rentals";
+const loginKicker = isWf1Redirect ? "WF1 login" : "HandoverNow login";
 const loginDescription = isWf1Redirect
-	? "This login was opened from the isolated WF1 workflow route. After login, you return to the WF1 task flow."
-	: "This is the rental-facing account page for owners and tenants. It uses EmDash auth APIs underneath, but it is not the EmDash backend admin login.";
+	? "Use Google to login or register. After login, you return to the requested HandoverNow workflow page."
+	: "Use Google to login or register for HandoverNow. No password or email login link is needed.";
 const isDev = import.meta.env.DEV;
 ---
 
-<RentalBase title="Login" description="Rental-facing login for ALM Rentals">
+<RentalBase title="Login" description="Rental-facing login for HandoverNow">
 	{
 		isWf1Redirect ? (
 			<section class="wf1-login-boundary">
@@ -67,11 +70,46 @@ const isDev = import.meta.env.DEV;
 				</div>
 			</article>
 
-			<article class="rental-panel alm-login-card">
-				<p class="rental-kicker">Passkey login</p>
-				<h2>Use your device passkey</h2>
+			{
+				oauthErrorMessage ? (
+					<article class="rental-panel alm-login-card alm-login-error" role="alert">
+						<p class="rental-kicker">Login needs attention</p>
+						<h2>Google login could not continue</h2>
+						<p>
+							{oauthErrorCode === "signup_not_allowed"
+								? "This Google account could not be enabled automatically. Please contact the manager."
+								: oauthErrorMessage}
+						</p>
+					</article>
+				) : null
+			}
+
+			<article class="rental-panel alm-login-card alm-google-login-card">
+				<p class="rental-kicker">Recommended</p>
+				<h2>Continue with Google</h2>
 				<p class="rental-muted">
-					Use this if your owner or tenant account already has a passkey.
+					Login or register using your Google account. HandoverNow will not send a password,
+					magic link, or verification email.
+				</p>
+
+				<a
+					class="rental-button google-login-button"
+					href={googleLoginHref}
+					data-astro-prefetch="false"
+				>
+					Continue with Google
+				</a>
+
+				<p class="rental-status">
+					New Google users are created using the existing HandoverNow/EmDash role policy.
+				</p>
+			</article>
+
+			<article class="rental-panel alm-login-card alm-passkey-card">
+				<p class="rental-kicker">Existing passkey</p>
+				<h2>Login with a saved passkey</h2>
+				<p class="rental-muted">
+					Use this only if you already added a passkey after logging in earlier.
 				</p>
 
 				<form id="alm-passkey-login" class="rental-form-grid" data-redirect={redirect}>
@@ -88,68 +126,10 @@ const isDev = import.meta.env.DEV;
 					</div>
 
 					<div class="rental-field full">
-						<button class="rental-button" type="submit">Login with passkey</button>
+						<button class="rental-button secondary" type="submit">Login with passkey</button>
 					</div>
 
 					<p id="alm-passkey-status" class="rental-status"></p>
-				</form>
-			</article>
-
-			<article class="rental-panel alm-login-card">
-				<p class="rental-kicker">Magic link</p>
-				<h2>Email me a login link</h2>
-				<p class="rental-muted">
-					If your account exists, EmDash will send a login link. The response is intentionally
-					generic to protect account privacy.
-				</p>
-
-				<form id="alm-magic-link" class="rental-form-grid">
-					<div class="rental-field full">
-						<label for="magic-email">Email</label>
-						<input
-							id="magic-email"
-							name="email"
-							type="email"
-							autocomplete="email"
-							placeholder="you@example.com"
-							required
-						/>
-					</div>
-
-					<div class="rental-field full">
-						<button class="rental-button secondary" type="submit">Send magic link</button>
-					</div>
-
-					<p id="alm-magic-status" class="rental-status"></p>
-				</form>
-			</article>
-
-			<article id="signup-request" class="rental-panel alm-login-card">
-				<p class="rental-kicker">New user</p>
-				<h2>Request signup</h2>
-				<p class="rental-muted">
-					Enter your email to request signup. If your email domain is allowed, you will receive
-					a verification email.
-				</p>
-
-				<form id="alm-signup-request" class="rental-form-grid">
-					<div class="rental-field full">
-						<label for="signup-email">Email</label>
-						<input
-							id="signup-email"
-							name="email"
-							type="email"
-							autocomplete="email"
-							placeholder="you@example.com"
-							required
-						/>
-					</div>
-
-					<div class="rental-field full">
-						<button class="rental-button secondary" type="submit">Request signup</button>
-					</div>
-
-					<p id="alm-signup-status" class="rental-status"></p>
 				</form>
 			</article>
 
@@ -358,92 +338,6 @@ const isDev = import.meta.env.DEV;
 		}
 	});
 
-	const magicForm = document.getElementById("alm-magic-link");
-	const magicStatus = document.getElementById("alm-magic-status");
-
-	magicForm?.addEventListener("submit", async (event) => {
-		event.preventDefault();
-
-		const email = new FormData(magicForm).get("email")?.toString().trim();
-
-		if (!email) {
-			setStatus(magicStatus, "Email is required.", "error");
-			return;
-		}
-
-		setFormDisabled(magicForm, true);
-		setStatus(magicStatus, "Sending magic link…", null);
-
-		try {
-			const response = await fetch("/_emdash/api/auth/magic-link/send", {
-				method: "POST",
-				headers: {
-					"content-type": "application/json",
-					"X-EmDash-Request": "1",
-				},
-				body: JSON.stringify({ email }),
-			});
-
-			await readApiJson(response, "Could not send magic link.");
-
-			setStatus(
-				magicStatus,
-				"If an account exists for this email, a magic link has been sent.",
-				"success",
-			);
-		} catch (error) {
-			setStatus(
-				magicStatus,
-				error instanceof Error ? error.message : "Could not send magic link.",
-				"error",
-			);
-			setFormDisabled(magicForm, false);
-		}
-	});
-
-	const signupForm = document.getElementById("alm-signup-request");
-	const signupStatus = document.getElementById("alm-signup-status");
-
-	signupForm?.addEventListener("submit", async (event) => {
-		event.preventDefault();
-
-		const email = new FormData(signupForm).get("email")?.toString().trim();
-
-		if (!email) {
-			setStatus(signupStatus, "Email is required.", "error");
-			return;
-		}
-
-		setFormDisabled(signupForm, true);
-		setStatus(signupStatus, "Requesting signup…", null);
-
-		try {
-			const response = await fetch("/_emdash/api/auth/signup/request", {
-				method: "POST",
-				headers: {
-					"content-type": "application/json",
-					"X-EmDash-Request": "1",
-				},
-				body: JSON.stringify({ email }),
-			});
-
-			await readApiJson(response, "Could not request signup.");
-
-			setStatus(
-				signupStatus,
-				"If this email is eligible, a signup verification email has been sent.",
-				"success",
-			);
-		} catch (error) {
-			setStatus(
-				signupStatus,
-				error instanceof Error ? error.message : "Could not request signup.",
-				"error",
-			);
-			setFormDisabled(signupForm, false);
-		}
-	});
-
 	const devForm = document.getElementById("alm-dev-login");
 	const devStatus = document.getElementById("alm-dev-status");
 
@@ -581,6 +475,33 @@ const isDev = import.meta.env.DEV;
 		display: flex;
 		flex-wrap: wrap;
 		gap: 10px;
+	}
+
+	.alm-login-error {
+		border-color: rgba(185, 28, 28, 0.34);
+		background: linear-gradient(180deg, rgba(254, 226, 226, 0.74), rgba(255, 255, 255, 0.94));
+	}
+
+	.alm-login-error .rental-kicker,
+	.alm-login-error p {
+		color: #b91c1c;
+	}
+
+	.alm-google-login-card {
+		border-color: rgba(234, 88, 12, 0.34);
+		box-shadow: 0 18px 50px rgba(234, 88, 12, 0.12);
+	}
+
+	.alm-passkey-card {
+		opacity: 0.92;
+	}
+
+	.google-login-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		text-align: center;
 	}
 
 	.rental-status {
