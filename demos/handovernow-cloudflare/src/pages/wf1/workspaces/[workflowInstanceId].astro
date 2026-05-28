@@ -10,35 +10,39 @@ import Wf1StatePanel from "../../../components/wf1/Wf1StatePanel.astro";
 import Wf1TaskBuckets from "../../../components/wf1/Wf1TaskBuckets.astro";
 import Wf1Timeline from "../../../components/wf1/Wf1Timeline.astro";
 
+import { getWf1WorkflowInstanceWorkspace } from "../../../lib/wf1/queries/workspace-instance.js";
+import { getWf1PageContext } from "../../../lib/wf1/server/context.js";
+
 export const prerender = false;
+
+type JsonObject = Record<string, unknown>;
 
 const workflowInstanceId = Astro.params.workflowInstanceId;
 
-async function loadWorkspace() {
+function isObjectRecord(value: unknown): value is JsonObject {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function loadWorkspace(): Promise<JsonObject | null> {
 	if (!workflowInstanceId) return null;
+
 	try {
-		const response = await fetch(new URL(`/api/wf1-rental/workspaces/${workflowInstanceId}`, Astro.url), {
-			headers: {
-				Accept: "application/json",
-				Cookie: Astro.request.headers.get("cookie") ?? "",
-			},
-		});
-		const payload = await response.json() as { data?: Record<string, unknown> };
-		return response.ok ? payload.data ?? null : null;
-	} catch {
+		const { store, user } = await getWf1PageContext(Astro);
+		const workspace = await getWf1WorkflowInstanceWorkspace(store, user, workflowInstanceId);
+		return isObjectRecord(workspace) ? workspace : null;
+	} catch (error) {
+		console.error("[wf1] Failed to load workflow workspace", error);
 		return null;
 	}
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-	return value && typeof value === "object" && !Array.isArray(value)
-		? value as Record<string, unknown>
-		: {};
+function objectValue(value: unknown): JsonObject {
+	return isObjectRecord(value) ? value : {};
 }
 
-function arrayValue(value: unknown): Array<Record<string, unknown>> {
+function arrayValue(value: unknown): Array<JsonObject> {
 	return Array.isArray(value)
-		? value.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>
+		? value.filter((item): item is JsonObject => isObjectRecord(item))
 		: [];
 }
 
@@ -49,7 +53,7 @@ const instance = objectValue(workspace?.instance);
 const projection = objectValue(workspace?.projection);
 const applicationState = objectValue(projection.applicationState);
 const assetState = objectValue(projection.assetState);
-const taskBuckets = objectValue(projection.taskBuckets) as Record<string, Array<Record<string, unknown>>>;
+const taskBuckets = objectValue(projection.taskBuckets) as Record<string, Array<JsonObject>>;
 const responses = arrayValue(workspace?.responses);
 const events = arrayValue(workspace?.events);
 const assetConfigItems = arrayValue(workspace?.assetConfigItems);

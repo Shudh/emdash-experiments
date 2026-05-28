@@ -1,40 +1,21 @@
 ---
 import Wf1Base from "../../components/wf1/Wf1Base.astro";
 
+import { listWorkflowMarketplaceAssets } from "../../lib/wf1/queries/marketplace.js";
+import { getWf1PageContext } from "../../lib/wf1/server/context.js";
+
 export const prerender = false;
 
 type JsonObject = Record<string, unknown>;
 
-const cookie = Astro.request.headers.get("cookie") ?? "";
-const user = Astro.locals.user as { email?: string | null } | undefined;
+const { store, user } = await getWf1PageContext(Astro);
 
-async function wf1Get(path: string): Promise<JsonObject | null> {
-	try {
-		const response = await fetch(new URL(path, Astro.url), {
-			headers: {
-				Accept: "application/json",
-				...(cookie ? { Cookie: cookie } : {}),
-			},
-		});
-
-		const payload = (await response.json()) as { data?: JsonObject };
-
-		return response.ok ? payload.data ?? null : null;
-	} catch {
-		return null;
-	}
-}
-
-function rowsFrom(value: unknown): Array<JsonObject> {
-	return Array.isArray(value)
-		? value.filter((item): item is JsonObject => item !== null && typeof item === "object" && !Array.isArray(item))
-		: [];
+function isObjectRecord(value: unknown): value is JsonObject {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function viewerFor(asset: JsonObject): JsonObject {
-	return asset.viewer && typeof asset.viewer === "object" && !Array.isArray(asset.viewer)
-		? asset.viewer as JsonObject
-		: {};
+	return isObjectRecord(asset.viewer) ? asset.viewer : {};
 }
 
 function numberTime(value: unknown): number {
@@ -74,9 +55,16 @@ function myApplicationAssets(assets: Array<JsonObject>): Array<JsonObject> {
 	);
 }
 
-const marketplaceData = await wf1Get("/api/wf1-rental/marketplace/assets");
-const marketplaceAssets = latestFirst(rowsFrom(marketplaceData?.items));
-const applications = myApplicationAssets(marketplaceAssets);
+let applications: Array<JsonObject> = [];
+
+try {
+	const rawAssets = await listWorkflowMarketplaceAssets(store, user);
+	const marketplaceAssets = latestFirst(rawAssets.filter(isObjectRecord));
+	applications = myApplicationAssets(marketplaceAssets);
+} catch (error) {
+	console.error("[wf1] Failed to load WF1 home application summary", error);
+}
+
 const latestApplicationHref = applications[0] ? applicationHref(applications[0]) : "/wf1/marketplace";
 ---
 
