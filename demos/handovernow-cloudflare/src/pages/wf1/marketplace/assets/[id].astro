@@ -4,34 +4,78 @@ import ConditionBox from "../../../../components/rental/ConditionBox.astro";
 import SpecTable from "../../../../components/rental/SpecTable.astro";
 import Wf1Base from "../../../../components/wf1/Wf1Base.astro";
 
+import { getWorkflowMarketplaceAsset } from "../../../../lib/wf1/queries/marketplace.js";
+import { getWf1PageContext } from "../../../../lib/wf1/server/context.js";
+
 export const prerender = false;
+
+type JsonObject = Record<string, unknown>;
+
+type OwnerConditions = {
+	version?: unknown;
+	hash?: unknown;
+	spec?: JsonObject | null;
+};
+
+type AssetDetails = {
+	asset?: JsonObject;
+	ownerConditions?: OwnerConditions | null;
+};
 
 const assetId = Astro.params.id;
 
-async function loadDetails() {
+function isObjectRecord(value: unknown): value is JsonObject {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeOwnerConditions(value: unknown): OwnerConditions | null | undefined {
+	if (value === null || value === undefined) {
+		return value;
+	}
+
+	if (!isObjectRecord(value)) {
+		return undefined;
+	}
+
+	const spec = value.spec;
+
+	return {
+		version: value.version,
+		hash: value.hash,
+		spec: isObjectRecord(spec) ? spec : spec === null || spec === undefined ? spec : null,
+	};
+}
+
+function normalizeAssetDetails(value: unknown): AssetDetails | null {
+	if (!isObjectRecord(value)) {
+		return null;
+	}
+
+	const rawAsset = value.asset;
+	const rawOwnerConditions = value.ownerConditions;
+
+	return {
+		asset: isObjectRecord(rawAsset) ? rawAsset : undefined,
+		ownerConditions: normalizeOwnerConditions(rawOwnerConditions),
+	};
+}
+
+async function loadDetails(): Promise<AssetDetails | null> {
 	if (!assetId) return null;
+
 	try {
-		const response = await fetch(new URL(`/api/wf1-rental/marketplace/assets/${assetId}`, Astro.url), {
-			headers: {
-				Accept: "application/json",
-				Cookie: Astro.request.headers.get("cookie") ?? "",
-			},
-		});
-		const payload = (await response.json()) as {
-			data?: {
-				asset?: Record<string, unknown>;
-				ownerConditions?: { version?: unknown; hash?: unknown; spec?: Record<string, unknown> };
-			};
-		};
-		return response.ok ? payload.data ?? null : null;
-	} catch {
+		const { store, user } = await getWf1PageContext(Astro);
+		const result = await getWorkflowMarketplaceAsset(store, user, assetId);
+		return normalizeAssetDetails(result);
+	} catch (error) {
+		console.error("[wf1] Failed to load marketplace asset details", error);
 		return null;
 	}
 }
 
-function configFor(asset: Record<string, unknown> | undefined) {
+function configFor(asset: JsonObject | undefined) {
 	return asset?.config_spec && typeof asset.config_spec === "object"
-		? (asset.config_spec as Record<string, unknown>)
+		? (asset.config_spec as JsonObject)
 		: {};
 }
 
@@ -42,7 +86,7 @@ function mediaUrlFromStorageKey(storageKey: string) {
 		.join("/")}`;
 }
 
-function moneyLabel(asset: Record<string, unknown> | undefined): string {
+function moneyLabel(asset: JsonObject | undefined): string {
 	const amount = Number(asset?.public_price ?? 0);
 	const currency = String(asset?.currency ?? "INR");
 
@@ -57,7 +101,7 @@ function moneyLabel(asset: Record<string, unknown> | undefined): string {
 	}).format(amount);
 }
 
-function minimumMonthsLabel(asset: Record<string, unknown> | undefined): string {
+function minimumMonthsLabel(asset: JsonObject | undefined): string {
 	const months = Number(asset?.minimum_months ?? 0);
 
 	if (!Number.isFinite(months) || months <= 0) {
@@ -67,14 +111,14 @@ function minimumMonthsLabel(asset: Record<string, unknown> | undefined): string 
 	return `Minimum stay: ${months} month${months === 1 ? "" : "s"}`;
 }
 
-function thumbnailFor(asset: Record<string, unknown> | undefined) {
+function thumbnailFor(asset: JsonObject | undefined) {
 	const config = configFor(asset);
 	const thumbnail =
 		config.thumbnailMediaRef && typeof config.thumbnailMediaRef === "object"
-			? (config.thumbnailMediaRef as Record<string, unknown>)
+			? (config.thumbnailMediaRef as JsonObject)
 			: null;
 	const mediaRefs = Array.isArray(config.mediaRefs)
-		? (config.mediaRefs.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>)
+		? (config.mediaRefs.filter((item) => isObjectRecord(item)) as Array<JsonObject>)
 		: [];
 	const media = thumbnail ?? mediaRefs[0] ?? null;
 
@@ -99,22 +143,18 @@ function thumbnailFor(asset: Record<string, unknown> | undefined) {
 const details = await loadDetails();
 const asset = details?.asset;
 const ownerConditions = details?.ownerConditions;
-const viewer =
-	asset?.viewer && typeof asset.viewer === "object"
-		? (asset.viewer as Record<string, unknown>)
-		: {};
+const viewer = isObjectRecord(asset?.viewer) ? asset.viewer : {};
 const relationship = String(viewer.relationship ?? "anonymous");
 const workflowInstanceId =
 	typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
 const canExpressInterest = viewer.canExpressInterest === true;
-const loginRedirect = asset?.id ? `/wf1/marketplace/assets/${asset.id}` : "/wf1/marketplace";
+const loginRedirect = asset?.id ? `/wf1/marketplace/assets/${String(asset.id)}` : "/wf1/marketplace";
 const loginHref = `/login?redirect=${encodeURIComponent(loginRedirect)}`;
 const thumbnail = thumbnailFor(asset);
 const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
 const price = moneyLabel(asset);
 const minimumMonths = minimumMonthsLabel(asset);
 ---
-
 <Wf1Base title={asset ? String(asset.title) : "WF1 asset"} description="WF1 asset details">
 	<section class="rental-section">
 		<div class="rental-shell detail-grid">

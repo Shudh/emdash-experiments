@@ -2,34 +2,58 @@
 import Wf1Base from "../../../components/wf1/Wf1Base.astro";
 import Wf1ApplicationList from "../../../components/wf1/Wf1ApplicationList.astro";
 
+import { DomainError } from "../../../lib/domain/types.js";
+import { getWorkflowOwnerDashboard } from "../../../lib/wf1/queries/owner-dashboard.js";
+import { getRequiredWf1PageContext } from "../../../lib/wf1/server/context.js";
+
 export const prerender = false;
 
 type JsonObject = Record<string, unknown>;
 
-async function loadDashboard() {
+type DashboardLoadResult =
+	| {
+			ok: true;
+			assets: Array<JsonObject>;
+			applicationRows: Array<JsonObject>;
+			error: null;
+	  }
+	| {
+			ok: false;
+			assets: Array<JsonObject>;
+			applicationRows: Array<JsonObject>;
+			error: string;
+	  };
+
+async function loadDashboardDirect(): Promise<DashboardLoadResult> {
 	try {
-		const response = await fetch(new URL("/api/wf1-rental/owner/dashboard", Astro.url), {
-			headers: {
-				Accept: "application/json",
-				Cookie: Astro.request.headers.get("cookie") ?? "",
-			},
-		});
-		const payload = (await response.json()) as {
-			data?: { assets?: Array<JsonObject>; applicationRows?: Array<JsonObject> };
-			error?: { message?: string };
-		};
+		const { store, user } = await getRequiredWf1PageContext(Astro);
+		const dashboard = await getWorkflowOwnerDashboard(store, user);
+
 		return {
-			ok: response.ok,
-			assets: payload.data?.assets ?? [],
-			applicationRows: payload.data?.applicationRows ?? [],
-			error: payload.error?.message,
+			ok: true,
+			assets: Array.isArray(dashboard.assets) ? (dashboard.assets as Array<JsonObject>) : [],
+			applicationRows: Array.isArray(dashboard.applicationRows)
+				? (dashboard.applicationRows as Array<JsonObject>)
+				: [],
+			error: null,
 		};
 	} catch (error) {
+		if (error instanceof DomainError) {
+			return {
+				ok: false,
+				assets: [],
+				applicationRows: [],
+				error: `${error.code}: ${error.message}`,
+			};
+		}
+
+		console.error("[wf1] Failed to load owner dashboard", error);
+
 		return {
 			ok: false,
 			assets: [],
 			applicationRows: [],
-			error: error instanceof Error ? error.message : "Dashboard unavailable",
+			error: "Owner dashboard could not be loaded.",
 		};
 	}
 }
@@ -75,7 +99,7 @@ function latestApplicationsFirst(rows: Array<JsonObject>): Array<JsonObject> {
 	return rows.toSorted((left, right) => latestApplicationStamp(right) - latestApplicationStamp(left));
 }
 
-const dashboard = await loadDashboard();
+const dashboard = await loadDashboardDirect();
 const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 	asset,
 	applications: latestApplicationsFirst(rowsFrom(asset.applications)),
@@ -102,7 +126,6 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 				<div class="asset-sections">
 					{assetRows.length ? assetRows.map((row) => {
 						const assetId = String(row.asset.id ?? "");
-						const applicantLink = `/wf1/marketplace/assets/${assetId}`;
 						const assetState = String(row.asset.business_state ?? "draft");
 						const visibilityState = String(row.asset.visibility_state ?? "private");
 						const canPublish = (assetState === "draft_asset" || assetState === "listed") && visibilityState !== "marketplace";
@@ -120,15 +143,7 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 									</div>
 								</div>
 								<div class="asset-links">
-									<a class="rental-button secondary" href={applicantLink}>Open applicant page</a>
-                                        <button
-                                            class="rental-button secondary"
-                                            type="button"
-                                            data-copy-applicant-link={applicantLink}
-                                        >
-                                            Copy applicant link
-                                        </button>
-                                        <span class="rental-muted" data-copy-applicant-status></span>
+									<a class="rental-button secondary" href={`/wf1/marketplace/assets/${assetId}`}>View listing</a>
 									{canPublish ? (
 										<form
 											class="wf1-inline-publish"
@@ -155,52 +170,6 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 </Wf1Base>
 
 <script>
-    function copyTextWithFallback(value: string): boolean {
-	const textArea = document.createElement("textarea");
-	textArea.value = value;
-	textArea.setAttribute("readonly", "readonly");
-	textArea.style.position = "fixed";
-	textArea.style.left = "-9999px";
-	document.body.append(textArea);
-	textArea.select();
-
-	try {
-		const copied = document.execCommand("copy");
-		textArea.remove();
-		return copied;
-	} catch {
-		textArea.remove();
-		return false;
-	}
-}
-
-for (const button of document.querySelectorAll<HTMLButtonElement>("[data-copy-applicant-link]")) {
-	button.addEventListener("click", async () => {
-		const path = button.dataset.copyApplicantLink ?? "";
-		const status = button
-			.closest(".asset-links")
-			?.querySelector<HTMLElement>("[data-copy-applicant-status]");
-
-		if (!path) {
-			if (status) status.textContent = "No link available.";
-			return;
-		}
-
-		const absoluteUrl = new URL(path, window.location.origin).toString();
-
-		try {
-			if (navigator.clipboard?.writeText) {
-				await navigator.clipboard.writeText(absoluteUrl);
-			} else if (!copyTextWithFallback(absoluteUrl)) {
-				throw new Error("Clipboard unavailable");
-			}
-
-			if (status) status.textContent = "Applicant link copied.";
-		} catch {
-			if (status) status.textContent = absoluteUrl;
-		}
-	});
-}
 	for (const form of document.querySelectorAll<HTMLFormElement>("[data-wf1-publish-form]")) {
 		form.addEventListener("submit", async (event) => {
 			event.preventDefault();

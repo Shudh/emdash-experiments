@@ -1,6 +1,10 @@
 ---
 import Wf1Base from "../../../components/wf1/Wf1Base.astro";
 
+import { DomainError } from "../../../lib/domain/types.js";
+import { listWorkflowMarketplaceAssets } from "../../../lib/wf1/queries/marketplace.js";
+import { getWf1PageContext } from "../../../lib/wf1/server/context.js";
+
 export const prerender = false;
 
 type MarketplaceCta = {
@@ -11,20 +15,44 @@ type MarketplaceCta = {
 
 type AssetRow = Record<string, unknown>;
 
-async function loadAssets() {
+type PageLoadResult =
+	| {
+			ok: true;
+			assets: Array<AssetRow>;
+			error: null;
+	  }
+	| {
+			ok: false;
+			assets: Array<AssetRow>;
+			error: string;
+	  };
+
+async function loadAssetsDirect(): Promise<PageLoadResult> {
 	try {
-		const response = await fetch(new URL("/api/wf1-rental/marketplace/assets", Astro.url), {
-			headers: {
-				Accept: "application/json",
-				Cookie: Astro.request.headers.get("cookie") ?? "",
-			},
-		});
-		const payload = (await response.json()) as {
-			data?: { items?: Array<AssetRow> };
+		const { store, user } = await getWf1PageContext(Astro);
+		const assets = await listWorkflowMarketplaceAssets(store, user);
+
+		return {
+			ok: true,
+			assets: assets as Array<AssetRow>,
+			error: null,
 		};
-		return response.ok ? payload.data?.items ?? [] : [];
-	} catch {
-		return [];
+	} catch (error) {
+		if (error instanceof DomainError) {
+			return {
+				ok: false,
+				assets: [],
+				error: `${error.code}: ${error.message}`,
+			};
+		}
+
+		console.error("[wf1] Failed to load marketplace assets", error);
+
+		return {
+			ok: false,
+			assets: [],
+			error: "Marketplace assets could not be loaded.",
+		};
 	}
 }
 
@@ -53,6 +81,7 @@ function publishedStamp(asset: AssetRow): number {
 		numberTime(asset.created_at),
 	);
 }
+
 function moneyLabel(asset: AssetRow): string {
 	const amount = Number(asset.public_price ?? 0);
 	const currency = String(asset.currency ?? "INR");
@@ -197,7 +226,8 @@ function cardCta(asset: AssetRow): MarketplaceCta {
 	};
 }
 
-const assets = sortMarketplaceAssets(await loadAssets());
+const loadResult = await loadAssetsDirect();
+const assets = sortMarketplaceAssets(loadResult.assets);
 const applicationCount = assets.filter(hasApplication).length;
 ---
 
@@ -218,61 +248,64 @@ const applicationCount = assets.filter(hasApplication).length;
 				</div>
 			</div>
 
-			{
-				assets.length ? (
-					<div class="rental-grid" data-marketplace-grid>
-						{assets.map((asset) => {
-							const cta = cardCta(asset);
-							const detailHref = assetDetailHref(asset);
-							const thumbnail = thumbnailFor(asset);
-							const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
-							const published = publishedLabel(asset);
-							const price = moneyLabel(asset);
-                            const minimumMonths = minimumMonthsLabel(asset);
+			{!loadResult.ok ? (
+				<div class="rental-panel marketplace-error">
+					<h2>Marketplace load failed</h2>
+					<p class="rental-muted">{loadResult.error}</p>
+				</div>
+			) : assets.length ? (
+				<div class="rental-grid" data-marketplace-grid>
+					{assets.map((asset) => {
+						const cta = cardCta(asset);
+						const detailHref = assetDetailHref(asset);
+						const thumbnail = thumbnailFor(asset);
+						const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
+						const published = publishedLabel(asset);
+						const price = moneyLabel(asset);
+						const minimumMonths = minimumMonthsLabel(asset);
 
-							return (
-								<article class:list={["rental-panel", "asset-card", { applied: hasApplication(asset) }]}>
-									<a class="asset-thumb" href={detailHref} aria-label={`Open ${String(asset.title ?? "asset")}`}>
-										{thumbnail && isImage ? (
-											<img src={thumbnail.url} alt={thumbnail.filename} loading="lazy" />
-										) : thumbnail ? (
-											<span>{thumbnail.filename || "PDF attached"}</span>
-										) : (
-											<span>No image yet</span>
-										)}
+						return (
+							<article class:list={["rental-panel", "asset-card", { applied: hasApplication(asset) }]}>
+								<a class="asset-thumb" href={detailHref} aria-label={`Open ${String(asset.title ?? "asset")}`}>
+									{thumbnail && isImage ? (
+										<img src={thumbnail.url} alt={thumbnail.filename} loading="lazy" />
+									) : thumbnail ? (
+										<span>{thumbnail.filename || "PDF attached"}</span>
+									) : (
+										<span>No image yet</span>
+									)}
+								</a>
+
+								<div class="asset-card-title">
+									<p class="rental-kicker">{hasApplication(asset) ? "My application" : String(asset.asset_kind ?? "asset")}</p>
+									<h2>
+										<a href={detailHref}>{String(asset.title ?? "Untitled asset")}</a>
+									</h2>
+								</div>
+								<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+								{price ? <p class="asset-price">{price} / month</p> : null}
+								{minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
+								{published ? <p class="rental-muted asset-published">Published: {published}</p> : null}
+								<div class="rental-badges">
+									<span class="rental-badge">
+										Asset State: {String(asset.business_state ?? "listed")}
+									</span>
+									<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+								</div>
+								<div class="asset-card-actions">
+									<a class={`rental-button ${cta.tone === "secondary" ? "secondary" : ""}`} href={cta.href}>
+										{cta.label}
 									</a>
-
-									<div class="asset-card-title">
-										<p class="rental-kicker">{hasApplication(asset) ? "My application" : String(asset.asset_kind ?? "asset")}</p>
-										<h2>
-											<a href={detailHref}>{String(asset.title ?? "Untitled asset")}</a>
-										</h2>
-									</div>
-									<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
-									{price ? <p class="asset-price">{price} / month</p> : null}
-                                    {minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
-									{published ? <p class="rental-muted asset-published">Published: {published}</p> : null}
-									<div class="rental-badges">
-										<span class="rental-badge">
-											Asset State: {String(asset.business_state ?? "listed")}
-										</span>
-										<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
-									</div>
-									<div class="asset-card-actions">
-										<a class={`rental-button ${cta.tone === "secondary" ? "secondary" : ""}`} href={cta.href}>
-											{cta.label}
-										</a>
-									</div>
-								</article>
-							);
-						})}
-					</div>
-				) : (
-					<div class="rental-panel">
-						<p class="rental-muted">No marketplace assets are currently listed.</p>
-					</div>
-				)
-			}
+								</div>
+							</article>
+						);
+					})}
+				</div>
+			) : (
+				<div class="rental-panel">
+					<p class="rental-muted">No marketplace assets are currently listed.</p>
+				</div>
+			)}
 		</div>
 	</section>
 </Wf1Base>
@@ -283,6 +316,13 @@ const applicationCount = assets.filter(hasApplication).length;
 		flex-wrap: wrap;
 		gap: 10px;
 		justify-content: flex-end;
+	}
+
+	.marketplace-error {
+		border-color: rgba(220, 38, 38, 0.36);
+		background:
+			linear-gradient(180deg, rgba(254, 242, 242, 0.9), rgba(255, 255, 255, 0.96)),
+			var(--r-panel);
 	}
 
 	.asset-card {
@@ -339,14 +379,15 @@ const applicationCount = assets.filter(hasApplication).length;
 	.asset-card-actions {
 		margin-top: 4px;
 	}
-	.asset-price {
-	margin: 0;
-	font-size: 1.05rem;
-	font-weight: 900;
-	color: var(--r-text);
-}
 
-.asset-minimum {
-	font-size: 0.86rem;
-}
+	.asset-price {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 900;
+		color: var(--r-text);
+	}
+
+	.asset-minimum {
+		font-size: 0.86rem;
+	}
 </style>
