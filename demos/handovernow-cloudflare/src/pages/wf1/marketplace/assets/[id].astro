@@ -150,7 +150,7 @@ const minimumMonths = minimumMonthsLabel(asset);
 
 							{relationship === "owner" ? (
 								<div class="rental-panel">
-									<h2>This is Eva's asset</h2>
+									<h2>This is your asset</h2>
 									<a class="rental-button" href="/wf1/owner">
 										Owner dashboard
 									</a>
@@ -164,10 +164,10 @@ const minimumMonths = minimumMonthsLabel(asset);
 								</div>
 							) : canExpressInterest ? (
 								<ActionForm
-									title="Express interest"
-									description="Rakesh selects the workflow definition for this application."
+									title="Apply for this property"
+									description="Fill this application once you are seriously interested. If you received an invite to this workflow from an owner that means you are considered as a prospective tenant out of many in the marketplaces"
 									action={`/api/wf1-rental/marketplace/assets/${asset.id}/express-interest`}
-									submitLabel="Express interest"
+									submitLabel="Submit application"
 								>
 									<input
 										type="hidden"
@@ -181,32 +181,24 @@ const minimumMonths = minimumMonthsLabel(asset);
 										value={String(ownerConditions?.hash ?? "")}
 									/>
 
-									<div class="rental-field full">
-										<label for="workflowDefinitionId">Workflow definition</label>
-										<select id="workflowDefinitionId" name="workflowDefinitionId">
-	<option value="rental-application-form-basic">Rental application form basic workflow</option>
-	<option value="simple-available-rented">Simple available/rented workflow</option>
-	<option value="rental-application">Full rental Part 1 + Part 2 workflow</option>
-	<option value="alm-current-parity">ALM parity workflow</option>
-</select>
-									</div>
 
-									<input
-										type="hidden"
-										name="workflowDefinitionVersion"
-										value="1"
-										data-number="true"
-									/>
+
+
 
 									<div class="rental-field">
 										<label for="name">Name</label>
-										<input id="name" name="name" value="Rakesh" required />
+										<input id="name" name="name"  required />
 									</div>
 
 									<div class="rental-field">
-										<label for="officialEmail">Official email</label>
-										<input id="officialEmail" name="officialEmail" type="email" />
-									</div>
+                                        <label for="officialEmail">Email</label>
+                                        <input id="officialEmail" name="officialEmail" type="email" autocomplete="email" />
+                                    </div>
+
+                                    <div class="rental-field">
+                                        <label for="phone">Phone / WhatsApp</label>
+                                        <input id="phone" name="phone" type="tel" autocomplete="tel" />
+                                    </div>
 
 									<div class="rental-field">
 										<label for="employerName">Employer</label>
@@ -227,7 +219,11 @@ const minimumMonths = minimumMonthsLabel(asset);
 
 									<div class="rental-field full">
 										<label for="message">Message</label>
-										<textarea id="message" name="message">Eva, I am interested in this flat.</textarea>
+										<textarea
+                                            id="message"
+                                            name="message"
+                                            placeholder="Add move-in timing, family or bachelor status, employment details, or questions for the owner."
+                                        ></textarea>
 									</div>
 
 									<div class="rental-field full">

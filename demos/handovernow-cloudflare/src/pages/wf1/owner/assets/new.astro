@@ -5,15 +5,16 @@ import Wf1MediaUpload from "../../../../components/wf1/Wf1MediaUpload.astro";
 export const prerender = false;
 ---
 
-<Wf1Base title="Create WF1 asset" description="Create a WF1 rental asset">
+<Wf1Base title="Add asset under management" description="Create a managed rental asset">
 	<section class="rental-section">
 		<div class="rental-shell create-grid">
 			<div>
 				<p class="rental-kicker">Owner asset</p>
 				<h1>Create draft asset</h1>
 				<p class="rental-muted">
-					Eva creates the property here. Add a marketplace image and optional item evidence.
-					Workflow starts later when Rakesh expresses interest.
+						Create the property or rentable asset here. Add the listing image, owner conditions,
+	                    furnishings, fixtures, and optional evidence. The application workflow starts only
+	                    after an interested applicant applies.This configuration specification will be used to manage asset lifecycle changes
 				</p>
 			</div>
 
@@ -23,8 +24,11 @@ export const prerender = false;
 						<label for="assetKind">Asset kind</label>
 						<select id="assetKind" name="assetKind">
 							<option value="flat">Flat</option>
-							<option value="car">Car</option>
-							<option value="equipment">Equipment</option>
+                            <option value="villa">Villa</option>
+                            <option value="independent_house">Independent house</option>
+                            <option value="room">Room / PG unit</option>
+                            <option value="commercial_unit">Commercial unit</option>
+                            <option value="rentable_asset">Other rentable asset</option>
 						</select>
 					</div>
 
@@ -70,7 +74,7 @@ export const prerender = false;
 
 					<Wf1MediaUpload
 						prefix="assetMedia"
-						label="Primary marketplace image or PDF"
+						label="Primary property image or PDF"
 						required={false}
 					/>
 

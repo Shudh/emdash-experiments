@@ -211,10 +211,8 @@ export class KyselyDomainStore implements DomainStore {
 	`.execute(this.db);
 	}
 
-	async transaction<T>(callback: (tx: DomainStore) => Promise<T>): Promise<T> {
-		if (!("transaction" in this.db) || typeof this.db.transaction !== "function") {
-			return callback(this);
-		}
-		return this.db.transaction().execute((tx) => callback(new KyselyDomainStore(tx)));
+		// Removed trannsactions as d1 failed in prod due to this..
+		async transaction<T>(callback: (tx: DomainStore) => Promise<T>): Promise<T> {
+		return callback(this);
 	}
 }
