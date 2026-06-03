@@ -422,9 +422,106 @@ export const prerender = false;
 		if (status) status.textContent = "Creating asset...";
 
 		try {
-			const ownerConditionsSpec = {
+						const ownerConditionsSpec = {
 				depositPolicy: data.get("depositPolicy"),
 				documentsRequired: [],
+				preScreenQuestions: [
+					{
+						key: "name",
+						label: "What is your full name?",
+						kind: "text",
+						required: true,
+						target: "name",
+						placeholder: "Your name",
+					},
+					{
+						key: "phone_whatsapp",
+						label: "What is your phone / WhatsApp number?",
+						kind: "phone",
+						required: true,
+						target: "phone",
+						placeholder: "+91...",
+					},
+					{
+						key: "official_email",
+						label: "What email should we keep on record?",
+						kind: "email",
+						required: true,
+						target: "officialEmail",
+						placeholder: "name@example.com",
+					},
+					{
+						key: "move_in_date",
+						label: "When do you want to move in?",
+						kind: "date",
+						required: true,
+						target: "requestedStartDate",
+					},
+					{
+						key: "minimum_stay",
+						label: "Can you stay for the owner’s minimum stay requirement?",
+						kind: "single_choice",
+						required: true,
+						options: ["Yes", "Need to discuss"],
+						target: "minimumStayAccepted",
+					},
+					{
+						key: "requested_minimum_months",
+						label: "How many months do you expect to stay?",
+						kind: "number",
+						required: true,
+						target: "requestedMinimumMonths",
+						placeholder: "11",
+					},
+					{
+						key: "occupants",
+						label: "Who will live in the flat?",
+						kind: "textarea",
+						required: true,
+						target: "occupants",
+						placeholder: "Example: husband, wife, one child",
+					},
+					{
+						key: "employer",
+						label: "Where do you work, or what is your income source?",
+						kind: "text",
+						required: true,
+						target: "employerName",
+						placeholder: "Company / business / profession",
+					},
+					{
+						key: "rent_acceptance",
+						label: "Are you comfortable with the listed rent and stated terms?",
+						kind: "single_choice",
+						required: true,
+						options: ["Yes", "Need to discuss"],
+						target: "rentAcceptance",
+					},
+					{
+						key: "offered_price",
+						label: "If you want to make a rent offer, enter the monthly amount. Leave blank if you accept the listed rent.",
+						kind: "number",
+						required: false,
+						target: "offeredPrice",
+						placeholder: "33000",
+					},
+					{
+						key: "normal_residential_use",
+						label: "Will this be used only as a normal residence, not Airbnb, guest-house, or short stay?",
+						kind: "single_choice",
+						required: true,
+						options: ["Yes, normal residence only", "Need to discuss"],
+						target: "normalResidentialUse",
+					},
+					{
+						key: "final_note",
+						label: "Anything else the owner should know before calling you?",
+						kind: "textarea",
+						required: false,
+						target: "message",
+						placeholder: "Write a short note for the owner",
+					},
+				],
 			};
 
 			const assetMediaRef = mediaRefFromHidden("assetMedia", "asset_thumbnail", "asset");

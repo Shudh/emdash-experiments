@@ -21,6 +21,8 @@ import {
 } from "../queries/marketplace.js";
 import { getWorkflowOwnerDashboard } from "../queries/owner-dashboard.js";
 import { getWf1WorkflowInstanceWorkspace } from "../queries/workspace-instance.js";
+import { validateLeadProtection } from "../security/lead-guard.js";
+import type { RuntimeEnv } from "../security/runtime-env.js";
 import { WORKFLOW_RENTAL_COLLECTIONS } from "../store/collections.js";
 import { actorRoleFor, getAssetOrThrow, getInterestOrThrow } from "../store/repository.js";
 import {
@@ -31,11 +33,15 @@ import {
 	stringField,
 } from "./contracts.js";
 
+// const MAX_WF1_JSON_BYTES = 32 * 1024;
+const MAX_WF1_DEFAULT_JSON_BYTES = 256 * 1024;
+const MAX_WF1_LEAD_JSON_BYTES = 32 * 1024;
 export type WorkflowRentalRouteInput = {
 	request: Request;
 	path: string;
 	store: DomainStore;
 	user: UserContext | null;
+	env?: RuntimeEnv;
 };
 
 export async function handleWorkflowRentalRoute(
@@ -43,7 +49,11 @@ export async function handleWorkflowRentalRoute(
 ): Promise<Response> {
 	try {
 		const parts = input.path.split("/").filter(Boolean);
-		const body = input.request.method === "GET" ? {} : parseRecord(await readJson(input.request));
+		const jsonLimit = isExpressInterestRoute(input.request.method, parts)
+					? MAX_WF1_LEAD_JSON_BYTES
+					: MAX_WF1_DEFAULT_JSON_BYTES;
+
+const body = input.request.method === "GET" ? {} : parseRecord(await readJson(input.request, jsonLimit));
 
 		if (input.request.method === "GET" && input.path === "marketplace/assets") {
 			return jsonOk({ items: await listWorkflowMarketplaceAssets(input.store, input.user) });
@@ -119,6 +129,7 @@ export async function handleWorkflowRentalRoute(
 
 				return jsonOk(await updateWorkflowAssetConfig(input.store, user, parts[2], configInput));
 			}
+
 			if (parts[3] === "publish-to-marketplace") {
 				return jsonOk(await publishWorkflowAsset(input.store, user, parts[2]));
 			}
@@ -131,6 +142,15 @@ export async function handleWorkflowRentalRoute(
 			parts[2] &&
 			parts[3] === "express-interest"
 		) {
+			await validateLeadProtection({
+				store: input.store,
+				request: input.request,
+				user,
+				assetId: parts[2],
+				body,
+				env: input.env,
+			});
+
 			const result = await expressWorkflowInterest(input.store, user, parts[2], {
 				name: asOptionalString(body.name),
 				officialEmail: asOptionalString(body.officialEmail),
@@ -158,9 +178,11 @@ export async function handleWorkflowRentalRoute(
 				201,
 			);
 		}
+
 		if (input.request.method === "GET" && parts[0] === "workspaces" && parts[1]) {
 			return jsonOk(await getWf1WorkflowInstanceWorkspace(input.store, user, parts[1]));
 		}
+
 		if (
 			input.request.method === "GET" &&
 			parts[0] === "assets" &&
@@ -208,6 +230,7 @@ export async function handleWorkflowRentalRoute(
 					201,
 				);
 			}
+
 			if (parts[3] === "decision") {
 				return jsonOk(
 					await decideWorkflowCard(input.store, user, parts[2], {
@@ -274,16 +297,22 @@ async function evidenceDownload(store: DomainStore, user: UserContext, attachmen
 		WORKFLOW_RENTAL_COLLECTIONS.EVIDENCE_ATTACHMENTS,
 		attachmentId,
 	);
-	if (!attachment)
+
+	if (!attachment) {
 		throw new DomainError("EVIDENCE_NOT_FOUND", "Evidence attachment not found", 404);
+	}
+
 	const [asset, interest] = await Promise.all([
 		getAssetOrThrow(store, asString(attachment.asset_id)),
 		getInterestOrThrow(store, asString(attachment.interest_id)),
 	]);
+
 	const role = actorRoleFor(user, asset, interest);
+
 	if (role !== "owner" && role !== "applicant" && role !== "renter") {
 		throw new DomainError("FORBIDDEN", "Evidence is private to workflow participants", 403);
 	}
+
 	return {
 		attachment,
 		download: {
@@ -293,9 +322,33 @@ async function evidenceDownload(store: DomainStore, user: UserContext, attachmen
 	};
 }
 
-async function readJson(request: Request): Promise<unknown> {
+function isExpressInterestRoute(method: string, parts: string[]): boolean {
+	return (
+		method === "POST" &&
+		parts[0] === "marketplace" &&
+		parts[1] === "assets" &&
+		typeof parts[2] === "string" &&
+		parts[3] === "express-interest"
+	);
+}
+async function readJson(request: Request, maxBytes: number): Promise<unknown> {
+	const rawLength = request.headers.get("content-length");
+
+	if (rawLength) {
+		const contentLength = Number(rawLength);
+		if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+			throw new DomainError("PAYLOAD_TOO_LARGE", "Request payload is too large", 413);
+		}
+	}
+
 	const text = await request.text();
+
+	if (new TextEncoder().encode(text).byteLength > maxBytes) {
+		throw new DomainError("PAYLOAD_TOO_LARGE", "Request payload is too large", 413);
+	}
+
 	if (!text.trim()) return {};
+
 	try {
 		return JSON.parse(text) as unknown;
 	} catch (error) {
@@ -311,9 +364,11 @@ function requireUser(user: UserContext | null): UserContext {
 function asOptionalString(value: unknown): string | undefined {
 	return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
+
 function hasOwn(object: object, key: PropertyKey): boolean {
 	return Object.hasOwn(object, key);
 }
+
 function jsonOk(data: unknown, status = 200): Response {
 	return Response.json({ ok: true, data }, { status });
 }
@@ -325,7 +380,9 @@ function jsonError(error: unknown): Response {
 			{ status: error.status },
 		);
 	}
+
 	console.error("[wf-rental] API route failed", error);
+
 	return Response.json(
 		{ ok: false, error: { code: "INTERNAL_ERROR", message: "Internal error" } },
 		{ status: 500 },

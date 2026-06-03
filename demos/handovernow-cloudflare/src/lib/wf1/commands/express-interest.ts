@@ -79,11 +79,22 @@ export async function expressWorkflowInterest(
 			);
 		}
 
-		if (input.acceptedConditionsVersion === undefined || !input.acceptedConditionsHash) {
+				if (input.acceptedConditionsVersion === undefined || !input.acceptedConditionsHash) {
 			throw new DomainError(
 				"CONDITIONS_ACCEPTANCE_REQUIRED",
 				"Current owner rental conditions must be accepted before expressing interest",
 				422,
+			);
+		}
+
+		if (
+			input.acceptedConditionsVersion !== Number(asset.conditions_version) ||
+			input.acceptedConditionsHash !== asString(asset.conditions_hash)
+		) {
+			throw new DomainError(
+				"CONDITIONS_ACCEPTANCE_STALE",
+				"Owner rental conditions changed. Please reload the asset page and accept the latest conditions.",
+				409,
 			);
 		}
 

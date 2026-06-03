@@ -1,11 +1,14 @@
 ---
-import ActionForm from "../../../../components/rental/ActionForm.astro";
 import ConditionBox from "../../../../components/rental/ConditionBox.astro";
 import SpecTable from "../../../../components/rental/SpecTable.astro";
+import PrescreenChatWidget from "../../../../components/wf1/PrescreenChatWidget.astro";
 import Wf1Base from "../../../../components/wf1/Wf1Base.astro";
 
 import { getWorkflowMarketplaceAsset } from "../../../../lib/wf1/queries/marketplace.js";
 import { getWf1PageContext } from "../../../../lib/wf1/server/context.js";
+import { createHumanCheckChallenge } from "../../../../lib/wf1/security/human-check.js";
+import { getRuntimeEnvFromLocals } from "../../../../lib/wf1/security/runtime-env.js";
+import { publicTurnstileSiteKeyFromEnv } from "../../../../lib/wf1/security/turnstile.js";
 
 export const prerender = false;
 
@@ -73,13 +76,19 @@ async function loadDetails(): Promise<AssetDetails | null> {
 	}
 }
 
-function configFor(asset: JsonObject | undefined) {
-	return asset?.config_spec && typeof asset.config_spec === "object"
-		? (asset.config_spec as JsonObject)
-		: {};
+function specFor(value: unknown): Record<string, unknown> {
+	return isObjectRecord(value) ? value : {};
 }
 
-function mediaUrlFromStorageKey(storageKey: string) {
+function configFor(asset: JsonObject | undefined): Record<string, unknown> {
+	return specFor(asset?.config_spec);
+}
+
+function conditionFor(asset: JsonObject | undefined): Record<string, unknown> {
+	return specFor(asset?.condition_spec);
+}
+
+function mediaUrlFromStorageKey(storageKey: string): string {
 	return `/_emdash/api/media/file/${storageKey
 		.split("/")
 		.map((part) => encodeURIComponent(part))
@@ -154,7 +163,11 @@ const thumbnail = thumbnailFor(asset);
 const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
 const price = moneyLabel(asset);
 const minimumMonths = minimumMonthsLabel(asset);
+const runtimeEnv = getRuntimeEnvFromLocals(Astro.locals);
+const humanCheckChallenge = asset?.id ? await createHumanCheckChallenge(String(asset.id), runtimeEnv) : null;
+const turnstileSiteKey = publicTurnstileSiteKeyFromEnv(runtimeEnv);
 ---
+
 <Wf1Base title={asset ? String(asset.title) : "WF1 asset"} description="WF1 asset details">
 	<section class="rental-section">
 		<div class="rental-shell detail-grid">
@@ -178,7 +191,7 @@ const minimumMonths = minimumMonthsLabel(asset);
 							<h1>{String(asset.title ?? "Untitled asset")}</h1>
 							<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
 							{price ? <p class="asset-price">{price} / month</p> : null}
-{minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
+							{minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
 							<div class="rental-badges">
 								<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
 								<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
@@ -202,93 +215,32 @@ const minimumMonths = minimumMonthsLabel(asset);
 										Open workspace
 									</a>
 								</div>
-							) : canExpressInterest ? (
-								<ActionForm
-									title="Apply for this property"
-									description="Fill this application once you are seriously interested. If you received an invite to this workflow from an owner that means you are considered as a prospective tenant out of many in the marketplaces"
-									action={`/api/wf1-rental/marketplace/assets/${asset.id}/express-interest`}
-									submitLabel="Submit application"
-								>
-									<input
-										type="hidden"
-										name="acceptedConditionsVersion"
-										value={String(ownerConditions?.version ?? "")}
-										data-number="true"
+							) : humanCheckChallenge ? (
+								<div class="rental-panel">
+									<PrescreenChatWidget
+										asset={asset}
+										ownerConditions={ownerConditions}
+										action={`/api/wf1-rental/marketplace/assets/${asset.id}/express-interest`}
+										loginHref={loginHref}
+										canSubmit={canExpressInterest}
+										humanCheckChallenge={humanCheckChallenge}
+										turnstileSiteKey={turnstileSiteKey}
 									/>
-									<input
-										type="hidden"
-										name="acceptedConditionsHash"
-										value={String(ownerConditions?.hash ?? "")}
-									/>
-
-
-
-
-
-									<div class="rental-field">
-										<label for="name">Name</label>
-										<input id="name" name="name"  required />
-									</div>
-
-									<div class="rental-field">
-                                        <label for="officialEmail">Email</label>
-                                        <input id="officialEmail" name="officialEmail" type="email" autocomplete="email" />
-                                    </div>
-
-                                    <div class="rental-field">
-                                        <label for="phone">Phone / WhatsApp</label>
-                                        <input id="phone" name="phone" type="tel" autocomplete="tel" />
-                                    </div>
-
-									<div class="rental-field">
-										<label for="employerName">Employer</label>
-										<input id="employerName" name="employerName" />
-									</div>
-                                                                    {price ? (
-                                    <div class="rental-field full price-note">
-                                        <p class="rental-muted">Owner asking price</p>
-                                        <p class="asset-price">{price} / month</p>
-                                        {minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
-                                    </div>
-                                ) : null}
-
-									<div class="rental-field">
-										<label for="offeredPrice">Offer</label>
-										<input id="offeredPrice" name="offeredPrice" type="number" data-number="true" />
-									</div>
-
-									<div class="rental-field full">
-										<label for="message">Message</label>
-										<textarea
-                                            id="message"
-                                            name="message"
-                                            placeholder="Add move-in timing, family or bachelor status, employment details, or questions for the owner."
-                                        ></textarea>
-									</div>
-
-									<div class="rental-field full">
-										<label>
-											<input name="accepted" type="checkbox" required />
-											I accept the current owner conditions.
-										</label>
-									</div>
-								</ActionForm>
+								</div>
 							) : (
 								<div class="rental-panel">
-									<h2>Login required</h2>
-									<a class="rental-button" href={loginHref}>
-										Login or register
-									</a>
+									<h2>Screening unavailable</h2>
+									<p class="rental-muted">This asset is not accepting applications right now.</p>
 								</div>
 							)}
 						</div>
 
 						<div class="rental-panel">
-							<SpecTable title="Configuration" spec={asset.config_spec as Record<string, unknown>} />
+							<SpecTable title="Configuration" spec={configFor(asset)} />
 						</div>
 
 						<div class="rental-panel">
-							<SpecTable title="Physical condition" spec={asset.condition_spec as Record<string, unknown>} />
+							<SpecTable title="Physical condition" spec={conditionFor(asset)} />
 						</div>
 					</>
 				) : (
@@ -347,21 +299,15 @@ const minimumMonths = minimumMonthsLabel(asset);
 			grid-template-columns: 1fr;
 		}
 	}
+
 	.asset-price {
-	margin: 0;
-	font-size: 1.2rem;
-	font-weight: 900;
-	color: var(--r-text);
-}
+		margin: 0;
+		font-size: 1.2rem;
+		font-weight: 900;
+		color: var(--r-text);
+	}
 
-.asset-minimum {
-	font-size: 0.9rem;
-}
-
-.price-note {
-	padding: 12px;
-	border: 1px solid var(--r-border);
-	border-radius: var(--r-radius);
-	background: var(--r-panel-soft);
-}
+	.asset-minimum {
+		font-size: 0.9rem;
+	}
 </style>
