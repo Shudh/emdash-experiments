@@ -19,6 +19,7 @@ export type CreateWorkflowAssetInput = {
 	publicPrice?: number;
 	currency?: string;
 	ownerConditionsSpec?: Record<string, unknown>;
+	configSpec?: Record<string, unknown>;
 };
 
 export async function createWorkflowAsset(
@@ -44,7 +45,7 @@ export async function createWorkflowAsset(
 			active_interest_id: null,
 			active_workflow_instance_id: null,
 			active_renter_user_id: null,
-			config_spec: {},
+			config_spec: input.configSpec ?? {},
 			condition_spec: {},
 			config_version: 1,
 			owner_conditions_spec: conditions.spec,

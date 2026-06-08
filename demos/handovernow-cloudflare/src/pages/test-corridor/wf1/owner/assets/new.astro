@@ -1,0 +1,693 @@
+---
+import Wf1TestBase from "../../../../../components/wf1-test/Wf1TestBase.astro";
+import Wf1MediaUpload from "../../../../../components/wf1-test/Wf1MediaUpload.astro";
+
+import Wf1TestLaneBanner from "../../../../../components/wf1-test/Wf1TestLaneBanner.astro";
+
+import {
+	applyTestLaneNoStoreHeaders,
+	testLaneHostRejectionResponse,
+} from "../../../../../lib/wf1/routing/host-policy.js";
+
+export const prerender = false;
+
+const rejection = testLaneHostRejectionResponse(Astro.request);
+
+if (rejection) {
+	return rejection;
+}
+
+applyTestLaneNoStoreHeaders(Astro.response.headers);
+
+---
+
+<Wf1TestBase title="Add asset under management" description="Create a managed rental asset">
+	<Wf1TestLaneBanner />
+
+	<section class="rental-section">
+		<div class="rental-shell create-grid">
+			<div>
+				<p class="rental-kicker">Owner asset</p>
+				<h1>Create draft asset</h1>
+				<p class="rental-muted">
+						Create the property or rentable asset here. Add the listing image, owner conditions,
+	                    furnishings, fixtures, and optional evidence. The application workflow starts only
+	                    after an interested applicant applies.This configuration specification will be used to manage asset lifecycle changes
+				</p>
+			</div>
+
+			<form class="rental-panel create-form" id="asset-form">
+				<div class="rental-form-grid">
+					<div class="rental-field">
+						<label for="assetKind">Asset kind</label>
+						<select id="assetKind" name="assetKind">
+							<option value="flat">Flat</option>
+                            <option value="villa">Villa</option>
+                            <option value="independent_house">Independent house</option>
+                            <option value="room">Room / PG unit</option>
+                            <option value="commercial_unit">Commercial unit</option>
+                            <option value="rentable_asset">Other rentable asset</option>
+						</select>
+					</div>
+
+					<div class="rental-field">
+						<label for="title">Title</label>
+						<input id="title" name="title" required />
+					</div>
+
+					<div class="rental-field">
+						<label for="locationLabel">Location</label>
+						<input id="locationLabel" name="locationLabel" value="Bangalore" />
+					</div>
+
+					<div class="rental-field">
+						<label for="publicPrice">Price</label>
+						<input id="publicPrice" name="publicPrice" type="number" value="60000" required />
+					</div>
+
+					<div class="rental-field">
+						<label for="minimumMonths">Minimum months</label>
+						<input id="minimumMonths" name="minimumMonths" type="number" value="11" />
+					</div>
+
+					<div class="rental-field">
+						<label for="bedrooms">Bedrooms</label>
+						<input id="bedrooms" name="bedrooms" type="number" value="2" />
+					</div>
+
+					<div class="rental-field">
+						<label for="furnishing">Furnishing</label>
+						<input id="furnishing" name="furnishing" value="semi_furnished" />
+					</div>
+
+					<div class="rental-field">
+						<label for="walls">Physical condition</label>
+						<input id="walls" name="walls" value="freshly_painted" />
+					</div>
+
+					<div class="rental-field full">
+						<label for="depositPolicy">Owner rental conditions</label>
+						<textarea id="depositPolicy" name="depositPolicy">Two months deposit covers chargeable damage.</textarea>
+					</div>
+
+					<Wf1MediaUpload
+						prefix="assetMedia"
+						label="Primary property image or PDF"
+						required={false}
+					/>
+
+					<div class="rental-field">
+						<label>
+							<input name="publish" type="checkbox" />
+							Publish to marketplace
+						</label>
+					</div>
+				</div>
+
+				<section class="form-section" aria-labelledby="inventory-heading">
+					<div class="section-head">
+						<div>
+							<p class="rental-kicker">Inventory</p>
+							<h2 id="inventory-heading">Asset config items</h2>
+							<p class="rental-muted">
+								Each item can carry its own optional image/PDF evidence.
+							</p>
+						</div>
+						<div class="section-actions">
+							<button class="rental-button secondary" type="button" id="add-starter-inventory">
+								Add starter flat inventory
+							</button>
+							<button class="rental-button secondary" type="button" id="add-inventory-row">
+								Add row
+							</button>
+						</div>
+					</div>
+
+					<div class="inventory-editor" id="inventory-editor"></div>
+				</section>
+
+				<button class="rental-button" type="submit">Create asset</button>
+				<p class="rental-status" id="asset-status"></p>
+			</form>
+		</div>
+	</section>
+</Wf1TestBase>
+
+<script>
+	const form = document.querySelector<HTMLFormElement>("#asset-form");
+	const status = document.querySelector<HTMLElement>("#asset-status");
+	const inventoryEditor = document.querySelector<HTMLElement>("#inventory-editor");
+	const addInventoryRowButton = document.querySelector<HTMLButtonElement>("#add-inventory-row");
+	const addStarterInventoryButton = document.querySelector<HTMLButtonElement>("#add-starter-inventory");
+
+	type MediaRef = {
+		mediaId: string;
+		storageKey: string;
+		mimeType: string;
+		filename: string;
+		url: string;
+		kind: string;
+		scope: string;
+		createdAt: string;
+	};
+
+	type InventoryItem = {
+		itemLabel: string;
+		itemKind: string;
+		itemGroup: string;
+		quantity: string;
+		ownerDeclaredState: string;
+		conditionDetails: string;
+	};
+
+	const starterInventory: InventoryItem[] = [
+		{
+			itemLabel: "Geyser",
+			itemKind: "appliance",
+			itemGroup: "bathroom",
+			quantity: "1",
+			ownerDeclaredState: "working",
+			conditionDetails: "Heats water, no leakage.",
+		},
+		{
+			itemLabel: "Fridge",
+			itemKind: "appliance",
+			itemGroup: "kitchen",
+			quantity: "1",
+			ownerDeclaredState: "working",
+			conditionDetails: "Silent, cooling is ok.",
+		},
+		{
+			itemLabel: "Washing machine",
+			itemKind: "appliance",
+			itemGroup: "utility",
+			quantity: "1",
+			ownerDeclaredState: "working",
+			conditionDetails: "",
+		},
+		{
+			itemLabel: "RO purifier",
+			itemKind: "appliance",
+			itemGroup: "kitchen",
+			quantity: "1",
+			ownerDeclaredState: "working",
+			conditionDetails: "",
+		},
+		{
+			itemLabel: "Fans",
+			itemKind: "fixture",
+			itemGroup: "all rooms",
+			quantity: "4",
+			ownerDeclaredState: "working",
+			conditionDetails: "",
+		},
+		{
+			itemLabel: "Lights",
+			itemKind: "fixture",
+			itemGroup: "all rooms",
+			quantity: "8",
+			ownerDeclaredState: "working",
+			conditionDetails: "",
+		},
+		{
+			itemLabel: "Curtains",
+			itemKind: "furnishing",
+			itemGroup: "bedrooms",
+			quantity: "4",
+			ownerDeclaredState: "good",
+			conditionDetails: "",
+		},
+		{
+			itemLabel: "Wardrobe",
+			itemKind: "furniture",
+			itemGroup: "bedroom",
+			quantity: "2",
+			ownerDeclaredState: "good",
+			conditionDetails: "",
+		},
+		{
+			itemLabel: "Sofa",
+			itemKind: "furniture",
+			itemGroup: "living room",
+			quantity: "1",
+			ownerDeclaredState: "worn",
+			conditionDetails: "Minor fabric marks.",
+		},
+		{
+			itemLabel: "Dining table",
+			itemKind: "furniture",
+			itemGroup: "dining",
+			quantity: "1",
+			ownerDeclaredState: "good",
+			conditionDetails: "",
+		},
+		{
+			itemLabel: "Bed",
+			itemKind: "furniture",
+			itemGroup: "bedroom",
+			quantity: "2",
+			ownerDeclaredState: "good",
+			conditionDetails: "",
+		},
+		{
+			itemLabel: "Mattress",
+			itemKind: "furnishing",
+			itemGroup: "bedroom",
+			quantity: "2",
+			ownerDeclaredState: "good",
+			conditionDetails: "",
+		},
+		{
+			itemLabel: "Keys",
+			itemKind: "access",
+			itemGroup: "main door",
+			quantity: "2",
+			ownerDeclaredState: "handed over",
+			conditionDetails: "Two physical keys.",
+		},
+		{
+			itemLabel: "Remote controls",
+			itemKind: "accessory",
+			itemGroup: "living room",
+			quantity: "2",
+			ownerDeclaredState: "working",
+			conditionDetails: "",
+		},
+	];
+
+	function htmlEscape(value = "") {
+		return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+	}
+
+	function mediaRefFromHidden(prefix: string, kind: string, scope: string): MediaRef | null {
+		if (!form) return null;
+
+		const read = (name: string) =>
+			(form.querySelector<HTMLInputElement>(`[name="${prefix}.${name}"]`)?.value ?? "").trim();
+
+		const mediaId = read("mediaId");
+		const storageKey = read("storageKey");
+		const mimeType = read("mimeType");
+		const filename = read("filename");
+		const url = read("url");
+
+		if (!mediaId && !storageKey && !url) return null;
+
+		return {
+			mediaId,
+			storageKey,
+			mimeType,
+			filename,
+			url,
+			kind,
+			scope,
+			createdAt: new Date().toISOString(),
+		};
+	}
+
+	async function uploadMediaFile(file: File, kind: string, scope: string): Promise<MediaRef> {
+		const body = new FormData();
+		body.append("file", file);
+
+		const response = await fetch("/_emdash/api/media", {
+			method: "POST",
+			credentials: "same-origin",
+			headers: {
+				"X-EmDash-Request": "1",
+			},
+			body,
+		});
+
+		const payload = await response.json().catch(() => ({}));
+
+		if (!response.ok) {
+			throw new Error(payload?.error?.message ?? "Media upload failed");
+		}
+
+		const item = payload?.data?.item ?? payload?.item;
+
+		return {
+			mediaId: String(item?.id ?? ""),
+			storageKey: String(item?.storageKey ?? ""),
+			mimeType: String(item?.mimeType ?? file.type),
+			filename: String(item?.filename ?? file.name),
+			url: String(item?.url ?? ""),
+			kind,
+			scope,
+			createdAt: new Date().toISOString(),
+		};
+	}
+
+	function addInventoryRow(item: Partial<InventoryItem> = {}) {
+		if (!inventoryEditor) return;
+
+		const row = document.createElement("article");
+		row.className = "inventory-row";
+		row.innerHTML = `
+			<label>
+				Item label
+				<input name="itemLabel" value="${htmlEscape(item.itemLabel)}" />
+			</label>
+			<label>
+				Item kind
+				<input name="itemKind" value="${htmlEscape(item.itemKind ?? "fixture")}" />
+			</label>
+			<label>
+				Room / group
+				<input name="itemGroup" value="${htmlEscape(item.itemGroup)}" />
+			</label>
+			<label>
+				Quantity
+				<input name="quantity" type="number" value="${htmlEscape(item.quantity ?? "1")}" />
+			</label>
+			<label>
+				Owner declared state
+				<input name="ownerDeclaredState" value="${htmlEscape(item.ownerDeclaredState ?? "working")}" />
+			</label>
+			<label>
+				Item image/PDF evidence
+				<input name="mediaFile" type="file" accept="image/*,application/pdf" />
+				<span class="media-note">Optional. Stored through EmDash media.</span>
+			</label>
+			<label class="wide">
+				Condition details
+				<textarea name="conditionDetails">${htmlEscape(item.conditionDetails ?? "")}</textarea>
+			</label>
+			<button class="rental-button secondary remove-row" type="button">Delete row</button>
+		`;
+
+		row.querySelector(".remove-row")?.addEventListener("click", () => row.remove());
+		inventoryEditor.append(row);
+	}
+
+	async function collectInventoryRows() {
+		const rows = [...document.querySelectorAll<HTMLElement>(".inventory-row")];
+		const items = [];
+
+		for (const row of rows) {
+			const scoped = (name: string) =>
+				(row.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)?.value ?? "").trim();
+
+			const itemLabel = scoped("itemLabel");
+			if (!itemLabel) continue;
+
+			const mediaFile = row.querySelector<HTMLInputElement>('[name="mediaFile"]')?.files?.[0];
+			const mediaRefs = mediaFile
+				? [await uploadMediaFile(mediaFile, "item_evidence", "asset_config_item")]
+				: [];
+
+			items.push({
+				itemKind: scoped("itemKind") || "fixture",
+				itemGroup: scoped("itemGroup"),
+				itemLabel,
+				ownerDeclaredState: scoped("ownerDeclaredState") || "working",
+				itemSpec: {
+					quantity: Number(scoped("quantity") || "1"),
+					room: scoped("itemGroup"),
+					conditionDetails: scoped("conditionDetails"),
+				},
+				mediaRefs,
+			});
+		}
+
+		return items;
+	}
+
+	async function postJson(url: string, body: Record<string, unknown>) {
+		const response = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"X-EmDash-Request": "1",
+			},
+			body: JSON.stringify(body),
+		});
+
+		const payload = await response.json().catch(() => ({}));
+
+		if (!response.ok) {
+			throw new Error(payload?.error?.message ?? `${url} failed`);
+		}
+
+		return payload.data;
+	}
+
+	form?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+
+		const data = new FormData(form);
+
+		if (status) status.textContent = "Creating asset...";
+
+		try {
+						const ownerConditionsSpec = {
+				depositPolicy: data.get("depositPolicy"),
+				documentsRequired: [],
+				preScreenQuestions: [
+					{
+						key: "name",
+						label: "What is your full name?",
+						kind: "text",
+						required: true,
+						target: "name",
+						placeholder: "Your name",
+					},
+					{
+						key: "phone_whatsapp",
+						label: "What is your phone / WhatsApp number?",
+						kind: "phone",
+						required: true,
+						target: "phone",
+						placeholder: "+91...",
+					},
+					{
+						key: "official_email",
+						label: "What email should we keep on record?",
+						kind: "email",
+						required: true,
+						target: "officialEmail",
+						placeholder: "name@example.com",
+					},
+					{
+						key: "move_in_date",
+						label: "When do you want to move in?",
+						kind: "date",
+						required: true,
+						target: "requestedStartDate",
+					},
+					{
+						key: "minimum_stay",
+						label: "Can you stay for the owner’s minimum stay requirement?",
+						kind: "single_choice",
+						required: true,
+						options: ["Yes", "Need to discuss"],
+						target: "minimumStayAccepted",
+					},
+					{
+						key: "requested_minimum_months",
+						label: "How many months do you expect to stay?",
+						kind: "number",
+						required: true,
+						target: "requestedMinimumMonths",
+						placeholder: "11",
+					},
+					{
+						key: "occupants",
+						label: "Who will live in the flat?",
+						kind: "textarea",
+						required: true,
+						target: "occupants",
+						placeholder: "Example: husband, wife, one child",
+					},
+					{
+						key: "employer",
+						label: "Where do you work, or what is your income source?",
+						kind: "text",
+						required: true,
+						target: "employerName",
+						placeholder: "Company / business / profession",
+					},
+					{
+						key: "rent_acceptance",
+						label: "Are you comfortable with the listed rent and stated terms?",
+						kind: "single_choice",
+						required: true,
+						options: ["Yes", "Need to discuss"],
+						target: "rentAcceptance",
+					},
+					{
+						key: "offered_price",
+						label: "If you want to make a rent offer, enter the monthly amount. Leave blank if you accept the listed rent.",
+						kind: "number",
+						required: false,
+						target: "offeredPrice",
+						placeholder: "33000",
+					},
+					{
+						key: "normal_residential_use",
+						label: "Will this be used only as a normal residence, not Airbnb, guest-house, or short stay?",
+						kind: "single_choice",
+						required: true,
+						options: ["Yes, normal residence only", "Need to discuss"],
+						target: "normalResidentialUse",
+					},
+					{
+						key: "final_note",
+						label: "Anything else the owner should know before calling you?",
+						kind: "textarea",
+						required: false,
+						target: "message",
+						placeholder: "Write a short note for the owner",
+					},
+				],
+			};
+
+			const assetMediaRef = mediaRefFromHidden("assetMedia", "asset_thumbnail", "asset");
+
+			const addData = await postJson("/test-corridor/api/wf1-rental/owner/assets/add", {
+				assetKind: data.get("assetKind"),
+				title: data.get("title"),
+				locationLabel: data.get("locationLabel"),
+				publicPrice: Number(data.get("publicPrice")),
+				currency: "INR",
+				ownerConditionsSpec,
+			});
+
+			const assetId = addData.asset.id;
+
+			await postJson(`/test-corridor/api/wf1-rental/owner/assets/${assetId}/config`, {
+				publicPrice: Number(data.get("publicPrice")),
+				minimumMonths: Number(data.get("minimumMonths")),
+				configSpec: {
+					bedrooms: Number(data.get("bedrooms")),
+					furnishing: data.get("furnishing"),
+					thumbnailMediaRef: assetMediaRef,
+					mediaRefs: assetMediaRef ? [assetMediaRef] : [],
+				},
+				conditionSpec: {
+					walls: data.get("walls"),
+				},
+				ownerConditionsSpec,
+				items: await collectInventoryRows(),
+			});
+
+			if (data.get("publish")) {
+				await postJson(`/test-corridor/api/wf1-rental/owner/assets/${assetId}/publish-to-marketplace`, {});
+			}
+
+			location.href = `/test-corridor/test-corridor/wf1/marketplace/assets/${assetId}`;
+		} catch (error) {
+			if (status) {
+				status.textContent = error instanceof Error ? error.message : "Create asset failed";
+			}
+		}
+	});
+
+	addInventoryRow({
+		itemLabel: "Geyser",
+		itemKind: "appliance",
+		itemGroup: "bathroom",
+		quantity: "1",
+		ownerDeclaredState: "working",
+		conditionDetails: "Heats water, no leakage.",
+	});
+
+	addInventoryRowButton?.addEventListener("click", () => addInventoryRow());
+
+	addStarterInventoryButton?.addEventListener("click", () => {
+		inventoryEditor?.replaceChildren();
+		starterInventory.forEach(addInventoryRow);
+	});
+
+	(window as unknown as { __rentalFormsReady?: boolean }).__rentalFormsReady = true;
+</script>
+
+<style>
+	.create-grid,
+	.create-form,
+	.inventory-editor {
+		display: grid;
+		gap: 16px;
+	}
+
+	.create-grid {
+		grid-template-columns: minmax(260px, 0.65fr) minmax(0, 1.35fr);
+		gap: 28px;
+		align-items: start;
+	}
+
+	.form-section {
+		display: grid;
+		gap: 14px;
+		border-top: 1px solid var(--r-border);
+		padding-top: 18px;
+	}
+
+	.section-head,
+	.section-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 12px;
+	}
+
+	.section-head {
+		align-items: end;
+		justify-content: space-between;
+	}
+
+	.inventory-row {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(130px, 1fr));
+		gap: 10px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 12px;
+		background: var(--r-bg);
+	}
+
+	.inventory-row label {
+		display: grid;
+		gap: 6px;
+		color: var(--r-muted);
+		font-size: 0.84rem;
+		font-weight: 750;
+	}
+
+	.inventory-row label.wide {
+		grid-column: span 2;
+	}
+
+	.inventory-row input,
+	.inventory-row textarea {
+		width: 100%;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 9px 10px;
+		background: var(--r-panel);
+		color: var(--r-text);
+	}
+
+	.media-note {
+		color: var(--r-muted);
+		font-size: 0.78rem;
+		font-weight: 650;
+	}
+
+	@media (max-width: 900px) {
+		.create-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.inventory-row {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	@media (max-width: 560px) {
+		.inventory-row,
+		.inventory-row label.wide {
+			grid-template-columns: 1fr;
+			grid-column: span 1;
+		}
+	}
+</style>

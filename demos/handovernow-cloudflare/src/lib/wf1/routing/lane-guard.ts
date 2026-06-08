@@ -132,26 +132,10 @@ export async function assertWf1RouteLane(
 	}
 
 	if (method === "POST" && parts[0] === "owner" && parts[1] === "assets" && parts[2] === "add") {
-		if (lane === "test") {
-			throw new DomainError(
-				"TEST_ASSET_CREATE_UNSUPPORTED",
-				"Test-lane asset creation is not enabled in Chapter 1. Create the asset through the public owner UI, then mark it as test-lane by asset id.",
-				400,
-			);
-		}
-
 		return;
 	}
 
 	if (method === "GET" && parts[0] === "owner" && parts[1] === "dashboard") {
-		if (lane === "test") {
-			throw new DomainError(
-				"TEST_OWNER_DASHBOARD_UNSUPPORTED",
-				"Test-lane owner dashboard is not enabled in Chapter 1.",
-				404,
-			);
-		}
-
 		return;
 	}
 

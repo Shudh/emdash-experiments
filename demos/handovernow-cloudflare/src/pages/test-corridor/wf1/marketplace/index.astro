@@ -1,12 +1,16 @@
 ---
-import Wf1Base from "../../../../components/wf1/Wf1Base.astro";
-import Wf1TestLaneBanner from "../../../../components/wf1/Wf1TestLaneBanner.astro";
+import Wf1TestBase from "../../../../components/wf1-test/Wf1TestBase.astro";
 
 import { DomainError } from "../../../../lib/domain/types.js";
-import { applyTestLaneNoStoreHeaders, testLaneHostRejectionResponse } from "../../../../lib/wf1/routing/host-policy.js";
-import { wf1AssetHref } from "../../../../lib/wf1/routing/lane.js";
 import { listWorkflowMarketplaceAssets } from "../../../../lib/wf1/queries/marketplace.js";
 import { getWf1PageContext } from "../../../../lib/wf1/server/context.js";
+
+import Wf1TestLaneBanner from "../../../../components/wf1-test/Wf1TestLaneBanner.astro";
+
+import {
+	applyTestLaneNoStoreHeaders,
+	testLaneHostRejectionResponse,
+} from "../../../../lib/wf1/routing/host-policy.js";
 
 export const prerender = false;
 
@@ -17,6 +21,13 @@ if (rejection) {
 }
 
 applyTestLaneNoStoreHeaders(Astro.response.headers);
+
+
+type MarketplaceCta = {
+	label: string;
+	href: string;
+	tone: "primary" | "secondary";
+};
 
 type AssetRow = Record<string, unknown>;
 
@@ -51,14 +62,26 @@ async function loadAssetsDirect(): Promise<PageLoadResult> {
 			};
 		}
 
-		console.error("[wf1-test] Failed to load test marketplace assets", error);
+		console.error("[wf1] Failed to load marketplace assets", error);
 
 		return {
 			ok: false,
 			assets: [],
-			error: "Test marketplace assets could not be loaded.",
+			error: "Marketplace assets could not be loaded.",
 		};
 	}
+}
+
+function viewerFor(asset: AssetRow) {
+	return asset.viewer && typeof asset.viewer === "object" && !Array.isArray(asset.viewer)
+		? (asset.viewer as Record<string, unknown>)
+		: {};
+}
+
+function configFor(asset: AssetRow) {
+	return asset.config_spec && typeof asset.config_spec === "object" && !Array.isArray(asset.config_spec)
+		? (asset.config_spec as Record<string, unknown>)
+		: {};
 }
 
 function numberTime(value: unknown): number {
@@ -73,14 +96,6 @@ function publishedStamp(asset: AssetRow): number {
 		numberTime(asset.published_at),
 		numberTime(asset.created_at),
 	);
-}
-
-function sortMarketplaceAssets(items: Array<AssetRow>): Array<AssetRow> {
-	return items.toSorted((left, right) => publishedStamp(right) - publishedStamp(left));
-}
-
-function assetDetailHref(asset: AssetRow): string {
-	return wf1AssetHref("test", String(asset.id ?? ""));
 }
 
 function moneyLabel(asset: AssetRow): string {
@@ -98,46 +113,197 @@ function moneyLabel(asset: AssetRow): string {
 	}).format(amount);
 }
 
+function minimumMonthsLabel(asset: AssetRow): string {
+	const months = Number(asset.minimum_months ?? 0);
+
+	if (!Number.isFinite(months) || months <= 0) {
+		return "";
+	}
+
+	return `Minimum stay: ${months} month${months === 1 ? "" : "s"}`;
+}
+
+function publishedLabel(asset: AssetRow): string {
+	const timestamp = numberTime(asset.published_at);
+
+	if (!timestamp) {
+		return "";
+	}
+
+	return new Intl.DateTimeFormat("en-IN", {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(new Date(timestamp));
+}
+
+function hasApplication(asset: AssetRow): boolean {
+	return String(viewerFor(asset).relationship ?? "") === "interested_applicant";
+}
+
+function sortMarketplaceAssets(items: Array<AssetRow>): Array<AssetRow> {
+	return items.toSorted((left, right) => publishedStamp(right) - publishedStamp(left));
+}
+
+function mediaUrlFromStorageKey(storageKey: string) {
+	return `/_emdash/api/media/file/${storageKey
+		.split("/")
+		.map((part) => encodeURIComponent(part))
+		.join("/")}`;
+}
+
+function thumbnailFor(asset: AssetRow) {
+	const config = configFor(asset);
+	const thumbnail =
+		config.thumbnailMediaRef && typeof config.thumbnailMediaRef === "object"
+			? (config.thumbnailMediaRef as Record<string, unknown>)
+			: null;
+	const mediaRefs = Array.isArray(config.mediaRefs)
+		? (config.mediaRefs.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>)
+		: [];
+	const media = thumbnail ?? mediaRefs[0] ?? null;
+
+	if (!media) return null;
+
+	const url =
+		typeof media.url === "string" && media.url
+			? media.url
+			: typeof media.storageKey === "string" && media.storageKey
+				? mediaUrlFromStorageKey(media.storageKey)
+				: "";
+
+	if (!url) return null;
+
+	return {
+		url,
+		mimeType: String(media.mimeType ?? ""),
+		filename: String(media.filename ?? "Asset media"),
+	};
+}
+
+function assetDetailHref(asset: AssetRow) {
+	return `/test-corridor/test-corridor/wf1/marketplace/assets/${String(asset.id)}`;
+}
+
+function loginHrefFor(asset: AssetRow) {
+	return `/login?redirect=${encodeURIComponent(assetDetailHref(asset))}`;
+}
+
+function cardCta(asset: AssetRow): MarketplaceCta {
+	const viewer = viewerFor(asset);
+	const relationship = String(viewer.relationship ?? "anonymous");
+	const workflowInstanceId =
+		typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
+	const canExpressInterest = viewer.canExpressInterest === true;
+
+	if (relationship === "owner") {
+		return {
+			label: "Manage in owner dashboard",
+			href: "/test-corridor/wf1/owner",
+			tone: "secondary",
+		};
+	}
+
+	if (relationship === "interested_applicant" && workflowInstanceId) {
+		return {
+			label: "Open application workspace",
+			href: `/test-corridor/wf1/workspaces/${workflowInstanceId}`,
+			tone: "primary",
+		};
+	}
+
+	if (relationship === "interested_applicant") {
+		return {
+			label: "View application",
+			href: assetDetailHref(asset),
+			tone: "primary",
+		};
+	}
+
+	if (relationship === "anonymous") {
+		return {
+			label: "Login to apply",
+			href: loginHrefFor(asset),
+			tone: "primary",
+		};
+	}
+
+	if (canExpressInterest) {
+		return {
+			label: "View and apply",
+			href: assetDetailHref(asset),
+			tone: "primary",
+		};
+	}
+
+	return {
+		label: "View details",
+		href: assetDetailHref(asset),
+		tone: "secondary",
+	};
+}
+
 const loadResult = await loadAssetsDirect();
 const assets = sortMarketplaceAssets(loadResult.assets);
+const applicationCount = assets.filter(hasApplication).length;
 ---
 
-<Wf1Base title="WF1 test marketplace" description="Protected WF1 production test marketplace">
+<Wf1TestBase title="WF1 marketplace" description="WF1 workflow marketplace">
 	<Wf1TestLaneBanner />
 
 	<section class="rental-section">
 		<div class="rental-shell">
 			<div class="rental-section-header">
 				<div>
-					<p class="rental-kicker">Protected production test corridor</p>
-					<h1>Published test assets</h1>
+					<p class="rental-kicker">Marketplace</p>
+					<h1>Published assets</h1>
 					<p class="rental-muted">
-						Only assets marked with config_spec.testLane.enabled = true appear here.
+						Latest published listings appear first.
 					</p>
+				</div>
+				<div class="marketplace-actions">
+					{applicationCount ? <a class="rental-button secondary" href="/test-corridor/wf1#my-applications">My applications</a> : null}
+					<a class="rental-button secondary" href="/test-corridor/test-corridor/wf1/owner/assets/new">List asset</a>
 				</div>
 			</div>
 
 			{!loadResult.ok ? (
 				<div class="rental-panel marketplace-error">
-					<h2>Test marketplace load failed</h2>
+					<h2>Marketplace load failed</h2>
 					<p class="rental-muted">{loadResult.error}</p>
 				</div>
 			) : assets.length ? (
-				<div class="rental-grid" data-test-marketplace-grid>
+				<div class="rental-grid" data-marketplace-grid>
 					{assets.map((asset) => {
+						const cta = cardCta(asset);
 						const detailHref = assetDetailHref(asset);
+						const thumbnail = thumbnailFor(asset);
+						const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
+						const published = publishedLabel(asset);
 						const price = moneyLabel(asset);
+						const minimumMonths = minimumMonthsLabel(asset);
 
 						return (
-							<article class="rental-panel asset-card">
+							<article class:list={["rental-panel", "asset-card", { applied: hasApplication(asset) }]}>
+								<a class="asset-thumb" href={detailHref} aria-label={`Open ${String(asset.title ?? "asset")}`}>
+									{thumbnail && isImage ? (
+										<img src={thumbnail.url} alt={thumbnail.filename} loading="lazy" />
+									) : thumbnail ? (
+										<span>{thumbnail.filename || "PDF attached"}</span>
+									) : (
+										<span>No image yet</span>
+									)}
+								</a>
+
 								<div class="asset-card-title">
-									<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
+									<p class="rental-kicker">{hasApplication(asset) ? "My application" : String(asset.asset_kind ?? "asset")}</p>
 									<h2>
-										<a href={detailHref}>{String(asset.title ?? "Untitled test asset")}</a>
+										<a href={detailHref}>{String(asset.title ?? "Untitled asset")}</a>
 									</h2>
 								</div>
 								<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
 								{price ? <p class="asset-price">{price} / month</p> : null}
+								{minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
+								{published ? <p class="rental-muted asset-published">Published: {published}</p> : null}
 								<div class="rental-badges">
 									<span class="rental-badge">
 										Asset State: {String(asset.business_state ?? "listed")}
@@ -145,7 +311,9 @@ const assets = sortMarketplaceAssets(loadResult.assets);
 									<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
 								</div>
 								<div class="asset-card-actions">
-									<a class="rental-button" href={detailHref}>Open test listing</a>
+									<a class={`rental-button ${cta.tone === "secondary" ? "secondary" : ""}`} href={cta.href}>
+										{cta.label}
+									</a>
 								</div>
 							</article>
 						);
@@ -153,14 +321,21 @@ const assets = sortMarketplaceAssets(loadResult.assets);
 				</div>
 			) : (
 				<div class="rental-panel">
-					<p class="rental-muted">No test marketplace assets are currently listed.</p>
+					<p class="rental-muted">No marketplace assets are currently listed.</p>
 				</div>
 			)}
 		</div>
 	</section>
-</Wf1Base>
+</Wf1TestBase>
 
 <style>
+	.marketplace-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		justify-content: flex-end;
+	}
+
 	.marketplace-error {
 		border-color: rgba(220, 38, 38, 0.36);
 		background:
@@ -174,18 +349,63 @@ const assets = sortMarketplaceAssets(loadResult.assets);
 		align-content: start;
 	}
 
-	.asset-card-title h2 a {
+	.asset-card.applied {
+		border-color: rgba(234, 88, 12, 0.48);
+		background:
+			linear-gradient(180deg, rgba(255, 247, 237, 0.82), rgba(255, 255, 255, 0.96)),
+			var(--r-panel);
+	}
+
+	.asset-thumb {
+		display: grid;
+		place-items: center;
+		width: 100%;
+		aspect-ratio: 16 / 10;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		background: var(--r-panel-soft);
+		color: var(--r-muted);
+		font-weight: 850;
+		overflow: hidden;
+	}
+
+	.asset-thumb img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+
+	.asset-card-title {
+		display: grid;
+		gap: 4px;
+	}
+
+	.asset-card h2 a {
 		color: inherit;
 		text-decoration: none;
 	}
 
-	.asset-card-title h2 a:hover {
+	.asset-card h2 a:hover {
 		text-decoration: underline;
 	}
 
+	.asset-published {
+		font-size: 0.86rem;
+	}
+
 	.asset-card-actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 10px;
+		margin-top: 4px;
+	}
+
+	.asset-price {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 900;
+		color: var(--r-text);
+	}
+
+	.asset-minimum {
+		font-size: 0.86rem;
 	}
 </style>

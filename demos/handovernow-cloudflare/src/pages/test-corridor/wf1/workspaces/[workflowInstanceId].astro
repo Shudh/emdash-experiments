@@ -1,15 +1,25 @@
 ---
 import SpecTable from "../../../../components/rental/SpecTable.astro";
-import Wf1Base from "../../../../components/wf1/Wf1Base.astro";
+import Wf1ActionPanel from "../../../../components/wf1-test/Wf1ActionPanel.astro";
+import Wf1AssetConfigItemsPanel from "../../../../components/wf1-test/Wf1AssetConfigItemsPanel.astro";
+import Wf1TestBase from "../../../../components/wf1-test/Wf1TestBase.astro";
+import Wf1CardComposerPanel from "../../../../components/wf1-test/Wf1CardComposerPanel.astro";
+import Wf1MoveoutTaskGenerator from "../../../../components/wf1-test/Wf1MoveoutTaskGenerator.astro";
+import Wf1RequiredGatePanel from "../../../../components/wf1-test/Wf1RequiredGatePanel.astro";
+import Wf1StatePanel from "../../../../components/wf1-test/Wf1StatePanel.astro";
+import Wf1TaskBuckets from "../../../../components/wf1-test/Wf1TaskBuckets.astro";
+import Wf1Timeline from "../../../../components/wf1-test/Wf1Timeline.astro";
 
-import Wf1TestLaneBanner from "../../../../components/wf1/Wf1TestLaneBanner.astro";
-import Wf1Timeline from "../../../../components/wf1/Wf1Timeline.astro";
-
-import { applyTestLaneNoStoreHeaders, testLaneHostRejectionResponse } from "../../../../lib/wf1/routing/host-policy.js";
-import { wf1MarketplaceHref } from "../../../../lib/wf1/routing/lane.js";
-import { assertWorkflowInstanceIdInLane } from "../../../../lib/wf1/routing/lane-guard.js";
 import { getWf1WorkflowInstanceWorkspace } from "../../../../lib/wf1/queries/workspace-instance.js";
 import { getWf1PageContext } from "../../../../lib/wf1/server/context.js";
+
+import Wf1TestLaneBanner from "../../../../components/wf1-test/Wf1TestLaneBanner.astro";
+
+import {
+	applyTestLaneNoStoreHeaders,
+	testLaneHostRejectionResponse,
+} from "../../../../lib/wf1/routing/host-policy.js";
+import { assertWorkflowInstanceIdInLane } from "../../../../lib/wf1/routing/lane-guard.js";
 
 export const prerender = false;
 
@@ -21,27 +31,36 @@ if (rejection) {
 
 applyTestLaneNoStoreHeaders(Astro.response.headers);
 
+
+type JsonObject = Record<string, unknown>;
+
 const workflowInstanceId = Astro.params.workflowInstanceId;
 
-async function loadWorkspace() {
+function isObjectRecord(value: unknown): value is JsonObject {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function loadWorkspace(): Promise<JsonObject | null> {
 	if (!workflowInstanceId) return null;
 
 	try {
 		const { store, user } = await getWf1PageContext(Astro);
 		await assertWorkflowInstanceIdInLane(store, "test", workflowInstanceId);
-		return await getWf1WorkflowInstanceWorkspace(store, user, workflowInstanceId);
-	} catch {
+		const workspace = await getWf1WorkflowInstanceWorkspace(store, user, workflowInstanceId);
+		return isObjectRecord(workspace) ? workspace : null;
+	} catch (error) {
+		console.error("[wf1] Failed to load workflow workspace", error);
 		return null;
 	}
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
-	return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+function objectValue(value: unknown): JsonObject {
+	return isObjectRecord(value) ? value : {};
 }
 
-function arrayValue(value: unknown): Array<Record<string, unknown>> {
+function arrayValue(value: unknown): Array<JsonObject> {
 	return Array.isArray(value)
-		? value.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>
+		? value.filter((item): item is JsonObject => isObjectRecord(item))
 		: [];
 }
 
@@ -52,83 +71,104 @@ const instance = objectValue(workspace?.instance);
 const projection = objectValue(workspace?.projection);
 const applicationState = objectValue(projection.applicationState);
 const assetState = objectValue(projection.assetState);
+const taskBuckets = objectValue(projection.taskBuckets) as Record<string, Array<JsonObject>>;
+const responses = arrayValue(workspace?.responses);
 const events = arrayValue(workspace?.events);
+const assetConfigItems = arrayValue(workspace?.assetConfigItems);
+const availableActions = arrayValue(projection.availableActions);
+const availableCardTypes = arrayValue(projection.availableCardTypes);
+const requiredUnresolvedTasks = arrayValue(taskBuckets.requiredUnresolvedTasks);
 const viewerRole = String(workspace?.viewerRole ?? "unknown");
-const primaryNextStep = String(projection.primaryNextStep ?? "No action needed now");
+const workspaceHref = workflowInstanceId ? `/test-corridor/wf1/workspaces/${workflowInstanceId}` : "/test-corridor/wf1";
+const canGenerateMoveoutTasks =
+	viewerRole === "owner" &&
+	String(applicationState.id ?? "") === "moveout_requested" &&
+	String(assetState.id ?? "") === "return_pending";
 ---
 
-<Wf1Base title="WF1 test workspace" description="Protected WF1 test workspace">
+<Wf1TestBase title="WF1 workspace" description="Generic workflow workspace">
 	<Wf1TestLaneBanner />
 
-	{workspace ? (
-		<section class="rental-section">
-			<div class="rental-shell workspace-grid">
-				<div class="workspace-head">
-					<p class="rental-kicker">Protected test workspace</p>
-					<h1>{String(asset.title ?? "Asset application form")}</h1>
-					<p class="rental-muted">
-						Workflow definition: {String(instance.definition_id ?? "unknown")}@{String(instance.definition_version ?? "1")}
-					</p>
-					<p class="rental-muted">Viewer role: {viewerRole}</p>
-					<a class="rental-button secondary" href={wf1MarketplaceHref("test")}>Back to test marketplace</a>
-				</div>
+	<section class="rental-section">
+		<div class="rental-shell workspace-grid">
+			{workspace ? (
+				<>
+					<div class="workspace-header">
+						<div>
+							<p class="rental-kicker">Workspace</p>
+							<h1>{String(asset.title ?? "Asset application form")}</h1>
+							<p class="rental-muted">Workflow definition: {String(instance.definition_id ?? "unknown")}@{String(instance.definition_version ?? "1")}</p>
+						</div>
+						<a class="rental-button secondary" href="/test-corridor/wf1/owner">Owner dashboard</a>
+					</div>
 
-				<div class="state-grid">
-	<div class="rental-panel">
-		<SpecTable title="Application state" spec={applicationState} />
-	</div>
+					<Wf1StatePanel projection={projection} viewerRole={viewerRole} />
 
-	<div class="rental-panel">
-		<SpecTable title="Asset state" spec={assetState} />
-	</div>
-</div>
-
+					<div class="workspace-columns">
+						<aside class="sidebar">
+							<div class="rental-panel">
+								<h2>Application Form Context</h2>
+								<SpecTable title="Applicant" spec={{
+									name: interest.name,
+									official_email: interest.official_email,
+									employer_name: interest.employer_name,
+									offered_price: interest.offered_price,
+								}} />
+							</div>
+							<Wf1AssetConfigItemsPanel items={assetConfigItems} />
+							<Wf1RequiredGatePanel requiredUnresolvedTasks={requiredUnresolvedTasks} />
+						</aside>
+						<main class="thread">
+							<Wf1ActionPanel availableActions={availableActions} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
+							<Wf1CardComposerPanel availableCardTypes={availableCardTypes} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
+							{canGenerateMoveoutTasks ? (
+								<Wf1MoveoutTaskGenerator
+									assetConfigItems={assetConfigItems}
+									workflowInstanceId={String(instance.id ?? "")}
+									workspaceHref={workspaceHref}
+								/>
+							) : null}
+							<Wf1TaskBuckets taskBuckets={taskBuckets} responses={responses} workspaceHref={workspaceHref} />
+							<Wf1Timeline events={events} />
+						</main>
+					</div>
+				</>
+			) : (
 				<div class="rental-panel">
-					<h2>Next step</h2>
-					<p class="rental-muted">{primaryNextStep}</p>
+					<h1>Workspace unavailable</h1>
+					<p class="rental-muted">Login as Eva or Rakesh for this workflow instance.</p>
 				</div>
-
-				<div class="rental-panel">
-					<SpecTable title="Application context" spec={interest} />
-				</div>
-
-				<Wf1Timeline events={events} />
-			</div>
-		</section>
-	) : (
-		<section class="rental-section">
-			<div class="rental-shell">
-				<div class="rental-panel">
-					<h1>Test workspace unavailable</h1>
-					<p class="rental-muted">
-						This workspace is not available in the protected test corridor.
-					</p>
-					<a class="rental-button" href={wf1MarketplaceHref("test")}>Back to test marketplace</a>
-				</div>
-			</div>
-		</section>
-	)}
-</Wf1Base>
+			)}
+		</div>
+	</section>
+</Wf1TestBase>
 
 <style>
-	.workspace-grid {
+	.workspace-grid,
+	.thread,
+	.sidebar {
 		display: grid;
 		gap: 18px;
 	}
 
-	.workspace-head {
-		display: grid;
-		gap: 8px;
+	.workspace-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
 	}
-	.state-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 18px;
-}
 
-@media (max-width: 900px) {
-	.state-grid {
-		grid-template-columns: 1fr;
+	.workspace-columns {
+		display: grid;
+		grid-template-columns: 340px minmax(0, 1fr);
+		gap: 18px;
+		align-items: start;
 	}
-}
+
+	@media (max-width: 900px) {
+		.workspace-columns {
+			grid-template-columns: 1fr;
+		}
+	}
 </style>

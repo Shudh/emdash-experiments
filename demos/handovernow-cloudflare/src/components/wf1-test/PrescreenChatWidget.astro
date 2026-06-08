@@ -1,0 +1,1433 @@
+---
+import type { HumanCheckChallenge } from "../../lib/wf1/security/human-check.js";
+
+type JsonObject = Record<string, unknown>;
+
+type OwnerConditions = {
+	version?: unknown;
+	hash?: unknown;
+	spec?: JsonObject | null;
+};
+
+type PrescreenQuestionKind =
+	| "text"
+	| "textarea"
+	| "phone"
+	| "email"
+	| "date"
+	| "number"
+	| "single_choice";
+
+type PrescreenQuestion = {
+	key: string;
+	label: string;
+	kind: PrescreenQuestionKind;
+	required: boolean;
+	options?: string[];
+	target: string;
+	placeholder: string;
+};
+
+type PrescreenWidgetProps = {
+	asset: JsonObject;
+	ownerConditions?: OwnerConditions | null;
+	action: string;
+	loginHref: string;
+	canSubmit: boolean;
+	humanCheckChallenge: HumanCheckChallenge;
+	turnstileSiteKey?: string;
+};
+
+const props = Astro.props as PrescreenWidgetProps;
+
+const asset = props.asset;
+const ownerConditions = props.ownerConditions;
+const action = props.action;
+const loginHref = props.loginHref;
+const canSubmit = props.canSubmit;
+const humanCheckChallenge = props.humanCheckChallenge;
+
+let turnstileSiteKey = "";
+if (typeof props.turnstileSiteKey === "string") {
+	turnstileSiteKey = props.turnstileSiteKey;
+}
+
+let assetId = "";
+if (typeof asset.id === "string") {
+	assetId = asset.id;
+}
+
+let assetTitle = "this property";
+if (typeof asset.title === "string" && asset.title.trim() !== "") {
+	assetTitle = asset.title.trim();
+}
+
+let publicPrice = 0;
+if (typeof asset.public_price === "number" && Number.isFinite(asset.public_price)) {
+	publicPrice = asset.public_price;
+}
+
+let currency = "INR";
+if (typeof asset.currency === "string" && asset.currency.trim() !== "") {
+	currency = asset.currency.trim();
+}
+
+let minimumMonths = 0;
+if (typeof asset.minimum_months === "number" && Number.isFinite(asset.minimum_months)) {
+	minimumMonths = asset.minimum_months;
+}
+
+let ownerConditionVersion = 0;
+if (
+	ownerConditions !== null &&
+	ownerConditions !== undefined &&
+	typeof ownerConditions.version === "number" &&
+	Number.isFinite(ownerConditions.version)
+) {
+	ownerConditionVersion = ownerConditions.version;
+}
+
+let ownerConditionHash = "";
+if (
+	ownerConditions !== null &&
+	ownerConditions !== undefined &&
+	typeof ownerConditions.hash === "string"
+) {
+	ownerConditionHash = ownerConditions.hash;
+}
+
+let ownerSpec: JsonObject = {};
+if (
+	ownerConditions !== null &&
+	ownerConditions !== undefined &&
+	ownerConditions.spec !== null &&
+	ownerConditions.spec !== undefined &&
+	typeof ownerConditions.spec === "object" &&
+	Array.isArray(ownerConditions.spec) === false
+) {
+	ownerSpec = ownerConditions.spec;
+}
+
+let customQuestionValues: unknown[] = [];
+if (Array.isArray(ownerSpec.preScreenQuestions) === true) {
+	customQuestionValues = ownerSpec.preScreenQuestions;
+}
+
+function moneyLabel(): string {
+	if (Number.isFinite(publicPrice) === false) {
+		return "";
+	}
+
+	if (publicPrice <= 0) {
+		return "";
+	}
+
+	const formatter = new Intl.NumberFormat("en-IN", {
+		style: "currency",
+		currency: currency,
+		maximumFractionDigits: 0,
+	});
+
+	const formattedValue = formatter.format(publicPrice);
+	return formattedValue;
+}
+
+function isSupportedQuestionKind(value: string): value is PrescreenQuestionKind {
+	if (value === "text") {
+		return true;
+	}
+
+	if (value === "textarea") {
+		return true;
+	}
+
+	if (value === "phone") {
+		return true;
+	}
+
+	if (value === "email") {
+		return true;
+	}
+
+	if (value === "date") {
+		return true;
+	}
+
+	if (value === "number") {
+		return true;
+	}
+
+	if (value === "single_choice") {
+		return true;
+	}
+
+	return false;
+}
+
+function normalizeQuestion(value: unknown): PrescreenQuestion | null {
+	if (value === null) {
+		return null;
+	}
+
+	if (value === undefined) {
+		return null;
+	}
+
+	if (typeof value !== "object") {
+		return null;
+	}
+
+	if (Array.isArray(value) === true) {
+		return null;
+	}
+
+	const record = value as Record<string, unknown>;
+
+	let key = "";
+	if (typeof record.key === "string") {
+		key = record.key.trim();
+	}
+
+	let label = "";
+	if (typeof record.label === "string") {
+		label = record.label.trim();
+	}
+
+	let kind: PrescreenQuestionKind = "text";
+	if (typeof record.kind === "string") {
+		if (isSupportedQuestionKind(record.kind) === true) {
+			kind = record.kind;
+		}
+	}
+
+	let required = true;
+	if (record.required === false) {
+		required = false;
+	}
+
+	const options: string[] = [];
+	if (Array.isArray(record.options) === true) {
+		for (const item of record.options) {
+			const option = String(item);
+			if (option !== "") {
+				options.push(option);
+			}
+		}
+	}
+
+	let target = "";
+	if (typeof record.target === "string") {
+		target = record.target.trim();
+	}
+
+	let placeholder = "";
+	if (typeof record.placeholder === "string") {
+		placeholder = record.placeholder;
+	}
+
+	if (key === "") {
+		return null;
+	}
+
+	if (label === "") {
+		return null;
+	}
+
+	const question: PrescreenQuestion = {
+		key: key,
+		label: label,
+		kind: kind,
+		required: required,
+		options: options,
+		target: target,
+		placeholder: placeholder,
+	};
+
+	return question;
+}
+
+function defaultQuestions(): PrescreenQuestion[] {
+	const price = moneyLabel();
+
+	let minimumStayLabel = "Can you stay for the owner’s minimum stay requirement?";
+	if (minimumMonths > 0) {
+		minimumStayLabel = `Can you stay for at least ${minimumMonths} months?`;
+	}
+
+	let rentAcceptanceLabel = "Are you comfortable with the listed rent and stated terms?";
+	if (price !== "") {
+		rentAcceptanceLabel = `Are you comfortable with ${price} per month plus stated terms?`;
+	}
+
+	let offeredPricePlaceholder = "33000";
+	if (Number.isFinite(publicPrice) === true && publicPrice > 0) {
+		offeredPricePlaceholder = String(publicPrice);
+	}
+
+	const questions: PrescreenQuestion[] = [];
+
+	questions.push({
+		key: "name",
+		label: "What is your full name?",
+		kind: "text",
+		required: true,
+		target: "name",
+		placeholder: "Your name",
+	});
+
+	questions.push({
+		key: "phone_whatsapp",
+		label: "What is your phone / WhatsApp number?",
+		kind: "phone",
+		required: true,
+		target: "phone",
+		placeholder: "+91...",
+	});
+
+	questions.push({
+		key: "official_email",
+		label: "What email should we keep on record?",
+		kind: "email",
+		required: true,
+		target: "officialEmail",
+		placeholder: "name@example.com",
+	});
+
+	questions.push({
+		key: "move_in_date",
+		label: "When do you want to move in?",
+		kind: "date",
+		required: true,
+		target: "requestedStartDate",
+		placeholder: "",
+	});
+
+	questions.push({
+		key: "minimum_stay",
+		label: minimumStayLabel,
+		kind: "single_choice",
+		required: true,
+		options: ["Yes", "Need to discuss"],
+		target: "minimumStayAccepted",
+		placeholder: "",
+	});
+
+	questions.push({
+		key: "requested_minimum_months",
+		label: "How many months do you expect to stay?",
+		kind: "number",
+		required: true,
+		target: "requestedMinimumMonths",
+		placeholder: "11",
+	});
+
+	questions.push({
+		key: "occupants",
+		label: "Who will live in the flat?",
+		kind: "textarea",
+		required: true,
+		target: "occupants",
+		placeholder: "Example: husband, wife, one child",
+	});
+
+	questions.push({
+		key: "employer",
+		label: "Where do you work, or what is your income source?",
+		kind: "text",
+		required: true,
+		target: "employerName",
+		placeholder: "Company / business / profession",
+	});
+
+	questions.push({
+		key: "rent_acceptance",
+		label: rentAcceptanceLabel,
+		kind: "single_choice",
+		required: true,
+		options: ["Yes", "Need to discuss"],
+		target: "rentAcceptance",
+		placeholder: "",
+	});
+
+	questions.push({
+		key: "offered_price",
+		label: "If you want to make a rent offer, enter the monthly amount. Leave blank if you accept the listed rent.",
+		kind: "number",
+		required: false,
+		target: "offeredPrice",
+		placeholder: offeredPricePlaceholder,
+	});
+
+	questions.push({
+		key: "normal_residential_use",
+		label: "Will this be used only as a normal residence, not Airbnb, guest-house, or short stay?",
+		kind: "single_choice",
+		required: true,
+		options: ["Yes, normal residence only", "Need to discuss"],
+		target: "normalResidentialUse",
+		placeholder: "",
+	});
+
+	questions.push({
+		key: "final_note",
+		label: "Anything else the owner should know before calling you?",
+		kind: "textarea",
+		required: false,
+		target: "message",
+		placeholder: "Write a short note for the owner",
+	});
+
+	return questions;
+}
+
+function safeJsonScript(value: unknown): string {
+	const rawJson = JSON.stringify(value);
+	let safeJson = rawJson;
+
+	safeJson = safeJson.replace(/</g, "\\u003c");
+	safeJson = safeJson.replace(/>/g, "\\u003e");
+	safeJson = safeJson.replace(/&/g, "\\u0026");
+	safeJson = safeJson.replace(/\u2028/g, "\\u2028");
+	safeJson = safeJson.replace(/\u2029/g, "\\u2029");
+
+	return safeJson;
+}
+
+function buildQuestions(): PrescreenQuestion[] {
+	const questions: PrescreenQuestion[] = [];
+
+	for (const customQuestionValue of customQuestionValues) {
+		const normalizedQuestion = normalizeQuestion(customQuestionValue);
+
+		if (normalizedQuestion !== null) {
+			questions.push(normalizedQuestion);
+		}
+	}
+
+	if (questions.length > 0) {
+		return questions;
+	}
+
+	const fallbackQuestions = defaultQuestions();
+	return fallbackQuestions;
+}
+
+const questions = buildQuestions();
+
+const config = {
+	assetId: assetId,
+	assetTitle: assetTitle,
+	action: action,
+	loginHref: loginHref,
+	canSubmit: canSubmit,
+	questions: questions,
+	acceptedConditionsVersion: ownerConditionVersion,
+	acceptedConditionsHash: ownerConditionHash,
+	humanCheckChallenge: humanCheckChallenge,
+	turnstileSiteKey: turnstileSiteKey,
+	storageKey: `handovernow:prescreen:${assetId}`,
+};
+
+const configJson = safeJsonScript(config);
+---
+
+<div class="prescreen-widget" data-prescreen-widget>
+	<script is:inline type="application/json" data-prescreen-config set:html={configJson}></script>
+
+	<div class="prescreen-card">
+		<div class="prescreen-head">
+			<div>
+				<p class="rental-kicker">Chat-first screening</p>
+				<h2>Start 2-minute screening</h2>
+				<p class="rental-muted">
+					Answer a few quick questions. Your answers become the first screening record for this asset.
+				</p>
+			</div>
+		</div>
+
+		<div class="prescreen-messages" data-prescreen-messages></div>
+
+		<div class="prescreen-control" data-prescreen-control></div>
+
+		<div class="prescreen-turnstile-slot" data-prescreen-turnstile-slot></div>
+
+		<div class="prescreen-hidden-trap" aria-hidden="true">
+			<label>
+				Company website
+				<input type="text" name="companyWebsite" tabindex="-1" autocomplete="off" data-prescreen-hp />
+			</label>
+		</div>
+
+		<p class="rental-status" data-prescreen-status></p>
+	</div>
+</div>
+
+<script>
+		type PrescreenQuestion = {
+		key: string;
+		label: string;
+		kind: "text" | "textarea" | "phone" | "email" | "date" | "number" | "single_choice";
+		required: boolean;
+		options?: string[];
+		target: string;
+		placeholder: string;
+	};
+	type PrescreenAnswer = {
+		key: string;
+		label: string;
+		answer: string;
+		target: string;
+	};
+
+	type HumanCheckChallenge = {
+		v: number;
+		assetId: string;
+		issuedAt: number;
+		expiresAt: number;
+		nonce: string;
+		a: number;
+		b: number;
+		op: "+";
+		question: string;
+		answerHash: string;
+		signature: string;
+	};
+
+	type PrescreenConfig = {
+		assetId: string;
+		assetTitle: string;
+		action: string;
+		loginHref: string;
+		canSubmit: boolean;
+		questions: PrescreenQuestion[];
+		acceptedConditionsVersion: number;
+		acceptedConditionsHash: string;
+		humanCheckChallenge: HumanCheckChallenge;
+		turnstileSiteKey: string;
+		storageKey: string;
+	};
+
+	type PrescreenState = {
+		startedAt: string;
+		index: number;
+		answers: Record<string, string>;
+		humanCheckAnswer: string;
+		turnstileToken: string;
+		challengeNonce: string;
+	};
+
+    type TurnstileWindow = Window & {
+		turnstile?: {
+			render: (el: HTMLElement, opts: Record<string, unknown>) => void;
+		};
+	};
+
+	const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+
+	function main(): void {
+		const widgetRoots = document.querySelectorAll<HTMLElement>("[data-prescreen-widget]");
+
+		for (const widgetRoot of widgetRoots) {
+			const alreadyInitialized = widgetRoot.dataset.prescreenInitialized;
+
+			if (alreadyInitialized !== "1") {
+				widgetRoot.dataset.prescreenInitialized = "1";
+				initPrescreen(widgetRoot);
+			}
+		}
+	}
+
+	function initPrescreen(root: HTMLElement): void {
+		const configScript = root.querySelector<HTMLScriptElement>("[data-prescreen-config]");
+		const messagesNode = root.querySelector<HTMLElement>("[data-prescreen-messages]");
+		const controlNode = root.querySelector<HTMLElement>("[data-prescreen-control]");
+		const statusNode = root.querySelector<HTMLElement>("[data-prescreen-status]");
+		const honeypotNode = root.querySelector<HTMLInputElement>("[data-prescreen-hp]");
+		const turnstileSlotNode = root.querySelector<HTMLElement>("[data-prescreen-turnstile-slot]");
+
+		if (configScript === null) {
+			return;
+		}
+
+		if (messagesNode === null) {
+			return;
+		}
+
+		if (controlNode === null) {
+			return;
+		}
+
+		if (statusNode === null) {
+			return;
+		}
+
+		if (turnstileSlotNode === null) {
+			return;
+		}
+
+		const messages: HTMLElement = messagesNode;
+		const control: HTMLElement = controlNode;
+		const status: HTMLElement = statusNode;
+		const turnstileSlot: HTMLElement = turnstileSlotNode;
+
+		const rawConfig = configScript.textContent;
+		let configText = "{}";
+
+		if (rawConfig !== null && rawConfig !== "") {
+			configText = rawConfig;
+		}
+
+		const parsedConfig = JSON.parse(configText) as PrescreenConfig;
+		const config: PrescreenConfig = parsedConfig;
+		const state = loadState(config);
+
+		let turnstileRendered = false;
+
+		render();
+
+		function render(): void {
+			saveState(config, state);
+
+			messages.innerHTML = "";
+			control.innerHTML = "";
+			status.textContent = "";
+			status.removeAttribute("data-state");
+
+			renderIntro(messages, config);
+
+			const visibleAnswerCount = Math.min(state.index, config.questions.length);
+
+			for (let index = 0; index < visibleAnswerCount; index += 1) {
+				const question = config.questions[index];
+				if (question === undefined) {
+					continue;
+				}
+
+				let answer = "";
+				const existingAnswer = state.answers[question.key];
+
+				if (typeof existingAnswer === "string") {
+					answer = existingAnswer;
+				}
+
+				if (answer !== "") {
+					appendMessage(messages, "bot", question.label);
+					appendMessage(messages, "visitor", answer);
+				}
+			}
+
+			if (state.index < config.questions.length) {
+				const activeQuestion = config.questions[state.index];
+
+				if (activeQuestion !== undefined) {
+					appendMessage(messages, "bot", activeQuestion.label);
+					renderQuestionInput(control, activeQuestion);
+				}
+
+				return;
+			}
+
+			const finalQuestion = `One quick check before submitting: what is ${config.humanCheckChallenge.question}?`;
+			appendMessage(messages, "bot", finalQuestion);
+			renderFinalControl(control);
+
+			if (config.turnstileSiteKey !== "" && config.canSubmit === true) {
+				renderTurnstileIfNeeded();
+			}
+		}
+
+		function renderQuestionInput(target: HTMLElement, question: PrescreenQuestion): void {
+			if (question.kind === "single_choice") {
+				renderChoiceQuestion(target, question);
+				return;
+			}
+
+			renderTextQuestion(target, question);
+		}
+
+				function renderChoiceQuestion(target: HTMLElement, question: PrescreenQuestion): void {
+			const wrap = document.createElement("div");
+			wrap.className = "prescreen-choice-row";
+
+			const fragment = document.createDocumentFragment();
+
+			const options = question.options;
+
+			if (options === undefined) {
+				showError("This choice question has no options configured.");
+				return;
+			}
+
+			if (options.length === 0) {
+				showError("This choice question has no options configured.");
+				return;
+			}
+
+			for (const option of options) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.className = "rental-button secondary";
+				button.textContent = option;
+
+				function handleChoiceClick(): void {
+					state.answers[question.key] = option;
+					state.index += 1;
+					render();
+				}
+
+				button.addEventListener("click", handleChoiceClick);
+				fragment.appendChild(button);
+			}
+
+			wrap.appendChild(fragment);
+			target.appendChild(wrap);
+		}
+
+		function renderTextQuestion(target: HTMLElement, question: PrescreenQuestion): void {
+			const wrap = document.createElement("div");
+			wrap.className = "prescreen-input-row";
+
+			let input: HTMLInputElement | HTMLTextAreaElement;
+
+			if (question.kind === "textarea") {
+				input = document.createElement("textarea");
+			} else {
+				input = document.createElement("input");
+			}
+
+			input.className = "prescreen-input";
+			input.name = question.key;
+			input.placeholder = question.placeholder;
+			input.setAttribute("aria-label", question.label);
+
+			if (input instanceof HTMLInputElement) {
+				configureInputElement(input, question);
+			}
+
+			const button = document.createElement("button");
+			button.type = "button";
+			button.className = "rental-button";
+			button.textContent = "Next";
+
+			function submitCurrent(): void {
+				const value = input.value.trim();
+
+				if (question.required === true && value === "") {
+					showError(`${question.label} is required.`);
+					input.focus();
+					return;
+				}
+
+				if (question.kind === "email" && value !== "") {
+					const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+					const emailIsValid = emailPattern.test(value);
+
+					if (emailIsValid === false) {
+						showError("Enter a valid email address.");
+						input.focus();
+						return;
+					}
+				}
+
+				if (question.kind === "phone" && value !== "") {
+					const digitCount = value.replace(/[^\d]/g, "").length;
+
+					if (digitCount < 8) {
+						showError("Enter a valid phone / WhatsApp number.");
+						input.focus();
+						return;
+					}
+				}
+
+				state.answers[question.key] = value;
+				state.index += 1;
+				render();
+			}
+
+			function handleKeyDown(event: Event): void {
+				const keyboardEvent = event as KeyboardEvent;
+
+				if (keyboardEvent.key === "Enter") {
+					const isTextArea = input instanceof HTMLTextAreaElement;
+
+					if (isTextArea === false) {
+						keyboardEvent.preventDefault();
+						submitCurrent();
+					}
+				}
+			}
+
+			function handleButtonClick(): void {
+				submitCurrent();
+			}
+
+			input.addEventListener("keydown", handleKeyDown);
+			button.addEventListener("click", handleButtonClick);
+
+			wrap.appendChild(input);
+			wrap.appendChild(button);
+			target.appendChild(wrap);
+			input.focus();
+		}
+
+		function configureInputElement(input: HTMLInputElement, question: PrescreenQuestion): void {
+			if (question.kind === "phone") {
+				input.type = "tel";
+				input.autocomplete = "tel";
+				return;
+			}
+
+			if (question.kind === "email") {
+				input.type = "email";
+				input.autocomplete = "email";
+				return;
+			}
+
+			if (question.kind === "date") {
+				input.type = "date";
+				return;
+			}
+
+			if (question.kind === "number") {
+				input.type = "number";
+				return;
+			}
+
+			input.type = "text";
+		}
+
+		function renderFinalControl(target: HTMLElement): void {
+			const wrap = document.createElement("div");
+			wrap.className = "prescreen-final";
+
+			const input = document.createElement("input");
+			input.className = "prescreen-input";
+			input.type = "number";
+			input.inputMode = "numeric";
+			input.placeholder = "Answer";
+			input.value = state.humanCheckAnswer;
+
+			function handleHumanCheckInput(): void {
+				state.humanCheckAnswer = input.value.trim();
+				saveState(config, state);
+			}
+
+			input.addEventListener("input", handleHumanCheckInput);
+
+			const back = document.createElement("button");
+			back.type = "button";
+			back.className = "rental-button secondary";
+			back.textContent = "Back";
+
+			function handleBackClick(): void {
+				const lastQuestionIndex = config.questions.length - 1;
+				state.index = Math.max(0, lastQuestionIndex);
+				render();
+			}
+
+			back.addEventListener("click", handleBackClick);
+
+			const submit = document.createElement("button");
+			submit.type = "button";
+			submit.className = "rental-button";
+
+			if (config.canSubmit === true) {
+				submit.textContent = "Submit application";
+			} else {
+				submit.textContent = "Login and submit";
+			}
+
+			function handleSubmitClick(): void {
+				void submitApplication();
+			}
+
+			submit.addEventListener("click", handleSubmitClick);
+
+			wrap.appendChild(input);
+			wrap.appendChild(back);
+			wrap.appendChild(submit);
+			target.appendChild(wrap);
+			input.focus();
+		}
+
+		async function submitApplication(): Promise<void> {
+			status.textContent = "Submitting...";
+			status.removeAttribute("data-state");
+
+			if (state.humanCheckAnswer.trim() === "") {
+				showError("Answer the quick check before submitting.");
+				return;
+			}
+
+			if (config.turnstileSiteKey !== "" && config.canSubmit === true && state.turnstileToken === "") {
+				showError("Spam verification is still loading. Please wait a few seconds and submit again.");
+				return;
+			}
+
+			const answers = buildAnswerList(config, state);
+			const mapped = mappedValues(config, state);
+			const markdown = toMarkdown(config, answers);
+			const honeypotValue = readHoneypotValue(honeypotNode);
+
+			const body: Record<string, unknown> = {};
+			body.name = mapped.name;
+			body.officialEmail = mapped.officialEmail;
+			body.phone = mapped.phone;
+			body.employerName = mapped.employerName;
+
+			if (mapped.offeredPrice !== undefined) {
+				body.offeredPrice = mapped.offeredPrice;
+			}
+
+			body.requestedStartDate = mapped.requestedStartDate;
+
+			if (mapped.requestedMinimumMonths !== undefined) {
+				body.requestedMinimumMonths = mapped.requestedMinimumMonths;
+			}
+
+			body.message = mapped.message;
+			body.acceptedConditionsVersion = config.acceptedConditionsVersion;
+			body.acceptedConditionsHash = config.acceptedConditionsHash;
+			body.prescreenStartedAt = state.startedAt;
+			body._hp = honeypotValue;
+
+			if (state.turnstileToken !== "") {
+				body.turnstileToken = state.turnstileToken;
+			}
+
+			body.humanCheck = {
+				challenge: config.humanCheckChallenge,
+				answer: state.humanCheckAnswer,
+			};
+
+			body.interestSpec = {
+				prescreen: {
+					kind: "chat_wizard",
+					version: 1,
+					source: "wf1_marketplace_asset_detail",
+					assetId: config.assetId,
+					assetTitle: config.assetTitle,
+					startedAt: state.startedAt,
+					submittedAt: new Date().toISOString(),
+					answers: answers,
+					markdown: markdown,
+					turnstileDisplayed: config.turnstileSiteKey !== "",
+				},
+			};
+
+			if (config.canSubmit === false) {
+				saveState(config, state);
+				location.href = config.loginHref;
+				return;
+			}
+
+			try {
+				const bodyText = JSON.stringify(body);
+
+				const fetchOptions: RequestInit = {
+					method: "POST",
+					credentials: "same-origin",
+					headers: {
+						"Content-Type": "application/json",
+						"X-EmDash-Request": "1",
+					},
+					body: bodyText,
+				};
+
+				const response = await fetch(config.action, fetchOptions);
+				const payload = await readJsonResponse(response);
+
+				if (response.ok === false) {
+					const errorMessage = readErrorMessage(payload);
+					throw new Error(errorMessage);
+				}
+
+				clearState(config);
+
+				const redirectTo = findPayloadValue(payload, "redirectTo");
+
+				if (redirectTo !== undefined && redirectTo.startsWith("/") === true) {
+					location.href = redirectTo;
+					return;
+				}
+
+				status.textContent = "Application submitted.";
+			} catch (submitError) {
+				const message = errorMessageFromUnknown(submitError, "Application submit failed.");
+				showError(message);
+			}
+		}
+
+		function renderTurnstileIfNeeded(): void {
+			if (turnstileRendered === true) {
+				return;
+			}
+
+			turnstileRendered = true;
+
+			const container = document.createElement("div");
+			container.className = "prescreen-turnstile";
+			turnstileSlot.replaceChildren(container);
+
+			function renderWidget(): void {
+				const typedWindow = window as TurnstileWindow;
+				const turnstileApi = typedWindow.turnstile;
+
+				if (turnstileApi === undefined) {
+					return;
+				}
+
+				turnstileApi.render(container, {
+					sitekey: config.turnstileSiteKey,
+					appearance: "interaction-only",
+					callback: function (token: string): void {
+						state.turnstileToken = token;
+						saveState(config, state);
+					},
+				});
+			}
+
+			const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${TURNSTILE_SCRIPT}"]`);
+
+			if (existingScript === null) {
+				const script = document.createElement("script");
+				script.src = TURNSTILE_SCRIPT;
+				script.async = true;
+				script.onload = renderWidget;
+				document.head.appendChild(script);
+				return;
+			}
+
+			renderWidget();
+		}
+
+		function showError(message: string): void {
+			status.dataset.state = "error";
+			status.textContent = message;
+		}
+	}
+
+	function renderIntro(messages: HTMLElement, config: PrescreenConfig): void {
+		const text = `Hi. I’ll collect a quick screening record for ${config.assetTitle}.`;
+		appendMessage(messages, "bot", text);
+	}
+
+	function appendMessage(target: HTMLElement, role: "bot" | "visitor", text: string): void {
+		const item = document.createElement("div");
+
+		if (role === "bot") {
+			item.className = "prescreen-message bot";
+		} else {
+			item.className = "prescreen-message visitor";
+		}
+
+		item.textContent = text;
+		target.appendChild(item);
+		target.scrollTop = target.scrollHeight;
+	}
+
+	function loadState(config: PrescreenConfig): PrescreenState {
+		try {
+			const raw = localStorage.getItem(config.storageKey);
+
+			if (raw !== null && raw !== "") {
+				const parsed = JSON.parse(raw) as Partial<PrescreenState>;
+				const sameChallenge = parsed.challengeNonce === config.humanCheckChallenge.nonce;
+
+				let startedAt = new Date().toISOString();
+				if (typeof parsed.startedAt === "string" && parsed.startedAt !== "") {
+					startedAt = parsed.startedAt;
+				}
+
+				let index = 0;
+				if (typeof parsed.index === "number" && Number.isFinite(parsed.index)) {
+					index = parsed.index;
+				}
+
+				let answers: Record<string, string> = {};
+				if (
+					parsed.answers !== undefined &&
+					parsed.answers !== null &&
+					typeof parsed.answers === "object" &&
+					Array.isArray(parsed.answers) === false
+				) {
+					answers = parsed.answers;
+				}
+
+				let humanCheckAnswer = "";
+				if (sameChallenge === true && typeof parsed.humanCheckAnswer === "string") {
+					humanCheckAnswer = parsed.humanCheckAnswer;
+				}
+
+				let turnstileToken = "";
+				if (sameChallenge === true && typeof parsed.turnstileToken === "string") {
+					turnstileToken = parsed.turnstileToken;
+				}
+
+				const loadedState: PrescreenState = {
+					startedAt: startedAt,
+					index: index,
+					answers: answers,
+					humanCheckAnswer: humanCheckAnswer,
+					turnstileToken: turnstileToken,
+					challengeNonce: config.humanCheckChallenge.nonce,
+				};
+
+				return loadedState;
+			}
+		} catch (storageReadError) {
+			console.warn("[handovernow] Prescreen local state could not be loaded.", storageReadError);
+
+			try {
+				localStorage.removeItem(config.storageKey);
+			} catch (storageRemoveError) {
+				console.warn("[handovernow] Prescreen local state could not be removed.", storageRemoveError);
+			}
+		}
+
+		const emptyState: PrescreenState = {
+			startedAt: new Date().toISOString(),
+			index: 0,
+			answers: {},
+			humanCheckAnswer: "",
+			turnstileToken: "",
+			challengeNonce: config.humanCheckChallenge.nonce,
+		};
+
+		return emptyState;
+	}
+
+	function saveState(config: PrescreenConfig, state: PrescreenState): void {
+		try {
+			const serializedState = JSON.stringify(state);
+			localStorage.setItem(config.storageKey, serializedState);
+		} catch (storageWriteError) {
+			console.warn("[handovernow] Prescreen local state could not be saved.", storageWriteError);
+		}
+	}
+
+	function clearState(config: PrescreenConfig): void {
+		try {
+			localStorage.removeItem(config.storageKey);
+		} catch (storageClearError) {
+			console.warn("[handovernow] Prescreen local state could not be cleared.", storageClearError);
+		}
+	}
+
+	function buildAnswerList(config: PrescreenConfig, state: PrescreenState): PrescreenAnswer[] {
+		const answers: PrescreenAnswer[] = [];
+
+		for (const question of config.questions) {
+			let answer = "";
+			const savedAnswer = state.answers[question.key];
+
+			if (typeof savedAnswer === "string") {
+				answer = savedAnswer;
+			}
+
+			const answerItem: PrescreenAnswer = {
+				key: question.key,
+				label: question.label,
+				answer: answer,
+				target: question.target,
+			};
+
+			answers.push(answerItem);
+		}
+
+		return answers;
+	}
+
+	function mappedValues(config: PrescreenConfig, state: PrescreenState) {
+		const byTarget = new Map<string, string>();
+
+		for (const question of config.questions) {
+			const value = state.answers[question.key];
+
+			if (typeof value !== "string") {
+				continue;
+			}
+
+			if (value === "") {
+				continue;
+			}
+
+			if (question.target !== "") {
+				byTarget.set(question.target, value);
+			}
+
+			byTarget.set(question.key, value);
+		}
+
+		const mapped = {
+			name: valueFromMap(byTarget, "name"),
+			officialEmail: valueFromMap(byTarget, "officialEmail"),
+			phone: valueFromMap(byTarget, "phone"),
+			employerName: valueFromMap(byTarget, "employerName"),
+			offeredPrice: numberOrUndefined(valueFromMap(byTarget, "offeredPrice")),
+			requestedStartDate: valueFromMap(byTarget, "requestedStartDate"),
+			requestedMinimumMonths: numberOrUndefined(valueFromMap(byTarget, "requestedMinimumMonths")),
+			message: valueFromMap(byTarget, "message"),
+		};
+
+		if (mapped.message === "") {
+			mapped.message = valueFromMap(byTarget, "final_note");
+		}
+
+		return mapped;
+	}
+
+	function valueFromMap(map: Map<string, string>, key: string): string {
+		const value = map.get(key);
+
+		if (value === undefined) {
+			return "";
+		}
+
+		return value;
+	}
+
+	function numberOrUndefined(value: string): number | undefined {
+		if (value === "") {
+			return undefined;
+		}
+
+		const number = Number(value);
+
+		if (Number.isFinite(number) === false) {
+			return undefined;
+		}
+
+		return number;
+	}
+
+	function toMarkdown(config: PrescreenConfig, answers: PrescreenAnswer[]): string {
+		const lines: string[] = [];
+
+		lines.push("# Prescreening record");
+		lines.push("");
+		lines.push(`Asset: ${config.assetTitle}`);
+		lines.push(`Asset ID: ${config.assetId}`);
+		lines.push(`Submitted: ${new Date().toISOString()}`);
+		lines.push("");
+		lines.push("## Answers");
+		lines.push("");
+
+		for (const answer of answers) {
+			let answerValue = answer.answer;
+
+			if (answerValue === "") {
+				answerValue = "(blank)";
+			}
+
+			const line = `- ${answer.label}: ${answerValue}`;
+			lines.push(line);
+		}
+
+		const markdown = lines.join("\n");
+		return markdown;
+	}
+
+	function readHoneypotValue(input: HTMLInputElement | null): string {
+		if (input === null) {
+			return "";
+		}
+
+		const value = input.value.trim();
+		return value;
+	}
+
+	async function readJsonResponse(response: Response): Promise<unknown> {
+		try {
+			const payload = await response.json();
+			return payload;
+		} catch (jsonError) {
+			console.warn("[handovernow] Prescreen response JSON could not be parsed.", jsonError);
+			return {};
+		}
+	}
+
+	function readErrorMessage(payload: unknown): string {
+		if (payload !== null && payload !== undefined && typeof payload === "object" && Array.isArray(payload) === false) {
+			const payloadRecord = payload as Record<string, unknown>;
+			const errorValue = payloadRecord.error;
+
+			if (
+				errorValue !== null &&
+				errorValue !== undefined &&
+				typeof errorValue === "object" &&
+				Array.isArray(errorValue) === false
+			) {
+				const errorRecord = errorValue as Record<string, unknown>;
+				const messageValue = errorRecord.message;
+
+				if (typeof messageValue === "string" && messageValue !== "") {
+					return messageValue;
+				}
+			}
+		}
+
+		return "Application submit failed.";
+	}
+
+	function errorMessageFromUnknown(error: unknown, fallback: string): string {
+		if (error instanceof Error) {
+			if (error.message !== "") {
+				return error.message;
+			}
+		}
+
+		return fallback;
+	}
+
+	function findPayloadValue(source: unknown, key: string): string | undefined {
+		if (source === null) {
+			return undefined;
+		}
+
+		if (source === undefined) {
+			return undefined;
+		}
+
+		if (typeof source !== "object") {
+			return undefined;
+		}
+
+		if (Array.isArray(source) === true) {
+			for (const item of source) {
+				const nestedArrayValue = findPayloadValue(item, key);
+
+				if (nestedArrayValue !== undefined) {
+					return nestedArrayValue;
+				}
+			}
+
+			return undefined;
+		}
+
+		const record = source as Record<string, unknown>;
+		const direct = record[key];
+
+		if (typeof direct === "string") {
+			return direct;
+		}
+
+		if (typeof direct === "number") {
+			return String(direct);
+		}
+
+		for (const value of Object.values(record)) {
+			const nestedValue = findPayloadValue(value, key);
+
+			if (nestedValue !== undefined) {
+				return nestedValue;
+			}
+		}
+
+		return undefined;
+	}
+
+	main();
+</script>
+
+<style>
+	.prescreen-card {
+		display: grid;
+		gap: 14px;
+	}
+
+	.prescreen-head h2 {
+		margin: 0;
+		font-size: 1.2rem;
+	}
+
+	.prescreen-messages {
+		display: grid;
+		gap: 10px;
+		max-height: 420px;
+		overflow: auto;
+		padding: 12px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		background: var(--r-panel-soft);
+	}
+
+	.prescreen-message {
+		max-width: 86%;
+		padding: 10px 12px;
+		border-radius: 18px;
+		font-weight: 750;
+		line-height: 1.35;
+	}
+
+	.prescreen-message.bot {
+		justify-self: start;
+		background: #fff;
+		border: 1px solid var(--r-border);
+		color: var(--r-text);
+	}
+
+	.prescreen-message.visitor {
+		justify-self: end;
+		background: var(--r-accent);
+		color: #fff;
+	}
+
+	.prescreen-control,
+	.prescreen-input-row,
+	.prescreen-final,
+	.prescreen-choice-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		align-items: center;
+	}
+
+	.prescreen-input {
+		flex: 1 1 190px;
+		width: 100%;
+		min-height: 44px;
+		padding: 10px 12px;
+		border: 1px solid var(--r-border);
+		border-radius: 14px;
+		background: #fff;
+		color: var(--r-text);
+		font: inherit;
+		font-weight: 750;
+	}
+
+	textarea.prescreen-input {
+		min-height: 88px;
+		resize: vertical;
+	}
+
+	.prescreen-hidden-trap {
+		position: absolute;
+		left: -9999px;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+	}
+
+	.prescreen-turnstile-slot {
+		min-height: 1px;
+	}
+
+	.rental-status[data-state="error"] {
+		color: #b42318;
+		font-weight: 850;
+	}
+
+	@media (max-width: 560px) {
+		.prescreen-message {
+			max-width: 94%;
+		}
+
+		.prescreen-input-row,
+		.prescreen-final,
+		.prescreen-choice-row {
+			display: grid;
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

@@ -79,7 +79,7 @@ export async function handleWorkflowRentalRoute(
 		const user = requireUser(input.user);
 
 		if (input.request.method === "GET" && input.path === "owner/dashboard") {
-			return jsonOk(await getWorkflowOwnerDashboard(input.store, user));
+			return jsonOk(await getWorkflowOwnerDashboard(input.store, user, { lane }));
 		}
 
 		if (input.request.method === "POST" && input.path === "owner/assets/add") {
@@ -91,6 +91,7 @@ export async function handleWorkflowRentalRoute(
 					publicPrice: optionalNumber(body, "publicPrice"),
 					currency: asOptionalString(body.currency) ?? "INR",
 					ownerConditionsSpec: optionalRecord(body, "ownerConditionsSpec"),
+					configSpec: lane === "test" ? withTestLaneConfigSpec({}, user) : undefined,
 				}),
 				201,
 			);
@@ -118,7 +119,8 @@ export async function handleWorkflowRentalRoute(
 				}
 
 				if (hasOwn(body, "configSpec")) {
-					configInput.configSpec = optionalRecord(body, "configSpec");
+					const configSpec = optionalRecord(body, "configSpec");
+					configInput.configSpec = lane === "test" ? withTestLaneConfigSpec(configSpec, user) : configSpec;
 				}
 
 				if (hasOwn(body, "conditionSpec")) {
@@ -328,6 +330,26 @@ async function evidenceDownload(store: DomainStore, user: UserContext, attachmen
 			storageKey: attachment.storage_key,
 			message: "Private evidence download authorization succeeded.",
 		},
+	};
+}
+
+function testLaneMarker(user: UserContext): Record<string, unknown> {
+	return {
+		enabled: true,
+		fixtureSlug: "manual-test-asset",
+		ownerEmail: user.email ?? "",
+		createdFor: "manual-prod-test",
+		visibleOnlyUnder: "/test-corridor",
+	};
+}
+
+function withTestLaneConfigSpec(
+	configSpec: Record<string, unknown> | undefined,
+	user: UserContext,
+): Record<string, unknown> {
+	return {
+		...(configSpec ?? {}),
+		testLane: testLaneMarker(user),
 	};
 }
 

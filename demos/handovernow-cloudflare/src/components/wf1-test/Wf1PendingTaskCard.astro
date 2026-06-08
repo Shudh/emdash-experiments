@@ -1,0 +1,144 @@
+---
+import ActionForm from "../rental/ActionForm.astro";
+import Wf1MediaUpload from "./Wf1MediaUpload.astro";
+
+interface Props {
+	card: Record<string, unknown>;
+	workspaceHref: string;
+}
+
+type McqOption = {
+	value: string;
+	label: string;
+};
+
+const { card, workspaceHref } = Astro.props;
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? value as Record<string, unknown>
+		: {};
+}
+
+function mcqOptions(schema: Record<string, unknown>): McqOption[] {
+	return Array.isArray(schema.options)
+		? schema.options
+				.filter((option) => option && typeof option === "object")
+				.map((option) => {
+					const row = option as Record<string, unknown>;
+					const value = String(row.value ?? "");
+					const label = String(row.label ?? value);
+					return { value, label };
+				})
+				.filter((option) => option.value)
+		: [];
+}
+
+const answerSchema = objectValue(card.answer_schema);
+const evidencePolicy = objectValue(card.evidence_policy);
+const kind = String(answerSchema.kind ?? "free_text");
+const answerLabel = kind === "amount_proof" ? "Reference" : "Answer";
+const evidenceMode = String(evidencePolicy.attachment ?? "forbidden");
+const acceptsEvidence = evidenceMode !== "forbidden";
+const requiresEvidence = evidenceMode === "required";
+const options = mcqOptions(answerSchema);
+---
+
+<ActionForm
+	title={String(card.prompt ?? card.card_type ?? "Task")}
+	action={`/test-corridor/api/wf1-rental/workflow/cards/${card.id}/answer`}
+	submitLabel="Answer"
+	successRedirect={workspaceHref}
+>
+	{
+		kind === "amount_proof" ? (
+			<>
+				<div class="rental-field">
+					<label for={`amount-${card.id}`}>Amount</label>
+					<input id={`amount-${card.id}`} name="answer.amount" type="number" data-number="true" />
+				</div>
+				<div class="rental-field full">
+					<label for={`reference-${card.id}`}>{answerLabel}</label>
+					<input id={`reference-${card.id}`} name="answer.reference" required />
+				</div>
+			</>
+		) : kind === "mcq_single" ? (
+			<div class="rental-field full">
+				<label for={`answer-${card.id}`}>Choice</label>
+				<select id={`answer-${card.id}`} name="answer.value" required>
+					{options.map((option) => (
+						<option value={option.value}>{option.label}</option>
+					))}
+				</select>
+			</div>
+		) : kind === "mcq_multi" ? (
+			<fieldset class="rental-field full wf1-choice-set">
+				<legend>Choices</legend>
+				{options.map((option) => (
+					<label>
+						<input
+							name="answer.values"
+							type="checkbox"
+							value={option.value}
+							data-array="true"
+							data-checkbox-value="true"
+						/>
+						<span>{option.label}</span>
+					</label>
+				))}
+			</fieldset>
+		) : kind === "yes_no" || kind === "agreement_review" ? (
+			<div class="rental-field">
+				<label for={`answer-${card.id}`}>Answer</label>
+				<select id={`answer-${card.id}`} name="answer.value" required>
+					<option value="yes">Yes</option>
+					<option value="no">No</option>
+				</select>
+			</div>
+		) : kind === "document_upload" || kind === "signed_document_upload" ? (
+			<div class="rental-field">
+				<label for={`document-${card.id}`}>Document reference</label>
+				<input id={`document-${card.id}`} name="answer.documentReference" required />
+			</div>
+		) : (
+			<div class="rental-field full">
+				<label for={`answer-${card.id}`}>{answerLabel}</label>
+				<textarea id={`answer-${card.id}`} name="answer.text" required>I will provide this.</textarea>
+			</div>
+		)
+	}
+
+	{
+		acceptsEvidence ? (
+			<Wf1MediaUpload
+				prefix="attachments.0"
+				label={requiresEvidence ? "Required evidence image/PDF" : "Optional evidence image/PDF"}
+				required={requiresEvidence}
+			/>
+		) : null
+	}
+</ActionForm>
+
+<style>
+	.wf1-choice-set {
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 12px;
+	}
+
+	.wf1-choice-set legend {
+		color: var(--r-muted);
+		font-size: 0.84rem;
+		font-weight: 750;
+		padding: 0 6px;
+	}
+
+	.wf1-choice-set label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--r-text);
+		font-size: 0.94rem;
+		font-weight: 700;
+	}
+</style>

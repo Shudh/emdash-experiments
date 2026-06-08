@@ -1,0 +1,109 @@
+---
+import ActionForm from "../rental/ActionForm.astro";
+
+interface Props {
+	applications: Array<Record<string, unknown>>;
+}
+
+const { applications } = Astro.props;
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value)
+		? value as Record<string, unknown>
+		: {};
+}
+
+function numberTime(value: unknown): number {
+	if (typeof value !== "string") return 0;
+
+	const timestamp = Date.parse(value);
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function latestStamp(row: Record<string, unknown>): number {
+	return Math.max(
+		numberTime(row.updated_at),
+		numberTime(row.created_at),
+		numberTime(row.submitted_at),
+	);
+}
+
+function applicationStamp(application: Record<string, unknown>): number {
+	const instance = objectValue(application.instance);
+	const interest = objectValue(application.interest);
+
+	return Math.max(
+		latestStamp(application),
+		latestStamp(instance),
+		latestStamp(interest),
+	);
+}
+
+const rows = applications
+	.toSorted((left, right) => applicationStamp(right) - applicationStamp(left))
+	.map((application) => {
+		const applicationState = objectValue(application.applicationState);
+		const instance = objectValue(application.instance);
+
+		return {
+			application,
+			applicationState,
+			actions: Array.isArray(application.availableActions)
+				? application.availableActions as Array<Record<string, unknown>>
+				: [],
+			workspaceHref: String(application.workspaceHref ?? ""),
+			workflowInstanceId: String(application.workflow_instance_id ?? instance.id ?? ""),
+		};
+	});
+---
+
+<div class="wf1-applications">
+	{rows.length ? (
+		rows.map((row) => (
+			<article class="wf1-application-row">
+				<div>
+					<strong>{String(row.application.name ?? row.application.official_email ?? "Applicant")}</strong>
+					<span class="rental-badge">Application Form State: {String(row.applicationState.id ?? row.application.interest_state ?? "submitted")}</span>
+				</div>
+				<a class="rental-button secondary" href={row.workspaceHref}>Open workspace</a>
+				{row.actions.length ? (
+					<div class="wf1-row-actions">
+						{row.actions.map((action) => (
+							action.blocked === true ? (
+								<button class="rental-button secondary" type="button" disabled>{String(action.label ?? action.id)}</button>
+							) : (
+								<ActionForm title={String(action.label ?? action.id)} action="/test-corridor/api/wf1-rental/workflow/actions" submitLabel={String(action.label ?? action.id)} successRedirect={row.workspaceHref}>
+									<input type="hidden" name="workflowInstanceId" value={row.workflowInstanceId} />
+									<input type="hidden" name="actionId" value={String(action.id ?? "")} />
+								</ActionForm>
+							)
+						))}
+					</div>
+				) : null}
+			</article>
+		))
+	) : <p class="rental-muted">No applications for this asset yet.</p>}
+</div>
+
+<style>
+	.wf1-applications,
+	.wf1-application-row,
+	.wf1-row-actions {
+		display: grid;
+		gap: 12px;
+	}
+
+	.wf1-application-row {
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 12px;
+		background: var(--r-bg);
+	}
+
+	.wf1-application-row > div:first-child {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+</style>
