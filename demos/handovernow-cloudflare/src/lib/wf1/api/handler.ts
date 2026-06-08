@@ -32,6 +32,9 @@ import {
 	parseRecord,
 	stringField,
 } from "./contracts.js";
+import { assertWf1RouteLane } from "../routing/lane-guard.js";
+import { wf1WorkspaceHref, type Wf1Lane } from "../routing/lane.js";
+
 
 // const MAX_WF1_JSON_BYTES = 32 * 1024;
 const MAX_WF1_DEFAULT_JSON_BYTES = 256 * 1024;
@@ -42,6 +45,7 @@ export type WorkflowRentalRouteInput = {
 	store: DomainStore;
 	user: UserContext | null;
 	env?: RuntimeEnv;
+	lane?: Wf1Lane;
 };
 
 export async function handleWorkflowRentalRoute(
@@ -50,13 +54,14 @@ export async function handleWorkflowRentalRoute(
 	try {
 		const parts = input.path.split("/").filter(Boolean);
 		const jsonLimit = isExpressInterestRoute(input.request.method, parts)
-					? MAX_WF1_LEAD_JSON_BYTES
-					: MAX_WF1_DEFAULT_JSON_BYTES;
+			? MAX_WF1_LEAD_JSON_BYTES
+			: MAX_WF1_DEFAULT_JSON_BYTES;
 
-const body = input.request.method === "GET" ? {} : parseRecord(await readJson(input.request, jsonLimit));
+		const body = input.request.method === "GET" ? {} : parseRecord(await readJson(input.request, jsonLimit));
+		const lane = input.lane ?? "public";
 
 		if (input.request.method === "GET" && input.path === "marketplace/assets") {
-			return jsonOk({ items: await listWorkflowMarketplaceAssets(input.store, input.user) });
+			return jsonOk({ items: await listWorkflowMarketplaceAssets(input.store, input.user, { lane }) });
 		}
 
 		if (
@@ -65,10 +70,11 @@ const body = input.request.method === "GET" ? {} : parseRecord(await readJson(in
 			parts[1] === "assets" &&
 			parts[2]
 		) {
-			const details = await getWorkflowMarketplaceAsset(input.store, input.user, parts[2]);
+			const details = await getWorkflowMarketplaceAsset(input.store, input.user, parts[2], { lane });
 			if (!details) throw new DomainError("ASSET_NOT_FOUND", "Asset not found", 404);
 			return jsonOk(details);
 		}
+		await assertWf1RouteLane(input.store, lane, input.request.method, parts, body);
 
 		const user = requireUser(input.user);
 
@@ -142,6 +148,9 @@ const body = input.request.method === "GET" ? {} : parseRecord(await readJson(in
 			parts[2] &&
 			parts[3] === "express-interest"
 		) {
+			const details = await getWorkflowMarketplaceAsset(input.store, input.user, parts[2], { lane });
+			if (!details) throw new DomainError("ASSET_NOT_FOUND", "Asset not found", 404);
+
 			await validateLeadProtection({
 				store: input.store,
 				request: input.request,
@@ -172,7 +181,7 @@ const body = input.request.method === "GET" ? {} : parseRecord(await readJson(in
 					interestId: result.interest.id,
 					assetId: result.asset.id,
 					workflowInstanceId: result.instance.id,
-					redirectTo: `/wf1/workspaces/${result.instance.id}`,
+					redirectTo: wf1WorkspaceHref(lane, String(result.instance.id)),
 					...result,
 				},
 				201,

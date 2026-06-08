@@ -1,22 +1,60 @@
-import { env } from "cloudflare:workers";
+import { env as cloudflareWorkersEnv } from "cloudflare:workers";
 
 export type RuntimeEnv = Record<string, unknown>;
 
-export function getRuntimeEnvFromLocals(_locals: unknown): RuntimeEnv {
-	const runtimeEnv = getRuntimeEnv();
+function readProperty(container: Record<string, unknown>, key: string): unknown {
+	try {
+		return container[key];
+	} catch {
+		return undefined;
+	}
+}
 
-	return runtimeEnv;
+function cloudflareWorkersRuntimeEnv(): RuntimeEnv | null {
+	return isRecord(cloudflareWorkersEnv) ? cloudflareWorkersEnv : null;
+}
+
+function nestedEnv(container: Record<string, unknown>, key: string): RuntimeEnv | null {
+	const nested = readProperty(container, key);
+
+	if (!isRecord(nested)) {
+		return null;
+	}
+
+	const env = readProperty(nested, "env");
+
+	if (!isRecord(env)) {
+		return null;
+	}
+
+	return env;
+}
+
+export function getRuntimeEnvFromLocals(locals: unknown): RuntimeEnv {
+	if (!isRecord(locals)) {
+		return getRuntimeEnv();
+	}
+
+	const directLocalsEnv = readProperty(locals, "env");
+
+	const candidates: Array<RuntimeEnv | null> = [
+		getRuntimeEnv(),
+		nestedEnv(locals, "cloudflare"),
+		nestedEnv(locals, "platform"),
+		isRecord(directLocalsEnv) ? directLocalsEnv : null,
+	];
+
+	for (const candidate of candidates) {
+		if (candidate !== null) {
+			return candidate;
+		}
+	}
+
+	return {};
 }
 
 export function getRuntimeEnv(): RuntimeEnv {
-	const cloudflareRuntimeEnv = env as unknown;
-	let runtimeEnv: RuntimeEnv = {};
-
-	if (isRecord(cloudflareRuntimeEnv) === true) {
-		runtimeEnv = cloudflareRuntimeEnv;
-	}
-
-	return runtimeEnv;
+	return cloudflareWorkersRuntimeEnv() ?? {};
 }
 
 export function envString(runtimeEnv: RuntimeEnv | undefined, ...keys: string[]): string | undefined {

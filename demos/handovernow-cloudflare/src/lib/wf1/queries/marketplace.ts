@@ -1,3 +1,8 @@
+import {
+	filterAssetsForLane,
+	isAssetVisibleInLane,
+	type Wf1Lane,
+} from "../routing/lane.js";
 import type { DomainRow, DomainStore, UserContext } from "../../domain/types.js";
 import { asString } from "../../domain/types.js";
 import {
@@ -10,7 +15,16 @@ import { actorRoleFor } from "../store/repository.js";
 
 type MarketplaceViewerRelationship = "anonymous" | "owner" | "interested_applicant" | "logged_in";
 
-export async function listWorkflowMarketplaceAssets(store: DomainStore, user: UserContext | null) {
+export type MarketplaceQueryOptions = {
+	lane?: Wf1Lane;
+};
+export async function listWorkflowMarketplaceAssets(
+	store: DomainStore,
+	user: UserContext | null,
+	options: MarketplaceQueryOptions = {},
+) {
+	const lane = options.lane ?? "public";
+
 	const assets = await store.list(
 		WORKFLOW_RENTAL_COLLECTIONS.ASSETS,
 		{
@@ -21,16 +35,24 @@ export async function listWorkflowMarketplaceAssets(store: DomainStore, user: Us
 		{ orderBy: "published_at", direction: "desc", limit: 100 },
 	);
 
-	return Promise.all(assets.map((asset) => withViewer(store, user, asset)));
+	const visibleAssets = filterAssetsForLane(assets, lane);
+
+	return Promise.all(visibleAssets.map((asset) => withViewer(store, user, asset)));
 }
 
 export async function getWorkflowMarketplaceAsset(
 	store: DomainStore,
 	user: UserContext | null,
 	assetId: string,
+	options: MarketplaceQueryOptions = {},
 ) {
 	const asset = await store.get(WORKFLOW_RENTAL_COLLECTIONS.ASSETS, assetId);
 	if (!asset) return null;
+	const lane = options.lane ?? "public";
+
+	if (!isAssetVisibleInLane(asset, lane)) {
+		return null;
+}
 
 	const interest = user
 		? await store.findOne(WORKFLOW_RENTAL_COLLECTIONS.INTERESTS, {

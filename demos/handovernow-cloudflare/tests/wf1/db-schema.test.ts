@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -168,7 +169,8 @@ type SeedCollection = {
 
 describe("WF1 seed schema", () => {
 	it("defines the approved WF1 collection slugs and fields", () => {
-		const seed = JSON.parse(readFileSync("demos/handovernow-cloudflare/seed/seed.json", "utf8")) as {
+		const seedPath = fileURLToPath(new URL("../../seed/seed.json", import.meta.url));
+		const seed = JSON.parse(readFileSync(seedPath, "utf8")) as {
 			collections: SeedCollection[];
 		};
 		const collections = new Map(

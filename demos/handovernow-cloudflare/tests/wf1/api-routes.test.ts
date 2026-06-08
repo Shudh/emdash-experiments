@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import { withRentalMutationGuard } from "../../src/pages/api/_domain-route-utils.js";
 import { handleWorkflowRentalRoute } from "../../src/lib/wf1/api/handler.js";
+import { createHumanCheckChallenge } from "../../src/lib/wf1/security/human-check.js";
 import { WORKFLOW_RENTAL_COLLECTIONS } from "../../src/lib/wf1/store/collections.js";
-import { createWf1Store, eva, rakesh, WF1_TEST_WORKFLOWS } from "./test-helpers.js";
+import {
+	adminReviewer,
+	createWf1Store,
+	eva,
+	rakesh,
+	WF1_TEST_WORKFLOWS,
+} from "./test-helpers.js";
 
 async function json(response: Response) {
 	return response.json() as Promise<{
@@ -97,7 +104,7 @@ describe("WF1 API routes", () => {
 			request: request("POST"),
 			path: `owner/assets/${assetId}/publish-to-marketplace`,
 			store,
-			user: eva,
+			user: adminReviewer,
 		});
 		expect(publishResponse.status).toBe(200);
 		const published = await json(publishResponse);
@@ -108,16 +115,24 @@ describe("WF1 API routes", () => {
 		};
 		expect(publishedAsset.visibility_state).toBe("marketplace");
 
+		const humanCheckChallenge = await createHumanCheckChallenge(assetId);
+		const prescreenStartedAt = new Date(Date.now() - 10_000).toISOString();
 		const interestResponse = await handleWorkflowRentalRoute({
 			request: request("POST", {
 				name: "Rakesh",
 				officialEmail: "tenant_manual_created_1@example.com",
+				phone: "+919876543210",
 				message: "I am interested.",
+				prescreenStartedAt,
+				humanCheck: {
+					challenge: humanCheckChallenge,
+					answer: humanCheckChallenge.a + humanCheckChallenge.b,
+				},
 				acceptedConditionsVersion: publishedAsset.conditions_version,
 				acceptedConditionsHash: publishedAsset.conditions_hash,
 				workflowDefinitionId: WF1_TEST_WORKFLOWS.rentalApplicationFormBasic.workflowDefinitionId,
 				workflowDefinitionVersion:
-					WF1_TEST_WORKFLOWS.rentalApplicationFormBasic.workflowDefinitionVersion,
+				WF1_TEST_WORKFLOWS.rentalApplicationFormBasic.workflowDefinitionVersion,
 			}),
 			path: `marketplace/assets/${assetId}/express-interest`,
 			store,

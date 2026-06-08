@@ -1,0 +1,134 @@
+---
+import SpecTable from "../../../../components/rental/SpecTable.astro";
+import Wf1Base from "../../../../components/wf1/Wf1Base.astro";
+
+import Wf1TestLaneBanner from "../../../../components/wf1/Wf1TestLaneBanner.astro";
+import Wf1Timeline from "../../../../components/wf1/Wf1Timeline.astro";
+
+import { applyTestLaneNoStoreHeaders, testLaneHostRejectionResponse } from "../../../../lib/wf1/routing/host-policy.js";
+import { wf1MarketplaceHref } from "../../../../lib/wf1/routing/lane.js";
+import { assertWorkflowInstanceIdInLane } from "../../../../lib/wf1/routing/lane-guard.js";
+import { getWf1WorkflowInstanceWorkspace } from "../../../../lib/wf1/queries/workspace-instance.js";
+import { getWf1PageContext } from "../../../../lib/wf1/server/context.js";
+
+export const prerender = false;
+
+const rejection = testLaneHostRejectionResponse(Astro.request);
+
+if (rejection) {
+	return rejection;
+}
+
+applyTestLaneNoStoreHeaders(Astro.response.headers);
+
+const workflowInstanceId = Astro.params.workflowInstanceId;
+
+async function loadWorkspace() {
+	if (!workflowInstanceId) return null;
+
+	try {
+		const { store, user } = await getWf1PageContext(Astro);
+		await assertWorkflowInstanceIdInLane(store, "test", workflowInstanceId);
+		return await getWf1WorkflowInstanceWorkspace(store, user, workflowInstanceId);
+	} catch {
+		return null;
+	}
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function arrayValue(value: unknown): Array<Record<string, unknown>> {
+	return Array.isArray(value)
+		? value.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>
+		: [];
+}
+
+const workspace = await loadWorkspace();
+const asset = objectValue(workspace?.asset);
+const interest = objectValue(workspace?.interest);
+const instance = objectValue(workspace?.instance);
+const projection = objectValue(workspace?.projection);
+const applicationState = objectValue(projection.applicationState);
+const assetState = objectValue(projection.assetState);
+const events = arrayValue(workspace?.events);
+const viewerRole = String(workspace?.viewerRole ?? "unknown");
+const primaryNextStep = String(projection.primaryNextStep ?? "No action needed now");
+---
+
+<Wf1Base title="WF1 test workspace" description="Protected WF1 test workspace">
+	<Wf1TestLaneBanner />
+
+	{workspace ? (
+		<section class="rental-section">
+			<div class="rental-shell workspace-grid">
+				<div class="workspace-head">
+					<p class="rental-kicker">Protected test workspace</p>
+					<h1>{String(asset.title ?? "Asset application form")}</h1>
+					<p class="rental-muted">
+						Workflow definition: {String(instance.definition_id ?? "unknown")}@{String(instance.definition_version ?? "1")}
+					</p>
+					<p class="rental-muted">Viewer role: {viewerRole}</p>
+					<a class="rental-button secondary" href={wf1MarketplaceHref("test")}>Back to test marketplace</a>
+				</div>
+
+				<div class="state-grid">
+	<div class="rental-panel">
+		<SpecTable title="Application state" spec={applicationState} />
+	</div>
+
+	<div class="rental-panel">
+		<SpecTable title="Asset state" spec={assetState} />
+	</div>
+</div>
+
+				<div class="rental-panel">
+					<h2>Next step</h2>
+					<p class="rental-muted">{primaryNextStep}</p>
+				</div>
+
+				<div class="rental-panel">
+					<SpecTable title="Application context" spec={interest} />
+				</div>
+
+				<Wf1Timeline events={events} />
+			</div>
+		</section>
+	) : (
+		<section class="rental-section">
+			<div class="rental-shell">
+				<div class="rental-panel">
+					<h1>Test workspace unavailable</h1>
+					<p class="rental-muted">
+						This workspace is not available in the protected test corridor.
+					</p>
+					<a class="rental-button" href={wf1MarketplaceHref("test")}>Back to test marketplace</a>
+				</div>
+			</div>
+		</section>
+	)}
+</Wf1Base>
+
+<style>
+	.workspace-grid {
+		display: grid;
+		gap: 18px;
+	}
+
+	.workspace-head {
+		display: grid;
+		gap: 8px;
+	}
+	.state-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 18px;
+}
+
+@media (max-width: 900px) {
+	.state-grid {
+		grid-template-columns: 1fr;
+	}
+}
+</style>

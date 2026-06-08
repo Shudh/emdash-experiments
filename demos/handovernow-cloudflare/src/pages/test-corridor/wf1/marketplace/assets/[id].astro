@@ -1,0 +1,230 @@
+---
+import ActionForm from "../../../../../components/rental/ActionForm.astro";
+import ConditionBox from "../../../../../components/rental/ConditionBox.astro";
+import SpecTable from "../../../../../components/rental/SpecTable.astro";
+import Wf1Base from "../../../../../components/wf1/Wf1Base.astro";
+import Wf1TestLaneBanner from "../../../../../components/wf1/Wf1TestLaneBanner.astro";
+
+import { applyTestLaneNoStoreHeaders, testLaneHostRejectionResponse } from "../../../../../lib/wf1/routing/host-policy.js";
+import { wf1LoginHref, wf1RentalApiPath, wf1WorkspaceHref } from "../../../../../lib/wf1/routing/lane.js";
+import { getWorkflowMarketplaceAsset } from "../../../../../lib/wf1/queries/marketplace.js";
+import { getWf1PageContext } from "../../../../../lib/wf1/server/context.js";
+
+export const prerender = false;
+
+const rejection = testLaneHostRejectionResponse(Astro.request);
+
+if (rejection) {
+	return rejection;
+}
+
+applyTestLaneNoStoreHeaders(Astro.response.headers);
+
+type JsonObject = Record<string, unknown>;
+type OwnerConditionsForConditionBox = {
+	version?: unknown;
+	hash?: unknown;
+	spec?: Record<string, unknown> | null | undefined;
+};
+
+function objectOrNullOrUndefined(value: unknown): Record<string, unknown> | null | undefined {
+	if (value === null || value === undefined) {
+		return value;
+	}
+
+	if (typeof value === "object" && !Array.isArray(value)) {
+		return value as Record<string, unknown>;
+	}
+
+	return null;
+}
+
+function ownerConditionsFor(value: unknown): OwnerConditionsForConditionBox | null | undefined {
+	if (value === null || value === undefined) {
+		return value;
+	}
+
+	if (typeof value !== "object" || Array.isArray(value)) {
+		return undefined;
+	}
+
+	const record = value as Record<string, unknown>;
+
+	return {
+		version: record.version,
+		hash: record.hash,
+		spec: objectOrNullOrUndefined(record.spec),
+	};
+}
+
+const assetId = Astro.params.id;
+
+async function loadDetails() {
+	if (!assetId) return null;
+
+	try {
+		const { store, user } = await getWf1PageContext(Astro);
+		return await getWorkflowMarketplaceAsset(store, user, assetId, { lane: "test" });
+	} catch {
+		return null;
+	}
+}
+
+function configFor(asset: JsonObject | undefined): JsonObject {
+	return asset?.config_spec && typeof asset.config_spec === "object" && !Array.isArray(asset.config_spec)
+		? asset.config_spec as JsonObject
+		: {};
+}
+
+function moneyLabel(asset: JsonObject | undefined): string {
+	const amount = Number(asset?.public_price ?? 0);
+	const currency = String(asset?.currency ?? "INR");
+
+	if (!Number.isFinite(amount) || amount <= 0) {
+		return "";
+	}
+
+	return new Intl.NumberFormat("en-IN", {
+		style: "currency",
+		currency,
+		maximumFractionDigits: 0,
+	}).format(amount);
+}
+
+function minimumMonthsLabel(asset: JsonObject | undefined): string {
+	const months = Number(asset?.minimum_months ?? 0);
+
+	if (!Number.isFinite(months) || months <= 0) {
+		return "";
+	}
+
+	return `Minimum stay: ${months} month${months === 1 ? "" : "s"}`;
+}
+
+const details = await loadDetails();
+const asset = details?.asset as JsonObject | undefined;
+const ownerConditions = ownerConditionsFor(details?.ownerConditions);
+const viewer = asset?.viewer && typeof asset.viewer === "object" && !Array.isArray(asset.viewer)
+	? asset.viewer as JsonObject
+	: {};
+const relationship = String(viewer.relationship ?? "anonymous");
+const workflowInstanceId = typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
+const canExpressInterest = viewer.canExpressInterest === true;
+const loginRedirect = asset?.id ? `/test-corridor/wf1/marketplace/assets/${String(asset.id)}` : "/test-corridor/wf1/marketplace";
+const loginHref = wf1LoginHref(loginRedirect);
+const price = moneyLabel(asset);
+const minimumMonths = minimumMonthsLabel(asset);
+---
+
+<Wf1Base title={asset ? String(asset.title) : "WF1 test asset"} description="Protected WF1 test asset details">
+	<Wf1TestLaneBanner />
+
+	<section class="rental-section">
+		<div class="rental-shell detail-grid">
+			{asset ? (
+				<>
+					<article class="rental-panel detail-main">
+						<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
+						<h1>{String(asset.title ?? "Untitled asset")}</h1>
+						<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+						{price ? <p class="asset-price">{price} / month</p> : null}
+						{minimumMonths ? <p class="rental-muted asset-minimum">{minimumMonths}</p> : null}
+						<div class="rental-badges">
+							<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
+							<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+						</div>
+					</article>
+
+					<div class="detail-side">
+						<ConditionBox conditions={ownerConditions} />
+
+						{relationship === "interested_applicant" && workflowInstanceId ? (
+							<div class="rental-panel">
+								<h2>Application submitted</h2>
+								<a class="rental-button" href={wf1WorkspaceHref("test", workflowInstanceId)}>
+									Open test workspace
+								</a>
+							</div>
+						) : canExpressInterest ? (
+							<ActionForm
+								title="Apply in test corridor"
+								action={wf1RentalApiPath("test", `/marketplace/assets/${String(asset.id)}/express-interest`)}
+								submitLabel="Submit test application"
+								successRedirect="/test-corridor/wf1/marketplace"
+							>
+								<input type="hidden" name="workflowDefinitionId" value="simple-available-rented-v1" />
+								<input type="hidden" name="workflowDefinitionVersion" value="1" />
+								<div class="rental-field">
+									<label for="name">Name</label>
+									<input id="name" name="name" required />
+								</div>
+								<div class="rental-field">
+									<label for="officialEmail">Official email</label>
+									<input id="officialEmail" name="officialEmail" type="email" />
+								</div>
+								<div class="rental-field">
+									<label for="employerName">Employer</label>
+									<input id="employerName" name="employerName" />
+								</div>
+								<div class="rental-field">
+									<label for="offeredPrice">Offer</label>
+									<input id="offeredPrice" name="offeredPrice" type="number" data-number="true" />
+								</div>
+								<div class="rental-field full">
+									<label for="message">Message</label>
+									<textarea id="message" name="message">I am applying through the protected test corridor.</textarea>
+								</div>
+							</ActionForm>
+						) : (
+							<div class="rental-panel">
+								<h2>Login required</h2>
+								<a class="rental-button" href={loginHref}>Login or register</a>
+							</div>
+						)}
+					</div>
+
+					<div class="rental-panel">
+						<SpecTable title="Configuration" spec={configFor(asset)} />
+					</div>
+				</>
+			) : (
+				<div class="rental-panel">
+					<h1>Test asset not found</h1>
+					<p class="rental-muted">This WF1 test asset is unavailable in the protected test corridor.</p>
+				</div>
+			)}
+		</div>
+	</section>
+</Wf1Base>
+
+<style>
+	.detail-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 380px;
+		gap: 18px;
+	}
+
+	.detail-main,
+	.detail-side {
+		display: grid;
+		gap: 16px;
+		align-content: start;
+	}
+
+	.asset-price {
+		margin: 0;
+		font-size: 1.2rem;
+		font-weight: 850;
+		color: var(--r-text);
+	}
+
+	.asset-minimum {
+		margin-top: -6px;
+	}
+
+	@media (max-width: 900px) {
+		.detail-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

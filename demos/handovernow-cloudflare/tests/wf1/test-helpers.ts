@@ -22,6 +22,12 @@ export const kavya: UserContext = {
 	email: "kavya@example.com",
 	name: "Kavya",
 };
+export const adminReviewer: UserContext = {
+	id: "admin_reviewer",
+	email: "shudh.datta@gmail.com",
+	name: "Admin Reviewer",
+	role: "50",
+};
 
 export type Wf1TestWorkflowProfile = {
 	workflowDefinitionId: string;
@@ -99,7 +105,7 @@ export async function seedSimpleApplication(
 		],
 	});
 
-	const published = await publishWorkflowAsset(store, eva, created.asset.id);
+	const published = await publishWorkflowAsset(store, adminReviewer, created.asset.id);
 
 	const interestResult = await expressWorkflowInterest(store, rakesh, published.asset.id, {
 		name: "Rakesh",
