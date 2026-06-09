@@ -1,0 +1,234 @@
+---
+import Wf1PrescreenChatbotifyApp from "../../features/wf1-chatbotify/Wf1PrescreenChatbotifyApp";
+
+import type {
+	HumanCheckChallenge,
+	JsonObject,
+	PrescreenConfig,
+	PrescreenQuestion,
+	PrescreenQuestionKind,
+} from "../../features/wf1-chatbotify/types";
+
+import { isObjectRecord, numberValue, objectValue, stringValue } from "../../features/wf1-chatbotify/objectUtils";
+import { startTrace } from "../../features/wf1-chatbotify/debugTrace";
+
+const TRACE_SCOPE = "Wf1PrescreenChatbotifyIsland";
+
+type OwnerConditions = {
+	version?: unknown;
+	hash?: unknown;
+	spec?: unknown;
+};
+
+type Props = {
+	asset: JsonObject;
+	ownerConditions?: OwnerConditions | null;
+	action: string;
+	loginHref: string;
+	canSubmit: boolean;
+	humanCheckChallenge: HumanCheckChallenge;
+	turnstileSiteKey?: string;
+};
+
+function supportedQuestionKinds(): PrescreenQuestionKind[] {
+	return ["text", "textarea", "phone", "email", "date", "number", "single_choice"];
+}
+
+function isSupportedQuestionKind(value: string): value is PrescreenQuestionKind {
+	return supportedQuestionKinds().includes(value as PrescreenQuestionKind);
+}
+
+function questionKindFromValue(value: unknown): PrescreenQuestionKind {
+	const rawKind = stringValue(value).trim();
+	return isSupportedQuestionKind(rawKind) ? rawKind : "text";
+}
+
+function trimmedStringFromValue(value: unknown): string {
+	return stringValue(value).trim();
+}
+
+function optionsFromValue(value: unknown): string[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	const options: string[] = [];
+
+	for (const item of value) {
+		const option = stringValue(item).trim();
+
+		if (option !== "") {
+			options.push(option);
+		}
+	}
+
+	return options;
+}
+
+function normalizeQuestion(value: unknown): PrescreenQuestion | null {
+	if (!isObjectRecord(value)) {
+		return null;
+	}
+
+	const key = trimmedStringFromValue(value.key);
+	const label = trimmedStringFromValue(value.label);
+	const kind = questionKindFromValue(value.kind);
+	const required = value.required === false ? false : true;
+	const target = trimmedStringFromValue(value.target);
+	const placeholder = stringValue(value.placeholder);
+	const options = optionsFromValue(value.options);
+
+	if (key === "" || label === "") {
+		return null;
+	}
+
+	return { key, label, kind, required, options, target, placeholder };
+}
+
+function moneyLabel(publicPrice: number, currency: string): string {
+	if (!Number.isFinite(publicPrice) || publicPrice <= 0) {
+		return "";
+	}
+
+	return new Intl.NumberFormat("en-IN", {
+		style: "currency",
+		currency,
+		maximumFractionDigits: 0,
+	}).format(publicPrice);
+}
+
+function assetTitleFromAsset(asset: JsonObject): string {
+	const title = stringValue(asset.title).trim();
+	return title !== "" ? title : "this property";
+}
+
+function assetIdFromAsset(asset: JsonObject): string {
+	return stringValue(asset.id).trim();
+}
+
+function publicPriceFromAsset(asset: JsonObject): number {
+	return numberValue(asset.public_price, 0);
+}
+
+function currencyFromAsset(asset: JsonObject): string {
+	const currency = stringValue(asset.currency, "INR").trim();
+	return currency !== "" ? currency : "INR";
+}
+
+function minimumMonthsFromAsset(asset: JsonObject): number {
+	return numberValue(asset.minimum_months, 0);
+}
+
+function defaultQuestions(asset: JsonObject): PrescreenQuestion[] {
+	const publicPrice = publicPriceFromAsset(asset);
+	const currency = currencyFromAsset(asset);
+	const minimumMonths = minimumMonthsFromAsset(asset);
+	const price = moneyLabel(publicPrice, currency);
+
+	const minimumStayLabel =
+		minimumMonths > 0
+			? `Can you stay for at least ${minimumMonths} months?`
+			: "Can you stay for the owner’s minimum stay requirement?";
+
+	const rentAcceptanceLabel =
+		price !== ""
+			? `Are you comfortable with ${price} per month plus stated terms?`
+			: "Are you comfortable with the listed rent and stated terms?";
+
+	const offeredPricePlaceholder = publicPrice > 0 ? String(publicPrice) : "33000";
+
+	return [
+		{ key: "name", label: "What is your full name?", kind: "text", required: true, target: "name", placeholder: "Your name" },
+		{ key: "phone_whatsapp", label: "What is your phone / WhatsApp number?", kind: "phone", required: true, target: "phone", placeholder: "+91..." },
+		{ key: "official_email", label: "What email should we keep on record?", kind: "email", required: true, target: "officialEmail", placeholder: "name@example.com" },
+		{ key: "move_in_date", label: "When do you want to move in?", kind: "date", required: true, target: "requestedStartDate", placeholder: "" },
+		{ key: "minimum_stay", label: minimumStayLabel, kind: "single_choice", required: true, options: ["Yes", "Need to discuss"], target: "minimumStayAccepted", placeholder: "" },
+		{ key: "requested_minimum_months", label: "How many months do you expect to stay?", kind: "number", required: true, target: "requestedMinimumMonths", placeholder: "11" },
+		{ key: "occupants", label: "Who will live in the flat?", kind: "textarea", required: true, target: "occupants", placeholder: "Example: husband, wife, one child" },
+		{ key: "employer", label: "Where do you work, or what is your income source?", kind: "text", required: true, target: "employerName", placeholder: "Company / business / profession" },
+		{ key: "rent_acceptance", label: rentAcceptanceLabel, kind: "single_choice", required: true, options: ["Yes", "Need to discuss"], target: "rentAcceptance", placeholder: "" },
+		{ key: "offered_price", label: "If you want to make a rent offer, enter the monthly amount. Leave blank if you accept the listed rent.", kind: "number", required: false, target: "offeredPrice", placeholder: offeredPricePlaceholder },
+		{ key: "normal_residential_use", label: "Will this be used only as a normal residence, not Airbnb, guest-house, or short stay?", kind: "single_choice", required: true, options: ["Yes, normal residence only", "Need to discuss"], target: "normalResidentialUse", placeholder: "" },
+		{ key: "final_note", label: "Anything else the owner should know before calling you?", kind: "textarea", required: false, target: "message", placeholder: "Write a short note for the owner" },
+	];
+}
+
+function ownerConditionSpec(ownerConditions: OwnerConditions | null): JsonObject {
+	if (ownerConditions === null) {
+		return {};
+	}
+
+	return objectValue(ownerConditions.spec);
+}
+
+function customQuestionsFromOwnerConditions(ownerConditions: OwnerConditions | null): PrescreenQuestion[] {
+	const spec = ownerConditionSpec(ownerConditions);
+	const rawQuestions = Array.isArray(spec.preScreenQuestions) ? spec.preScreenQuestions : [];
+	const questions: PrescreenQuestion[] = [];
+
+	for (const rawQuestion of rawQuestions) {
+		const normalizedQuestion = normalizeQuestion(rawQuestion);
+
+		if (normalizedQuestion !== null) {
+			questions.push(normalizedQuestion);
+		}
+	}
+
+	return questions;
+}
+
+function questionsForConfig(asset: JsonObject, ownerConditions: OwnerConditions | null): PrescreenQuestion[] {
+	const customQuestions = customQuestionsFromOwnerConditions(ownerConditions);
+	return customQuestions.length > 0 ? customQuestions : defaultQuestions(asset);
+}
+
+function acceptedConditionsVersion(ownerConditions: OwnerConditions | null): number {
+	return ownerConditions === null ? 0 : numberValue(ownerConditions.version, 0);
+}
+
+function acceptedConditionsHash(ownerConditions: OwnerConditions | null): string {
+	return ownerConditions === null ? "" : stringValue(ownerConditions.hash).trim();
+}
+
+function storageKeyForPrescreen(assetId: string, version: number, hash: string): string {
+	const storageHash = hash !== "" ? hash : "nohash";
+	return `handovernow:prescreen:${assetId}:${version}:${storageHash}`;
+}
+
+function buildPrescreenConfig(props: Props): PrescreenConfig {
+	const trace = startTrace(TRACE_SCOPE, "buildPrescreenConfig", {
+		action: props.action,
+		loginHref: props.loginHref,
+		canSubmit: props.canSubmit,
+	});
+
+	const asset = objectValue(props.asset);
+	const ownerConditions = props.ownerConditions ?? null;
+	const assetId = assetIdFromAsset(asset);
+	const assetTitle = assetTitleFromAsset(asset);
+	const version = acceptedConditionsVersion(ownerConditions);
+	const hash = acceptedConditionsHash(ownerConditions);
+
+	const config: PrescreenConfig = {
+		assetId,
+		assetTitle,
+		action: props.action,
+		loginHref: props.loginHref,
+		canSubmit: props.canSubmit,
+		questions: questionsForConfig(asset, ownerConditions),
+		acceptedConditionsVersion: version,
+		acceptedConditionsHash: hash,
+		humanCheckChallenge: props.humanCheckChallenge,
+		turnstileSiteKey: stringValue(props.turnstileSiteKey).trim(),
+		storageKey: storageKeyForPrescreen(assetId, version, hash),
+	};
+
+	trace.end({ assetId: config.assetId, questionCount: config.questions.length, storageKey: config.storageKey });
+	return config;
+}
+
+const props = Astro.props as Props;
+const config = buildPrescreenConfig(props);
+---
+
+<Wf1PrescreenChatbotifyApp config={config} client:only="react" />

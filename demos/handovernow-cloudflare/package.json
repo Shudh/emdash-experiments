@@ -27,6 +27,7 @@
 		"astro": "catalog:",
 		"emdash": "workspace:*",
 		"react": "catalog:",
+		"react-chatbotify": "2.5.0",
 		"react-dom": "catalog:"
 	},
 	"devDependencies": {
@@ -34,6 +35,8 @@
 		"@cloudflare/workers-types": "catalog:",
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
 		"better-sqlite3": "catalog:",
 		"kysely": "^0.27.0",
 		"vitest": "catalog:",

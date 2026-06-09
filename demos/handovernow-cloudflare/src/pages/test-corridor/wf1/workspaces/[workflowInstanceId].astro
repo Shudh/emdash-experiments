@@ -1,5 +1,6 @@
 ---
 import SpecTable from "../../../../components/rental/SpecTable.astro";
+import Wf1WorkspaceChatbotifyIsland from "../../../../components/wf1/Wf1WorkspaceChatbotifyIsland.astro";
 import Wf1ActionPanel from "../../../../components/wf1-test/Wf1ActionPanel.astro";
 import Wf1AssetConfigItemsPanel from "../../../../components/wf1-test/Wf1AssetConfigItemsPanel.astro";
 import Wf1TestBase from "../../../../components/wf1-test/Wf1TestBase.astro";
@@ -20,6 +21,10 @@ import {
 	testLaneHostRejectionResponse,
 } from "../../../../lib/wf1/routing/host-policy.js";
 import { assertWorkflowInstanceIdInLane } from "../../../../lib/wf1/routing/lane-guard.js";
+import {
+	wf1RentalApiPath,
+	wf1WorkspaceHref,
+} from "../../../../lib/wf1/routing/lane.js";
 
 export const prerender = false;
 
@@ -34,7 +39,8 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 
 type JsonObject = Record<string, unknown>;
 
-const workflowInstanceId = Astro.params.workflowInstanceId;
+const WF1_TEST_LANE = "test" as const;
+const workflowInstanceId = Astro.params.workflowInstanceId ?? "";
 
 function isObjectRecord(value: unknown): value is JsonObject {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -79,7 +85,21 @@ const availableActions = arrayValue(projection.availableActions);
 const availableCardTypes = arrayValue(projection.availableCardTypes);
 const requiredUnresolvedTasks = arrayValue(taskBuckets.requiredUnresolvedTasks);
 const viewerRole = String(workspace?.viewerRole ?? "unknown");
-const workspaceHref = workflowInstanceId ? `/test-corridor/wf1/workspaces/${workflowInstanceId}` : "/test-corridor/wf1";
+const workspaceHref = workflowInstanceId ? wf1WorkspaceHref(WF1_TEST_LANE, workflowInstanceId) : "/test-corridor/wf1";
+
+function workspaceRoutesFor(workflowInstanceId: string) {
+	const encodedWorkflowInstanceId = encodeURIComponent(workflowInstanceId);
+
+	return {
+		workspace: wf1RentalApiPath(WF1_TEST_LANE, `/workspaces/${encodedWorkflowInstanceId}`),
+		workflowActions: wf1RentalApiPath(WF1_TEST_LANE, "/workflow/actions"),
+		workflowCards: wf1RentalApiPath(WF1_TEST_LANE, "/workflow/cards"),
+		workflowCardAnswerBase: wf1RentalApiPath(WF1_TEST_LANE, "/workflow/cards"),
+		mediaUpload: "/_emdash/api/media",
+	};
+}
+
+const workspaceRoutes = workflowInstanceId !== "" ? workspaceRoutesFor(workflowInstanceId) : null;
 const canGenerateMoveoutTasks =
 	viewerRole === "owner" &&
 	String(applicationState.id ?? "") === "moveout_requested" &&
@@ -103,6 +123,23 @@ const canGenerateMoveoutTasks =
 					</div>
 
 					<Wf1StatePanel projection={projection} viewerRole={viewerRole} />
+
+					{workspaceRoutes ? (
+						<section class="rental-panel wf1-chatbotify-panel">
+							<div>
+								<p class="rental-kicker">ChatBotify workspace</p>
+								<h2>Guided workflow command panel</h2>
+								<p class="rental-muted">
+									This panel uses the same WF1 projection, but renders it through the new React/ChatBotify command layer.
+								</p>
+							</div>
+
+							<Wf1WorkspaceChatbotifyIsland
+								workflowInstanceId={workflowInstanceId}
+								routes={workspaceRoutes}
+							/>
+						</section>
+					) : null}
 
 					<div class="workspace-columns">
 						<aside class="sidebar">
@@ -164,6 +201,11 @@ const canGenerateMoveoutTasks =
 		grid-template-columns: 340px minmax(0, 1fr);
 		gap: 18px;
 		align-items: start;
+	}
+
+	.wf1-chatbotify-panel {
+		display: grid;
+		gap: 14px;
 	}
 
 	@media (max-width: 900px) {

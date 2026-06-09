@@ -4,6 +4,12 @@ import Wf1TestBase from "../../../../components/wf1-test/Wf1TestBase.astro";
 import { DomainError } from "../../../../lib/domain/types.js";
 import { listWorkflowMarketplaceAssets } from "../../../../lib/wf1/queries/marketplace.js";
 import { getWf1PageContext } from "../../../../lib/wf1/server/context.js";
+import {
+	wf1AssetHref,
+	wf1LoginHref,
+	wf1MarketplaceHref,
+	wf1WorkspaceHref,
+} from "../../../../lib/wf1/routing/lane.js";
 
 import Wf1TestLaneBanner from "../../../../components/wf1-test/Wf1TestLaneBanner.astro";
 
@@ -22,6 +28,7 @@ if (rejection) {
 
 applyTestLaneNoStoreHeaders(Astro.response.headers);
 
+const WF1_TEST_LANE = "test" as const;
 
 type MarketplaceCta = {
 	label: string;
@@ -180,12 +187,23 @@ function thumbnailFor(asset: AssetRow) {
 	};
 }
 
-function assetDetailHref(asset: AssetRow) {
-	return `/test-corridor/wf1/marketplace/assets/${String(asset.id)}`;
+function assetIdFor(asset: AssetRow): string {
+	const assetId = String(asset.id ?? "").trim();
+	return assetId;
 }
 
-function loginHrefFor(asset: AssetRow) {
-	return `/login?redirect=${encodeURIComponent(assetDetailHref(asset))}`;
+function assetDetailHref(asset: AssetRow): string {
+	const assetId = assetIdFor(asset);
+
+	if (assetId === "") {
+		return wf1MarketplaceHref(WF1_TEST_LANE);
+	}
+
+	return wf1AssetHref(WF1_TEST_LANE, assetId);
+}
+
+function loginHrefFor(asset: AssetRow): string {
+	return wf1LoginHref(assetDetailHref(asset));
 }
 
 function cardCta(asset: AssetRow): MarketplaceCta {
@@ -206,7 +224,7 @@ function cardCta(asset: AssetRow): MarketplaceCta {
 	if (relationship === "interested_applicant" && workflowInstanceId) {
 		return {
 			label: "Open application workspace",
-			href: `/test-corridor/wf1/workspaces/${workflowInstanceId}`,
+			href: wf1WorkspaceHref(WF1_TEST_LANE, workflowInstanceId),
 			tone: "primary",
 		};
 	}

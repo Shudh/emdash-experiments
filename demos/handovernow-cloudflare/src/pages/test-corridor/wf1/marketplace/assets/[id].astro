@@ -1,7 +1,7 @@
 ---
 import ConditionBox from "../../../../../components/rental/ConditionBox.astro";
 import SpecTable from "../../../../../components/rental/SpecTable.astro";
-import PrescreenChatWidget from "../../../../../components/wf1-test/PrescreenChatWidget.astro";
+import Wf1PrescreenChatbotifyIsland from "../../../../../components/wf1/Wf1PrescreenChatbotifyIsland.astro";
 import Wf1TestBase from "../../../../../components/wf1-test/Wf1TestBase.astro";
 
 import { getWorkflowMarketplaceAsset } from "../../../../../lib/wf1/queries/marketplace.js";
@@ -9,6 +9,13 @@ import { getWf1PageContext } from "../../../../../lib/wf1/server/context.js";
 import { createHumanCheckChallenge } from "../../../../../lib/wf1/security/human-check.js";
 import { getRuntimeEnvFromLocals } from "../../../../../lib/wf1/security/runtime-env.js";
 import { publicTurnstileSiteKeyFromEnv } from "../../../../../lib/wf1/security/turnstile.js";
+import {
+	wf1AssetHref,
+	wf1LoginHref,
+	wf1MarketplaceHref,
+	wf1RentalApiPath,
+	wf1WorkspaceHref,
+} from "../../../../../lib/wf1/routing/lane.js";
 
 import Wf1TestLaneBanner from "../../../../../components/wf1-test/Wf1TestLaneBanner.astro";
 
@@ -27,6 +34,7 @@ if (rejection) {
 
 applyTestLaneNoStoreHeaders(Astro.response.headers);
 
+const WF1_TEST_LANE = "test" as const;
 
 type JsonObject = Record<string, unknown>;
 
@@ -173,8 +181,30 @@ const relationship = String(viewer.relationship ?? "anonymous");
 const workflowInstanceId =
 	typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
 const canExpressInterest = viewer.canExpressInterest === true;
-const loginRedirect = asset?.id ? `/test-corridor/wf1/marketplace/assets/${String(asset.id)}` : "/test-corridor/wf1/marketplace";
-const loginHref = `/login?redirect=${encodeURIComponent(loginRedirect)}`;
+function assetIdForRoute(asset: JsonObject | undefined): string {
+	const value = asset?.id;
+
+	if (typeof value === "string") {
+		return value.trim();
+	}
+
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return String(value);
+	}
+
+	return "";
+}
+
+const assetIdForLinks = assetIdForRoute(asset);
+const loginRedirect =
+	assetIdForLinks !== ""
+		? wf1AssetHref(WF1_TEST_LANE, assetIdForLinks)
+		: wf1MarketplaceHref(WF1_TEST_LANE);
+const loginHref = wf1LoginHref(loginRedirect);
+const expressInterestAction =
+	assetIdForLinks !== ""
+		? wf1RentalApiPath(WF1_TEST_LANE, `/marketplace/assets/${assetIdForLinks}/express-interest`)
+		: "";
 const thumbnail = thumbnailFor(asset);
 const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;
 const price = moneyLabel(asset);
@@ -229,16 +259,16 @@ const turnstileSiteKey = publicTurnstileSiteKeyFromEnv(runtimeEnv);
 							) : relationship === "interested_applicant" && workflowInstanceId ? (
 								<div class="rental-panel">
 									<h2>Application submitted</h2>
-									<a class="rental-button" href={`/test-corridor/wf1/workspaces/${workflowInstanceId}`}>
+									<a class="rental-button" href={wf1WorkspaceHref(WF1_TEST_LANE, workflowInstanceId)}>
 										Open workspace
 									</a>
 								</div>
 							) : humanCheckChallenge ? (
 								<div class="rental-panel">
-									<PrescreenChatWidget
+									<Wf1PrescreenChatbotifyIsland
 										asset={asset}
 										ownerConditions={ownerConditions}
-										action={`/test-corridor/api/wf1-rental/marketplace/assets/${asset.id}/express-interest`}
+										action={expressInterestAction}
 										loginHref={loginHref}
 										canSubmit={canExpressInterest}
 										humanCheckChallenge={humanCheckChallenge}

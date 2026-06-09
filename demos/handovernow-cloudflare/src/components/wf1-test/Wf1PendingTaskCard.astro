@@ -15,33 +15,119 @@ type McqOption = {
 const { card, workspaceHref } = Astro.props;
 
 function objectValue(value: unknown): Record<string, unknown> {
-	return value && typeof value === "object" && !Array.isArray(value)
-		? value as Record<string, unknown>
-		: {};
+	if (value === null) {
+		return {};
+	}
+
+	if (typeof value !== "object") {
+		return {};
+	}
+
+	if (Array.isArray(value)) {
+		return {};
+	}
+
+	return value as Record<string, unknown>;
 }
 
-function mcqOptions(schema: Record<string, unknown>): McqOption[] {
-	return Array.isArray(schema.options)
-		? schema.options
-				.filter((option) => option && typeof option === "object")
-				.map((option) => {
-					const row = option as Record<string, unknown>;
-					const value = String(row.value ?? "");
-					const label = String(row.label ?? value);
-					return { value, label };
-				})
-				.filter((option) => option.value)
-		: [];
+function stringValue(value: unknown, fallback = ""): string {
+	if (typeof value === "string") {
+		return value;
+	}
+
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return String(value);
+	}
+
+	if (typeof value === "boolean") {
+		return String(value);
+	}
+
+	return fallback;
 }
 
-const answerSchema = objectValue(card.answer_schema);
-const evidencePolicy = objectValue(card.evidence_policy);
-const kind = String(answerSchema.kind ?? "free_text");
+function mcqOptionFromUnknown(value: unknown): McqOption | null {
+	const row = objectValue(value);
+	const optionValue = stringValue(row.value).trim();
+	const optionLabel = stringValue(row.label, optionValue).trim();
+
+	if (optionValue === "") {
+		return null;
+	}
+
+	return {
+		value: optionValue,
+		label: optionLabel === "" ? optionValue : optionLabel,
+	};
+}
+
+function mcqOptionsFromSchema(schema: Record<string, unknown>): McqOption[] {
+	const rawOptions = Array.isArray(schema.options) ? schema.options : [];
+	const options: McqOption[] = [];
+
+	for (const rawOption of rawOptions) {
+		const option = mcqOptionFromUnknown(rawOption);
+
+		if (option === null) {
+			continue;
+		}
+
+		options.push(option);
+	}
+
+	return options;
+}
+
+function mergeSchemaValuesWithSpecLabels(schemaOptions: McqOption[], specOptions: McqOption[]): McqOption[] {
+	if (schemaOptions.length === 0 && specOptions.length === 0) {
+		return [
+			{ value: "yes", label: "Yes" },
+			{ value: "no", label: "No" },
+		];
+	}
+
+	if (schemaOptions.length === 0) {
+		return specOptions;
+	}
+
+	if (specOptions.length === 0) {
+		return schemaOptions;
+	}
+
+	const labelByValue = new Map<string, string>();
+
+	for (const option of specOptions) {
+		labelByValue.set(option.value, option.label);
+	}
+
+	const mergedOptions: McqOption[] = [];
+
+	for (const option of schemaOptions) {
+		mergedOptions.push({
+			value: option.value,
+			label: labelByValue.get(option.value) ?? option.label,
+		});
+	}
+
+	return mergedOptions;
+}
+
+function mcqOptions(answerSchema: Record<string, unknown>, cardSpec: Record<string, unknown>): McqOption[] {
+	const schemaOptions = mcqOptionsFromSchema(answerSchema);
+	const specOptions = mcqOptionsFromSchema(cardSpec);
+
+	return mergeSchemaValuesWithSpecLabels(schemaOptions, specOptions);
+}
+
+const answerSchema = objectValue(card.answer_schema ?? card.answerSchema);
+const evidencePolicy = objectValue(card.evidence_policy ?? card.evidencePolicy);
+const cardSpec = objectValue(card.card_spec ?? card.cardSpec);
+const kind = stringValue(answerSchema.kind, "free_text");
 const answerLabel = kind === "amount_proof" ? "Reference" : "Answer";
-const evidenceMode = String(evidencePolicy.attachment ?? "forbidden");
+const evidenceMode = stringValue(evidencePolicy.attachment, "forbidden");
 const acceptsEvidence = evidenceMode !== "forbidden";
 const requiresEvidence = evidenceMode === "required";
-const options = mcqOptions(answerSchema);
+const options = mcqOptions(answerSchema, cardSpec);
 ---
 
 <ActionForm

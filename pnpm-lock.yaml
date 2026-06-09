@@ -374,7 +374,7 @@ importers:
     dependencies:
       '@astrojs/cloudflare':
         specifier: 'catalog:'
-        version: 13.1.7(@types/node@24.10.13)(astro@6.0.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.55.2)(tsx@4.21.0)(typescript@6.0.0-beta)(yaml@2.8.2))(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(workerd@1.20260507.1)(wrangler@4.90.0(@cloudflare/workers-types@4.20260305.1))(yaml@2.8.2)
+        version: 13.1.7(@types/node@24.10.13)(astro@6.0.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.55.2)(tsx@4.21.0)(typescript@6.0.0-beta)(yaml@2.8.2))(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(wrangler@4.90.0(@cloudflare/workers-types@4.20260305.1))(yaml@2.8.2)
       '@astrojs/react':
         specifier: 'catalog:'
         version: 5.0.0(@types/node@24.10.13)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(jiti@2.6.1)(lightningcss@1.32.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tsx@4.21.0)(yaml@2.8.2)
@@ -423,7 +423,7 @@ importers:
     dependencies:
       '@astrojs/cloudflare':
         specifier: 'catalog:'
-        version: 13.1.7(@types/node@24.10.13)(astro@6.0.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.55.2)(tsx@4.21.0)(typescript@6.0.0-beta)(yaml@2.8.2))(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(wrangler@4.90.0(@cloudflare/workers-types@4.20260305.1))(yaml@2.8.2)
+        version: 13.1.7(@types/node@24.10.13)(astro@6.0.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.55.2)(tsx@4.21.0)(typescript@6.0.0-beta)(yaml@2.8.2))(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(workerd@1.20260507.1)(wrangler@4.90.0(@cloudflare/workers-types@4.20260305.1))(yaml@2.8.2)
       '@astrojs/node':
         specifier: 'catalog:'
         version: 10.0.0(astro@6.0.1(@types/node@24.10.13)(jiti@2.6.1)(lightningcss@1.32.0)(rollup@4.55.2)(tsx@4.21.0)(typescript@6.0.0-beta)(yaml@2.8.2))
@@ -442,6 +442,9 @@ importers:
       react:
         specifier: 'catalog:'
         version: 19.2.4
+      react-chatbotify:
+        specifier: 2.5.0
+        version: 2.5.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-dom:
         specifier: 'catalog:'
         version: 19.2.4(react@19.2.4)
@@ -458,6 +461,12 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.10.13
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.14)
       better-sqlite3:
         specifier: 'catalog:'
         version: 12.8.0
@@ -9031,6 +9040,12 @@ packages:
   rc@1.2.8:
     resolution: {integrity: sha512-y3bGgqKj3QBdxLbLkomlohkvsA8gdAiUQlSBJnBhfn+BPxg4bc62d8TcBW15wavDfgexCgccckhcZvywyQYPOw==}
     hasBin: true
+
+  react-chatbotify@2.5.0:
+    resolution: {integrity: sha512-NN7Tpv/JU0vrrt68KaRvJRWRP5NjuTYd630f5tTAVEdt82r3x7xSos08eL6HkTqzhRmQ0a1iAZtgVoNhkvvFJw==}
+    peerDependencies:
+      react: '>=16.14.0'
+      react-dom: '>=16.14.0'
 
   react-day-picker@9.14.0:
     resolution: {integrity: sha512-tBaoDWjPwe0M5pGrum4H0SR6Lyk+BO9oHnp9JbKpGKW2mlraNPgP9BMfsg5pWpwrssARmeqk7YBl2oXutZTaHA==}
@@ -18622,6 +18637,11 @@ snapshots:
       ini: 1.3.8
       minimist: 1.2.8
       strip-json-comments: 2.0.1
+
+  react-chatbotify@2.5.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+    dependencies:
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
 
   react-day-picker@9.14.0(react@19.2.4):
     dependencies:

@@ -1,0 +1,49 @@
+---
+import Wf1WorkspaceChatbotifyApp from "../../features/wf1-chatbotify/Wf1WorkspaceChatbotifyApp";
+
+import type { Wf1WorkspaceRoutes } from "../../features/wf1-chatbotify/types";
+import { objectValue, stringValue } from "../../features/wf1-chatbotify/objectUtils";
+import { startTrace } from "../../features/wf1-chatbotify/debugTrace";
+
+const TRACE_SCOPE = "Wf1WorkspaceChatbotifyIsland";
+
+type Props = {
+	workflowInstanceId: string;
+	routes: Wf1WorkspaceRoutes;
+};
+
+function localPathFromValue(value: unknown, fallback: string): string {
+	const path = stringValue(value).trim();
+	return path.startsWith("/") ? path : fallback;
+}
+
+function normalizeWorkflowInstanceId(value: unknown): string {
+	return stringValue(value).trim();
+}
+
+function normalizeRoutes(value: unknown): Wf1WorkspaceRoutes {
+	const routes = objectValue(value);
+	return {
+		workspace: localPathFromValue(routes.workspace, "/api/wf1-rental/workspaces/missing"),
+		workflowActions: localPathFromValue(routes.workflowActions, "/api/wf1-rental/workflow/actions"),
+		workflowCards: localPathFromValue(routes.workflowCards, "/api/wf1-rental/workflow/cards"),
+		workflowCardAnswerBase: localPathFromValue(routes.workflowCardAnswerBase, "/api/wf1-rental/workflow/cards"),
+		mediaUpload: localPathFromValue(routes.mediaUpload, "/_emdash/api/media"),
+	};
+}
+
+function normalizeProps(rawProps: unknown): Props {
+	const trace = startTrace(TRACE_SCOPE, "normalizeProps", { rawPropsType: typeof rawProps });
+	const props = objectValue(rawProps);
+	const normalizedProps = {
+		workflowInstanceId: normalizeWorkflowInstanceId(props.workflowInstanceId),
+		routes: normalizeRoutes(props.routes),
+	};
+	trace.end({ workflowInstanceId: normalizedProps.workflowInstanceId, workspaceRoute: normalizedProps.routes.workspace });
+	return normalizedProps;
+}
+
+const props = normalizeProps(Astro.props);
+---
+
+<Wf1WorkspaceChatbotifyApp workflowInstanceId={props.workflowInstanceId} routes={props.routes} client:only="react" />
