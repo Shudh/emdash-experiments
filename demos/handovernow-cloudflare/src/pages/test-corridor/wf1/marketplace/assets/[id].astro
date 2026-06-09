@@ -173,7 +173,7 @@ const relationship = String(viewer.relationship ?? "anonymous");
 const workflowInstanceId =
 	typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
 const canExpressInterest = viewer.canExpressInterest === true;
-const loginRedirect = asset?.id ? `/test-corridor/test-corridor/wf1/marketplace/assets/${String(asset.id)}` : "/test-corridor/wf1/marketplace";
+const loginRedirect = asset?.id ? `/test-corridor/wf1/marketplace/assets/${String(asset.id)}` : "/test-corridor/wf1/marketplace";
 const loginHref = `/login?redirect=${encodeURIComponent(loginRedirect)}`;
 const thumbnail = thumbnailFor(asset);
 const isImage = thumbnail?.mimeType.startsWith("image/") ?? false;

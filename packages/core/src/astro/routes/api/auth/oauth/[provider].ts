@@ -180,7 +180,7 @@ export const GET: APIRoute = async ({ params, request, locals, redirect }) => {
 		}
 
 		const config: OAuthConsumerConfig = {
-			baseUrl: `${getPublicOrigin(url, emdash?.config)}/_emdash`,
+			baseUrl: `${redirectTo?.startsWith("/test-corridor/") ? url.origin : getPublicOrigin(url, emdash?.config)}/_emdash`,
 			providers,
 		};
 

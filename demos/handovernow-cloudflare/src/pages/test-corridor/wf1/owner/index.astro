@@ -133,7 +133,7 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 					<h1>Dashboard</h1>
 					<p class="rental-muted">Latest assets are displayed first. Each asset shows application forms, Application Form State, and derived actions.</p>
 				</div>
-				<a class="rental-button" href="/test-corridor/test-corridor/wf1/owner/assets/new">Create asset</a>
+				<a class="rental-button" href="/test-corridor/wf1/owner/assets/new">Create asset</a>
 			</div>
 			{!dashboard.ok ? (
 				<div class="rental-panel">
@@ -161,7 +161,7 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 									</div>
 								</div>
 								<div class="asset-links">
-									<a class="rental-button secondary" href={`/test-corridor/test-corridor/wf1/marketplace/assets/${assetId}`}>View listing</a>
+									<a class="rental-button secondary" href={`/test-corridor/wf1/marketplace/assets/${assetId}`}>View listing</a>
 									{canPublish ? (
 										<form
 											class="wf1-inline-publish"

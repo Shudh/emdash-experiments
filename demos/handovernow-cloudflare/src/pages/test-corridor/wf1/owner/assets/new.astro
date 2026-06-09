@@ -575,7 +575,7 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 				await postJson(`/test-corridor/api/wf1-rental/owner/assets/${assetId}/publish-to-marketplace`, {});
 			}
 
-			location.href = `/test-corridor/test-corridor/wf1/marketplace/assets/${assetId}`;
+			location.href = `/test-corridor/wf1/marketplace/assets/${assetId}`;
 		} catch (error) {
 			if (status) {
 				status.textContent = error instanceof Error ? error.message : "Create asset failed";

@@ -1,0 +1,194 @@
+---
+import Wf1TestBase from "../../../components/wf1-test/Wf1TestBase.astro";
+import Wf1TestLaneBanner from "../../../components/wf1-test/Wf1TestLaneBanner.astro";
+
+import { listWorkflowMarketplaceAssets } from "../../../lib/wf1/queries/marketplace.js";
+import { getWf1PageContext } from "../../../lib/wf1/server/context.js";
+
+import {
+	applyTestLaneNoStoreHeaders,
+	testLaneHostRejectionResponse,
+} from "../../../lib/wf1/routing/host-policy.js";
+
+export const prerender = false;
+
+const rejection = testLaneHostRejectionResponse(Astro.request);
+
+if (rejection) {
+	return rejection;
+}
+
+applyTestLaneNoStoreHeaders(Astro.response.headers);
+
+type JsonObject = Record<string, unknown>;
+
+const { store, user } = await getWf1PageContext(Astro);
+
+function isObjectRecord(value: unknown): value is JsonObject {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function viewerFor(asset: JsonObject): JsonObject {
+	return isObjectRecord(asset.viewer) ? asset.viewer : {};
+}
+
+function numberTime(value: unknown): number {
+	if (typeof value !== "string") return 0;
+
+	const timestamp = Date.parse(value);
+	return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function latestStamp(row: JsonObject): number {
+	return Math.max(
+		numberTime(row.updated_at),
+		numberTime(row.created_at),
+		numberTime(row.published_at),
+		numberTime(row.submitted_at),
+	);
+}
+
+function latestFirst(rows: Array<JsonObject>): Array<JsonObject> {
+	return rows.toSorted((left, right) => latestStamp(right) - latestStamp(left));
+}
+
+function assetHref(asset: JsonObject): string {
+	return `/test-corridor/wf1/marketplace/assets/${String(asset.id ?? "")}`;
+}
+
+function applicationHref(asset: JsonObject): string {
+	const viewer = viewerFor(asset);
+	const workflowInstanceId = typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
+
+	return workflowInstanceId ? `/test-corridor/wf1/workspaces/${workflowInstanceId}` : assetHref(asset);
+}
+
+function myApplicationAssets(assets: Array<JsonObject>): Array<JsonObject> {
+	return latestFirst(
+		assets.filter((asset) => String(viewerFor(asset).relationship ?? "") === "interested_applicant"),
+	);
+}
+
+let applications: Array<JsonObject> = [];
+
+try {
+	const rawAssets = await listWorkflowMarketplaceAssets(store, user, { lane: "test" });
+	const marketplaceAssets = latestFirst(rawAssets.filter(isObjectRecord));
+	applications = myApplicationAssets(marketplaceAssets);
+} catch (error) {
+	console.error("[wf1-test] Failed to load WF1 test home application summary", error);
+}
+
+const latestApplicationHref = applications[0] ? applicationHref(applications[0]) : "/test-corridor/wf1/marketplace";
+---
+
+<Wf1TestBase title="WF1 test corridor" description="WF1 test corridor">
+	<Wf1TestLaneBanner />
+
+	<section class="rental-section wf1-home-hero">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">WF1 Test Corridor</p>
+					<h1>Clean rentals, safely isolated.</h1>
+					<p class="rental-muted">
+						Test-lane assets, applications, task cards, gates, and projection-derived actions.
+					</p>
+				</div>
+				<div class="wf1-actions">
+					<a class="rental-button" href="/test-corridor/wf1/marketplace">Marketplace</a>
+					<a class="rental-button secondary" href="/test-corridor/wf1/owner">Owner dashboard</a>
+					<a class="rental-button secondary" href="/test-corridor/wf1/owner/assets/new">Create asset</a>
+					{
+						user?.email ? (
+							<a class="rental-button secondary" href={latestApplicationHref}>My applications</a>
+						) : null
+					}
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section id="my-applications" class="rental-section compact-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">My test applications</p>
+					<h2>{applications.length ? "Latest first." : "Nothing yet."}</h2>
+					<p class="rental-muted">
+						{
+							applications.length
+								? "Open the test flat you are already interacting with. The newest application stays on top."
+								: "Apply from the test marketplace. Your test application workspaces will appear here."
+						}
+					</p>
+				</div>
+				<a class="rental-button secondary" href="/test-corridor/wf1/marketplace">Browse marketplace</a>
+			</div>
+
+			{
+				applications.length ? (
+					<div class="application-grid">
+						{applications.map((asset) => (
+							<article class="rental-panel application-card">
+								<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
+								<h3>
+									<a href={applicationHref(asset)}>{String(asset.title ?? "Untitled asset")}</a>
+								</h3>
+								<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
+								<div class="rental-badges">
+									<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
+									<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+								</div>
+								<a class="rental-button" href={applicationHref(asset)}>Open application workspace</a>
+							</article>
+						))}
+					</div>
+				) : (
+					<div class="rental-panel empty-state">
+						<p class="rental-muted">No test applications yet. Go to the test marketplace, open a listed flat, and express interest.</p>
+						<a class="rental-button" href="/test-corridor/wf1/marketplace">Open marketplace</a>
+					</div>
+				)
+			}
+		</div>
+	</section>
+</Wf1TestBase>
+
+<style>
+	.wf1-home-hero {
+		padding-bottom: 28px;
+	}
+
+	.wf1-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+
+	.compact-section {
+		padding-top: 24px;
+	}
+
+	.application-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+		gap: 16px;
+	}
+
+	.application-card,
+	.empty-state {
+		display: grid;
+		gap: 12px;
+		align-content: start;
+	}
+
+	.application-card h3 a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.application-card h3 a:hover {
+		text-decoration: underline;
+	}
+</style>

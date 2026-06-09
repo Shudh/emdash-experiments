@@ -181,7 +181,7 @@ function thumbnailFor(asset: AssetRow) {
 }
 
 function assetDetailHref(asset: AssetRow) {
-	return `/test-corridor/test-corridor/wf1/marketplace/assets/${String(asset.id)}`;
+	return `/test-corridor/wf1/marketplace/assets/${String(asset.id)}`;
 }
 
 function loginHrefFor(asset: AssetRow) {
@@ -262,7 +262,7 @@ const applicationCount = assets.filter(hasApplication).length;
 				</div>
 				<div class="marketplace-actions">
 					{applicationCount ? <a class="rental-button secondary" href="/test-corridor/wf1#my-applications">My applications</a> : null}
-					<a class="rental-button secondary" href="/test-corridor/test-corridor/wf1/owner/assets/new">List asset</a>
+					<a class="rental-button secondary" href="/test-corridor/wf1/owner/assets/new">List asset</a>
 				</div>
 			</div>
 
