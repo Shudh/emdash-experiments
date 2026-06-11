@@ -1,6 +1,5 @@
 ---
 import SpecTable from "../../../../components/rental/SpecTable.astro";
-import Wf1WorkspaceChatbotifyIsland from "../../../../components/wf1/Wf1WorkspaceChatbotifyIsland.astro";
 import Wf1ActionPanel from "../../../../components/wf1-test/Wf1ActionPanel.astro";
 import Wf1AssetConfigItemsPanel from "../../../../components/wf1-test/Wf1AssetConfigItemsPanel.astro";
 import Wf1TestBase from "../../../../components/wf1-test/Wf1TestBase.astro";
@@ -21,10 +20,7 @@ import {
 	testLaneHostRejectionResponse,
 } from "../../../../lib/wf1/routing/host-policy.js";
 import { assertWorkflowInstanceIdInLane } from "../../../../lib/wf1/routing/lane-guard.js";
-import {
-	wf1RentalApiPath,
-	wf1WorkspaceHref,
-} from "../../../../lib/wf1/routing/lane.js";
+import { wf1WorkspaceHref } from "../../../../lib/wf1/routing/lane.js";
 
 export const prerender = false;
 
@@ -35,7 +31,6 @@ if (rejection) {
 }
 
 applyTestLaneNoStoreHeaders(Astro.response.headers);
-
 
 type JsonObject = Record<string, unknown>;
 
@@ -70,6 +65,127 @@ function arrayValue(value: unknown): Array<JsonObject> {
 		: [];
 }
 
+function stringValue(value: unknown, fallback = ""): string {
+	if (typeof value === "string" && value.trim() !== "") {
+		return value.trim();
+	}
+
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return String(value);
+	}
+
+	if (typeof value === "boolean") {
+		return value ? "Yes" : "No";
+	}
+
+	return fallback;
+}
+
+function displayValue(value: unknown, fallback = "Not provided"): string {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		return trimmed === "" ? fallback : trimmed;
+	}
+
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return String(value);
+	}
+
+	if (typeof value === "boolean") {
+		return value ? "Yes" : "No";
+	}
+
+	if (Array.isArray(value)) {
+		const items = value
+			.map((item) => displayValue(item, ""))
+			.filter((item) => item.trim() !== "");
+
+		return items.length > 0 ? items.join(", ") : fallback;
+	}
+
+	if (isObjectRecord(value)) {
+		try {
+			return JSON.stringify(value);
+		} catch {
+			return fallback;
+		}
+	}
+
+	return fallback;
+}
+
+function dateTimeLabel(value: unknown): string {
+	const raw = stringValue(value);
+
+	if (raw === "") {
+		return "";
+	}
+
+	const date = new Date(raw);
+
+	if (Number.isNaN(date.getTime())) {
+		return raw;
+	}
+
+	return new Intl.DateTimeFormat("en-IN", {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(date);
+}
+
+function screeningReportFromInterest(interest: JsonObject): JsonObject {
+	const interestSpec = objectValue(interest.interest_spec);
+	return objectValue(interestSpec.prescreen);
+}
+
+function screeningAnswersFromReport(report: JsonObject): Array<JsonObject> {
+	return arrayValue(report.answers);
+}
+
+function screeningLabel(answer: JsonObject, index: number): string {
+	return stringValue(answer.label, `Question ${index + 1}`);
+}
+
+function screeningAnswer(answer: JsonObject): string {
+	return displayValue(answer.answer, "Not answered");
+}
+
+function screeningTarget(answer: JsonObject): string {
+	return stringValue(answer.target);
+}
+
+function screeningSourceLabel(report: JsonObject): string {
+	const source = stringValue(report.source);
+
+	if (source === "") {
+		return "Agent screening";
+	}
+
+	if (source === "wf1_marketplace_asset_detail_chatbotify") {
+		return "ChatBotify agent screening";
+	}
+
+	return source;
+}
+
+function screeningVersionLabel(report: JsonObject): string {
+	const version = stringValue(report.version);
+
+	if (version === "") {
+		return "";
+	}
+
+	return `v${version}`;
+}
+
+function agentFolderKeyFor(asset: JsonObject, interest: JsonObject, instance: JsonObject): string {
+	const assetId = stringValue(asset.id, "unknown-asset");
+	const applicantUserId = stringValue(interest.interested_user_id, "unknown-applicant");
+	const instanceId = stringValue(instance.id, workflowInstanceId || "unknown-workflow");
+
+	return `wf1/assets/${assetId}/applicants/${applicantUserId}/workflows/${instanceId}/`;
+}
+
 const workspace = await loadWorkspace();
 const asset = objectValue(workspace?.asset);
 const interest = objectValue(workspace?.interest);
@@ -86,24 +202,19 @@ const availableCardTypes = arrayValue(projection.availableCardTypes);
 const requiredUnresolvedTasks = arrayValue(taskBuckets.requiredUnresolvedTasks);
 const viewerRole = String(workspace?.viewerRole ?? "unknown");
 const workspaceHref = workflowInstanceId ? wf1WorkspaceHref(WF1_TEST_LANE, workflowInstanceId) : "/test-corridor/wf1";
-
-function workspaceRoutesFor(workflowInstanceId: string) {
-	const encodedWorkflowInstanceId = encodeURIComponent(workflowInstanceId);
-
-	return {
-		workspace: wf1RentalApiPath(WF1_TEST_LANE, `/workspaces/${encodedWorkflowInstanceId}`),
-		workflowActions: wf1RentalApiPath(WF1_TEST_LANE, "/workflow/actions"),
-		workflowCards: wf1RentalApiPath(WF1_TEST_LANE, "/workflow/cards"),
-		workflowCardAnswerBase: wf1RentalApiPath(WF1_TEST_LANE, "/workflow/cards"),
-		mediaUpload: "/_emdash/api/media",
-	};
-}
-
-const workspaceRoutes = workflowInstanceId !== "" ? workspaceRoutesFor(workflowInstanceId) : null;
 const canGenerateMoveoutTasks =
 	viewerRole === "owner" &&
 	String(applicationState.id ?? "") === "moveout_requested" &&
 	String(assetState.id ?? "") === "return_pending";
+
+const screeningReport = screeningReportFromInterest(interest);
+const screeningAnswers = screeningAnswersFromReport(screeningReport);
+const hasScreeningReport = screeningAnswers.length > 0;
+const screeningSource = screeningSourceLabel(screeningReport);
+const screeningVersion = screeningVersionLabel(screeningReport);
+const screeningStartedAt = dateTimeLabel(screeningReport.startedAt);
+const screeningSubmittedAt = dateTimeLabel(screeningReport.submittedAt);
+const agentFolderKey = agentFolderKeyFor(asset, interest, instance);
 ---
 
 <Wf1TestBase title="WF1 workspace" description="Generic workflow workspace">
@@ -124,23 +235,6 @@ const canGenerateMoveoutTasks =
 
 					<Wf1StatePanel projection={projection} viewerRole={viewerRole} />
 
-					{workspaceRoutes ? (
-						<section class="rental-panel wf1-chatbotify-panel">
-							<div>
-								<p class="rental-kicker">ChatBotify workspace</p>
-								<h2>Guided workflow command panel</h2>
-								<p class="rental-muted">
-									This panel uses the same WF1 projection, but renders it through the new React/ChatBotify command layer.
-								</p>
-							</div>
-
-							<Wf1WorkspaceChatbotifyIsland
-								workflowInstanceId={workflowInstanceId}
-								routes={workspaceRoutes}
-							/>
-						</section>
-					) : null}
-
 					<div class="workspace-columns">
 						<aside class="sidebar">
 							<div class="rental-panel">
@@ -148,13 +242,78 @@ const canGenerateMoveoutTasks =
 								<SpecTable title="Applicant" spec={{
 									name: interest.name,
 									official_email: interest.official_email,
+									phone: interest.phone,
 									employer_name: interest.employer_name,
 									offered_price: interest.offered_price,
+									requested_start_date: interest.requested_start_date,
+									requested_minimum_months: interest.requested_minimum_months,
 								}} />
 							</div>
+
+							{viewerRole === "owner" ? (
+								<div class="rental-panel screening-report-panel">
+									<div>
+										<p class="rental-kicker">Screening report</p>
+										<h2>Agent screening record</h2>
+										{hasScreeningReport ? (
+											<p class="rental-muted">
+												{screeningSource}{screeningVersion ? ` · ${screeningVersion}` : ""}
+											</p>
+										) : (
+											<p class="rental-muted">
+												No agent screening answers were saved for this application.
+											</p>
+										)}
+									</div>
+
+									{hasScreeningReport ? (
+										<>
+											<div class="screening-meta-grid">
+												{screeningStartedAt ? (
+													<div>
+														<span>Started</span>
+														<strong>{screeningStartedAt}</strong>
+													</div>
+												) : null}
+												{screeningSubmittedAt ? (
+													<div>
+														<span>Submitted</span>
+														<strong>{screeningSubmittedAt}</strong>
+													</div>
+												) : null}
+											</div>
+
+											<div class="screening-answer-list">
+												{screeningAnswers.map((answer, index) => (
+													<div class="screening-answer-card">
+														<div>
+															<p class="screening-question">{screeningLabel(answer, index)}</p>
+															<p class="screening-answer">{screeningAnswer(answer)}</p>
+														</div>
+														{screeningTarget(answer) ? (
+															<span class="screening-target">{screeningTarget(answer)}</span>
+														) : null}
+													</div>
+												))}
+											</div>
+
+											<details class="agent-folder-details">
+												<summary>Agent storage path planned for R2</summary>
+												<p class="rental-muted">
+													This is the stable folder convention for the future agent/VPS/R2 handoff.
+													This page does not write to R2 yet.
+												</p>
+												<code>{agentFolderKey}</code>
+											</details>
+										</>
+									) : null}
+								</div>
+							) : null}
+
 							<Wf1AssetConfigItemsPanel items={assetConfigItems} />
 							<Wf1RequiredGatePanel requiredUnresolvedTasks={requiredUnresolvedTasks} />
 						</aside>
+
 						<main class="thread">
 							<Wf1ActionPanel availableActions={availableActions} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
 							<Wf1CardComposerPanel availableCardTypes={availableCardTypes} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
@@ -203,13 +362,116 @@ const canGenerateMoveoutTasks =
 		align-items: start;
 	}
 
-	.wf1-chatbotify-panel {
+	.screening-report-panel {
 		display: grid;
 		gap: 14px;
 	}
 
+	.screening-meta-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px;
+	}
+
+	.screening-meta-grid div {
+		display: grid;
+		gap: 4px;
+		padding: 10px;
+		border: 1px solid var(--r-border);
+		border-radius: 14px;
+		background: var(--r-panel-soft);
+	}
+
+	.screening-meta-grid span {
+		color: var(--r-muted);
+		font-size: 0.78rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.screening-meta-grid strong {
+		color: var(--r-text);
+		font-size: 0.9rem;
+		line-height: 1.35;
+	}
+
+	.screening-answer-list {
+		display: grid;
+		gap: 10px;
+	}
+
+	.screening-answer-card {
+		display: grid;
+		gap: 8px;
+		padding: 12px;
+		border: 1px solid var(--r-border);
+		border-radius: 14px;
+		background: var(--r-panel-soft);
+	}
+
+	.screening-question {
+		margin: 0;
+		color: var(--r-muted);
+		font-size: 0.82rem;
+		font-weight: 850;
+		line-height: 1.35;
+	}
+
+	.screening-answer {
+		margin: 6px 0 0;
+		color: var(--r-text);
+		font-size: 0.96rem;
+		font-weight: 800;
+		line-height: 1.45;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
+	.screening-target {
+		justify-self: start;
+		padding: 4px 8px;
+		border-radius: 999px;
+		background: var(--r-panel);
+		color: var(--r-muted);
+		font-size: 0.72rem;
+		font-weight: 850;
+	}
+
+	.agent-folder-details {
+		display: grid;
+		gap: 8px;
+		padding: 10px 12px;
+		border: 1px dashed var(--r-border);
+		border-radius: 14px;
+		background: var(--r-panel-soft);
+	}
+
+	.agent-folder-details summary {
+		cursor: pointer;
+		color: var(--r-text);
+		font-weight: 850;
+	}
+
+	.agent-folder-details code {
+		display: block;
+		margin-top: 8px;
+		padding: 8px;
+		border-radius: 10px;
+		background: var(--r-panel);
+		color: var(--r-text);
+		font-size: 0.78rem;
+		line-height: 1.35;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
 	@media (max-width: 900px) {
 		.workspace-columns {
+			grid-template-columns: 1fr;
+		}
+
+		.screening-meta-grid {
 			grid-template-columns: 1fr;
 		}
 	}

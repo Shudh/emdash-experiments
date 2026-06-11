@@ -13,6 +13,63 @@ function objectValue(value: unknown): Record<string, unknown> {
 		: {};
 }
 
+function arrayValue(value: unknown): Array<Record<string, unknown>> {
+	return Array.isArray(value)
+		? value.filter((item): item is Record<string, unknown> =>
+				item !== null && typeof item === "object" && !Array.isArray(item),
+			)
+		: [];
+}
+
+function stringValue(value: unknown, fallback = ""): string {
+	if (typeof value === "string" && value.trim() !== "") {
+		return value.trim();
+	}
+
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return String(value);
+	}
+
+	if (typeof value === "boolean") {
+		return value ? "Yes" : "No";
+	}
+
+	return fallback;
+}
+
+function displayValue(value: unknown, fallback = "Not provided"): string {
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		return trimmed === "" ? fallback : trimmed;
+	}
+
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return String(value);
+	}
+
+	if (typeof value === "boolean") {
+		return value ? "Yes" : "No";
+	}
+
+	if (Array.isArray(value)) {
+		const items = value
+			.map((item) => displayValue(item, ""))
+			.filter((item) => item.trim() !== "");
+
+		return items.length > 0 ? items.join(", ") : fallback;
+	}
+
+	if (objectValue(value) !== value) {
+		return fallback;
+	}
+
+	try {
+		return JSON.stringify(value);
+	} catch {
+		return fallback;
+	}
+}
+
 function numberTime(value: unknown): number {
 	if (typeof value !== "string") return 0;
 
@@ -39,20 +96,111 @@ function applicationStamp(application: Record<string, unknown>): number {
 	);
 }
 
+function dateTimeLabel(value: unknown): string {
+	const raw = stringValue(value);
+
+	if (raw === "") {
+		return "";
+	}
+
+	const date = new Date(raw);
+
+	if (Number.isNaN(date.getTime())) {
+		return raw;
+	}
+
+	return new Intl.DateTimeFormat("en-IN", {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(date);
+}
+
+function interestFor(application: Record<string, unknown>): Record<string, unknown> {
+	const nestedInterest = objectValue(application.interest);
+	return Object.keys(nestedInterest).length > 0 ? nestedInterest : application;
+}
+
+function screeningReportFor(application: Record<string, unknown>): Record<string, unknown> {
+	const interest = interestFor(application);
+	const interestSpec = objectValue(interest.interest_spec);
+	return objectValue(interestSpec.prescreen);
+}
+
+function screeningAnswersFor(application: Record<string, unknown>): Array<Record<string, unknown>> {
+	const report = screeningReportFor(application);
+	return arrayValue(report.answers);
+}
+
+function screeningLabel(answer: Record<string, unknown>, index: number): string {
+	return stringValue(answer.label, `Question ${index + 1}`);
+}
+
+function screeningAnswer(answer: Record<string, unknown>): string {
+	return displayValue(answer.answer, "Not answered");
+}
+
+function screeningTarget(answer: Record<string, unknown>): string {
+	return stringValue(answer.target);
+}
+
+function applicantName(application: Record<string, unknown>): string {
+	const interest = interestFor(application);
+
+	return stringValue(
+		interest.name,
+		stringValue(interest.official_email, stringValue(application.name, "Applicant")),
+	);
+}
+
+function applicantEmail(application: Record<string, unknown>): string {
+	const interest = interestFor(application);
+	return stringValue(interest.official_email, stringValue(application.official_email));
+}
+
+function applicantPhone(application: Record<string, unknown>): string {
+	const interest = interestFor(application);
+	return stringValue(interest.phone, stringValue(application.phone));
+}
+
+function screeningSummary(application: Record<string, unknown>): string {
+	const report = screeningReportFor(application);
+	const answers = screeningAnswersFor(application);
+	const submittedAt = dateTimeLabel(report.submittedAt);
+
+	if (answers.length === 0) {
+		return "No agent screening";
+	}
+
+	return submittedAt
+		? `${answers.length} answer${answers.length === 1 ? "" : "s"} · ${submittedAt}`
+		: `${answers.length} answer${answers.length === 1 ? "" : "s"}`;
+}
+
 const rows = applications
 	.toSorted((left, right) => applicationStamp(right) - applicationStamp(left))
 	.map((application) => {
 		const applicationState = objectValue(application.applicationState);
 		const instance = objectValue(application.instance);
+		const interest = interestFor(application);
+		const screeningReport = screeningReportFor(application);
+		const screeningAnswers = screeningAnswersFor(application);
 
 		return {
 			application,
+			interest,
 			applicationState,
 			actions: Array.isArray(application.availableActions)
 				? application.availableActions as Array<Record<string, unknown>>
 				: [],
 			workspaceHref: String(application.workspaceHref ?? ""),
 			workflowInstanceId: String(application.workflow_instance_id ?? instance.id ?? ""),
+			applicantName: applicantName(application),
+			applicantEmail: applicantEmail(application),
+			applicantPhone: applicantPhone(application),
+			screeningReport,
+			screeningAnswers,
+			hasScreeningReport: screeningAnswers.length > 0,
+			screeningSummary: screeningSummary(application),
 		};
 	});
 ---
@@ -61,25 +209,77 @@ const rows = applications
 	{rows.length ? (
 		rows.map((row) => (
 			<article class="wf1-application-row">
-				<div>
-					<strong>{String(row.application.name ?? row.application.official_email ?? "Applicant")}</strong>
-					<span class="rental-badge">Application Form State: {String(row.applicationState.id ?? row.application.interest_state ?? "submitted")}</span>
-				</div>
-				<a class="rental-button secondary" href={row.workspaceHref}>Open workspace</a>
-				{row.actions.length ? (
-					<div class="wf1-row-actions">
-						{row.actions.map((action) => (
-							action.blocked === true ? (
-								<button class="rental-button secondary" type="button" disabled>{String(action.label ?? action.id)}</button>
-							) : (
-								<ActionForm title={String(action.label ?? action.id)} action="/test-corridor/api/wf1-rental/workflow/actions" submitLabel={String(action.label ?? action.id)} successRedirect={row.workspaceHref}>
-									<input type="hidden" name="workflowInstanceId" value={row.workflowInstanceId} />
-									<input type="hidden" name="actionId" value={String(action.id ?? "")} />
-								</ActionForm>
-							)
-						))}
+				<div class="wf1-application-top">
+					<div>
+						<p class="rental-kicker">Applicant</p>
+						<strong>{row.applicantName}</strong>
+						<div class="wf1-applicant-meta">
+							{row.applicantEmail ? <span>{row.applicantEmail}</span> : null}
+							{row.applicantPhone ? <span>{row.applicantPhone}</span> : null}
+						</div>
 					</div>
-				) : null}
+
+					<div class="wf1-application-badges">
+						<span class="rental-badge">
+							State: {String(row.applicationState.id ?? row.application.interest_state ?? "submitted")}
+						</span>
+						<span class={row.hasScreeningReport ? "rental-badge wf1-screening-good" : "rental-badge"}>
+							{row.screeningSummary}
+						</span>
+					</div>
+				</div>
+
+				<div class="wf1-row-actions">
+					{row.hasScreeningReport ? (
+						<details class="wf1-screening-details">
+							<summary>View screening</summary>
+
+							<div class="wf1-screening-meta">
+								{dateTimeLabel(row.screeningReport.startedAt) ? (
+									<div>
+										<span>Started</span>
+										<strong>{dateTimeLabel(row.screeningReport.startedAt)}</strong>
+									</div>
+								) : null}
+								{dateTimeLabel(row.screeningReport.submittedAt) ? (
+									<div>
+										<span>Submitted</span>
+										<strong>{dateTimeLabel(row.screeningReport.submittedAt)}</strong>
+									</div>
+								) : null}
+							</div>
+
+							<div class="wf1-screening-answer-list">
+								{row.screeningAnswers.map((answer, index) => (
+									<div class="wf1-screening-answer-card">
+										<p class="wf1-screening-question">{screeningLabel(answer, index)}</p>
+										<p class="wf1-screening-answer">{screeningAnswer(answer)}</p>
+										{screeningTarget(answer) ? (
+											<span class="wf1-screening-target">{screeningTarget(answer)}</span>
+										) : null}
+									</div>
+								))}
+							</div>
+						</details>
+					) : null}
+
+					<a class="rental-button secondary" href={row.workspaceHref}>Open workspace</a>
+
+					{row.actions.length ? (
+						<div class="wf1-action-forms">
+							{row.actions.map((action) => (
+								action.blocked === true ? (
+									<button class="rental-button secondary" type="button" disabled>{String(action.label ?? action.id)}</button>
+								) : (
+									<ActionForm title={String(action.label ?? action.id)} action="/test-corridor/api/wf1-rental/workflow/actions" submitLabel={String(action.label ?? action.id)} successRedirect={row.workspaceHref}>
+										<input type="hidden" name="workflowInstanceId" value={row.workflowInstanceId} />
+										<input type="hidden" name="actionId" value={String(action.id ?? "")} />
+									</ActionForm>
+								)
+							))}
+						</div>
+					) : null}
+				</div>
 			</article>
 		))
 	) : <p class="rental-muted">No applications for this asset yet.</p>}
@@ -88,7 +288,8 @@ const rows = applications
 <style>
 	.wf1-applications,
 	.wf1-application-row,
-	.wf1-row-actions {
+	.wf1-row-actions,
+	.wf1-action-forms {
 		display: grid;
 		gap: 12px;
 	}
@@ -96,14 +297,142 @@ const rows = applications
 	.wf1-application-row {
 		border: 1px solid var(--r-border);
 		border-radius: var(--r-radius);
-		padding: 12px;
+		padding: 14px;
 		background: var(--r-bg);
 	}
 
-	.wf1-application-row > div:first-child {
+	.wf1-application-top {
 		display: flex;
-		align-items: center;
+		flex-wrap: wrap;
+		align-items: flex-start;
 		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.wf1-application-top strong {
+		display: block;
+		margin-top: 2px;
+		color: var(--r-text);
+		font-size: 1rem;
+		line-height: 1.35;
+	}
+
+	.wf1-applicant-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin-top: 6px;
+		color: var(--r-muted);
+		font-size: 0.84rem;
+		font-weight: 750;
+	}
+
+	.wf1-application-badges {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		justify-content: flex-end;
+	}
+
+	.wf1-screening-good {
+		border-color: var(--r-accent);
+	}
+
+	.wf1-screening-details {
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		background: var(--r-panel-soft);
+	}
+
+	.wf1-screening-details summary {
+		cursor: pointer;
+		padding: 12px;
+		color: var(--r-text);
+		font-weight: 900;
+	}
+
+	.wf1-screening-meta {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 10px;
+		padding: 0 12px 12px;
+	}
+
+	.wf1-screening-meta div {
+		display: grid;
+		gap: 4px;
+		padding: 10px;
+		border: 1px solid var(--r-border);
+		border-radius: 14px;
+		background: var(--r-panel);
+	}
+
+	.wf1-screening-meta span {
+		color: var(--r-muted);
+		font-size: 0.74rem;
+		font-weight: 850;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.wf1-screening-meta strong {
+		color: var(--r-text);
+		font-size: 0.86rem;
+		line-height: 1.35;
+	}
+
+	.wf1-screening-answer-list {
+		display: grid;
+		gap: 10px;
+		padding: 0 12px 12px;
+	}
+
+	.wf1-screening-answer-card {
+		display: grid;
+		gap: 6px;
+		padding: 12px;
+		border: 1px solid var(--r-border);
+		border-radius: 14px;
+		background: var(--r-panel);
+	}
+
+	.wf1-screening-question {
+		margin: 0;
+		color: var(--r-muted);
+		font-size: 0.82rem;
+		font-weight: 850;
+		line-height: 1.35;
+	}
+
+	.wf1-screening-answer {
+		margin: 0;
+		color: var(--r-text);
+		font-size: 0.95rem;
+		font-weight: 850;
+		line-height: 1.45;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
+	.wf1-screening-target {
+		justify-self: start;
+		padding: 4px 8px;
+		border-radius: 999px;
+		background: var(--r-panel-soft);
+		color: var(--r-muted);
+		font-size: 0.72rem;
+		font-weight: 850;
+	}
+
+	@media (max-width: 760px) {
+		.wf1-application-top,
+		.wf1-application-badges {
+			display: grid;
+			justify-content: stretch;
+		}
+
+		.wf1-screening-meta {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

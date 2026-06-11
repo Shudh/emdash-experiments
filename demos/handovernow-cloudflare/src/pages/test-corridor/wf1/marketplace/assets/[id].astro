@@ -55,6 +55,23 @@ function isObjectRecord(value: unknown): value is JsonObject {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function stringValue(value: unknown, fallback = ""): string {
+	return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
+}
+
+function numberValue(value: unknown, fallback = 0): number {
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return value;
+	}
+
+	if (typeof value === "string" && value.trim() !== "") {
+		const parsed = Number(value);
+		return Number.isFinite(parsed) ? parsed : fallback;
+	}
+
+	return fallback;
+}
+
 function normalizeOwnerConditions(value: unknown): OwnerConditions | null | undefined {
 	if (value === null || value === undefined) {
 		return value;
@@ -173,14 +190,6 @@ function thumbnailFor(asset: JsonObject | undefined) {
 	};
 }
 
-const details = await loadDetails();
-const asset = details?.asset;
-const ownerConditions = details?.ownerConditions;
-const viewer = isObjectRecord(asset?.viewer) ? asset.viewer : {};
-const relationship = String(viewer.relationship ?? "anonymous");
-const workflowInstanceId =
-	typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
-const canExpressInterest = viewer.canExpressInterest === true;
 function assetIdForRoute(asset: JsonObject | undefined): string {
 	const value = asset?.id;
 
@@ -194,6 +203,15 @@ function assetIdForRoute(asset: JsonObject | undefined): string {
 
 	return "";
 }
+
+const details = await loadDetails();
+const asset = details?.asset;
+const ownerConditions = details?.ownerConditions;
+const viewer = isObjectRecord(asset?.viewer) ? asset.viewer : {};
+const relationship = String(viewer.relationship ?? "anonymous");
+const workflowInstanceId =
+	typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
+const canExpressInterest = viewer.canExpressInterest === true;
 
 const assetIdForLinks = assetIdForRoute(asset);
 const loginRedirect =
@@ -212,6 +230,9 @@ const minimumMonths = minimumMonthsLabel(asset);
 const runtimeEnv = getRuntimeEnvFromLocals(Astro.locals);
 const humanCheckChallenge = asset?.id ? await createHumanCheckChallenge(String(asset.id), runtimeEnv) : null;
 const turnstileSiteKey = publicTurnstileSiteKeyFromEnv(runtimeEnv);
+const ownerConditionVersion = numberValue(ownerConditions?.version, 0);
+const ownerConditionHash = stringValue(ownerConditions?.hash);
+const prescreenStartedAt = new Date().toISOString();
 ---
 
 <Wf1TestBase title={asset ? String(asset.title) : "WF1 asset"} description="WF1 asset details">
@@ -264,16 +285,154 @@ const turnstileSiteKey = publicTurnstileSiteKeyFromEnv(runtimeEnv);
 									</a>
 								</div>
 							) : humanCheckChallenge ? (
-								<div class="rental-panel">
-									<Wf1PrescreenChatbotifyIsland
-										asset={asset}
-										ownerConditions={ownerConditions}
-										action={expressInterestAction}
-										loginHref={loginHref}
-										canSubmit={canExpressInterest}
-										humanCheckChallenge={humanCheckChallenge}
-										turnstileSiteKey={turnstileSiteKey}
-									/>
+								<div class="rental-panel application-panel">
+									{canExpressInterest ? (
+										<form
+											class="express-interest-form"
+											data-express-interest-form
+											action={expressInterestAction}
+											method="post"
+										>
+											<div>
+												<p class="rental-kicker">Application</p>
+												<h2>Express interest</h2>
+												<p class="rental-muted">
+													Use the normal form, or chat with the HandoverNow agent if you prefer guided screening.
+												</p>
+											</div>
+
+											<input type="hidden" name="acceptedConditionsVersion" value={ownerConditionVersion} data-number="true" />
+											<input type="hidden" name="acceptedConditionsHash" value={ownerConditionHash} />
+											<input type="hidden" name="prescreenStartedAt" value={prescreenStartedAt} />
+
+											<input type="hidden" name="humanCheck.challenge.v" value={humanCheckChallenge.v} data-number="true" />
+											<input type="hidden" name="humanCheck.challenge.assetId" value={humanCheckChallenge.assetId} />
+											<input type="hidden" name="humanCheck.challenge.issuedAt" value={humanCheckChallenge.issuedAt} data-number="true" />
+											<input type="hidden" name="humanCheck.challenge.expiresAt" value={humanCheckChallenge.expiresAt} data-number="true" />
+											<input type="hidden" name="humanCheck.challenge.nonce" value={humanCheckChallenge.nonce} />
+											<input type="hidden" name="humanCheck.challenge.a" value={humanCheckChallenge.a} data-number="true" />
+											<input type="hidden" name="humanCheck.challenge.b" value={humanCheckChallenge.b} data-number="true" />
+											<input type="hidden" name="humanCheck.challenge.op" value={humanCheckChallenge.op} />
+											<input type="hidden" name="humanCheck.challenge.question" value={humanCheckChallenge.question} />
+											<input type="hidden" name="humanCheck.challenge.checksum" value={humanCheckChallenge.checksum} />
+											<input type="hidden" name="turnstileToken" data-express-turnstile-token />
+
+											<div class="rental-form-grid">
+												<div class="rental-field">
+													<label for="name">Name</label>
+													<input id="name" name="name" required autocomplete="name" />
+												</div>
+
+												<div class="rental-field">
+													<label for="officialEmail">Official email</label>
+													<input id="officialEmail" name="officialEmail" type="email" autocomplete="email" />
+												</div>
+
+												<div class="rental-field">
+													<label for="phone">Phone / WhatsApp</label>
+													<input id="phone" name="phone" type="tel" required autocomplete="tel" />
+												</div>
+
+												<div class="rental-field">
+													<label for="employerName">Employer / income source</label>
+													<input id="employerName" name="employerName" />
+												</div>
+
+												<div class="rental-field">
+													<label for="offeredPrice">Offer</label>
+													<input id="offeredPrice" name="offeredPrice" type="number" data-number="true" />
+												</div>
+
+												<div class="rental-field">
+													<label for="requestedStartDate">Move-in date</label>
+													<input id="requestedStartDate" name="requestedStartDate" type="date" />
+												</div>
+
+												<div class="rental-field">
+													<label for="requestedMinimumMonths">Expected stay in months</label>
+													<input id="requestedMinimumMonths" name="requestedMinimumMonths" type="number" data-number="true" />
+												</div>
+
+												<div class="rental-field">
+													<label for="humanCheckAnswer">Quick check: what is {humanCheckChallenge.question}?</label>
+													<input id="humanCheckAnswer" name="humanCheck.answer" type="number" inputmode="numeric" required />
+												</div>
+
+												<div class="rental-field full">
+													<label for="message">Message</label>
+													<textarea id="message" name="message">I am interested in this property.</textarea>
+												</div>
+
+												{turnstileSiteKey !== "" ? (
+													<div class="rental-field full">
+														<div
+															class="express-interest-turnstile"
+															data-express-turnstile
+															data-site-key={turnstileSiteKey}
+														></div>
+														<p class="rental-muted" data-express-turnstile-status>
+															Loading spam verification...
+														</p>
+													</div>
+												) : null}
+											</div>
+
+											<div class="application-action-row">
+												<button class="rental-button" type="submit" data-express-interest-submit>
+													Express interest
+												</button>
+												<button class="rental-button secondary" type="button" data-chatbotify-open>
+													Chat with agent
+												</button>
+											</div>
+
+											<p class="rental-status" data-express-interest-status></p>
+										</form>
+									) : (
+										<div class="login-application-panel">
+											<div>
+												<p class="rental-kicker">Application</p>
+												<h2>Login required</h2>
+												<p class="rental-muted">
+													Login to express interest, or chat with the HandoverNow agent and continue after login.
+												</p>
+											</div>
+
+											<div class="application-action-row">
+												<a class="rental-button" href={loginHref}>Login or register</a>
+												<button class="rental-button secondary" type="button" data-chatbotify-open>
+													Chat with agent
+												</button>
+											</div>
+										</div>
+									)}
+
+									<dialog class="chatbotify-agent-dialog" data-chatbotify-dialog>
+										<div class="chatbotify-agent-shell">
+											<div class="chatbotify-agent-header">
+												<div>
+													<p class="rental-kicker">HandoverNow agent</p>
+													<h2>Chat screening</h2>
+													<p class="rental-muted">
+														A guided chat surface for the same application workflow.
+													</p>
+												</div>
+												<button class="rental-button secondary" type="button" data-chatbotify-close>
+													Close
+												</button>
+											</div>
+
+											<Wf1PrescreenChatbotifyIsland
+												asset={asset}
+												ownerConditions={ownerConditions}
+												action={expressInterestAction}
+												loginHref={loginHref}
+												canSubmit={canExpressInterest}
+												humanCheckChallenge={humanCheckChallenge}
+												turnstileSiteKey={turnstileSiteKey}
+											/>
+										</div>
+									</dialog>
 								</div>
 							) : (
 								<div class="rental-panel">
@@ -301,6 +460,384 @@ const turnstileSiteKey = publicTurnstileSiteKeyFromEnv(runtimeEnv);
 		</div>
 	</section>
 </Wf1TestBase>
+
+<script is:inline>
+	(function () {
+		const REDIRECT_TOKEN_PATTERN = /:([A-Za-z0-9_]+)/g;
+		const INDEX_PATTERN = /^\d+$/;
+		const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+		const MIN_PRESCREEN_SECONDS = 8;
+
+		function assignNestedValue(target, key, value) {
+			const existing = target[key];
+
+			if (existing === undefined) {
+				target[key] = value;
+				return;
+			}
+
+			if (Array.isArray(existing)) {
+				if (Array.isArray(value)) {
+					existing.push(...value);
+				} else {
+					existing.push(value);
+				}
+				return;
+			}
+
+			target[key] = Array.isArray(value) ? [existing, ...value] : [existing, value];
+		}
+
+		function setNested(target, path, value) {
+			const parts = path.split(".");
+			let cursor = target;
+
+			for (let index = 0; index < parts.length; index += 1) {
+				const part = parts[index];
+				const last = index === parts.length - 1;
+				const nextPart = parts[index + 1];
+				const key = INDEX_PATTERN.test(part) ? Number(part) : part;
+				const nextContainer = nextPart && INDEX_PATTERN.test(nextPart) ? [] : {};
+
+				if (last) {
+					assignNestedValue(cursor, key, value);
+					return;
+				}
+
+				if (cursor[key] === undefined) {
+					cursor[key] = nextContainer;
+				}
+
+				cursor = cursor[key];
+			}
+		}
+
+		function valueFrom(rawValue, element) {
+			const value = String(rawValue).trim();
+
+			if (element instanceof HTMLInputElement && element.type === "checkbox") {
+				if (!element.checked) return false;
+				if (element.dataset.checkboxValue === "true") {
+					return element.dataset.array === "true" ? [value] : value;
+				}
+				return true;
+			}
+
+			if (element instanceof HTMLElement && element.dataset.number === "true") {
+				return value ? Number(value) : undefined;
+			}
+
+			if (element instanceof HTMLElement && element.dataset.lines === "true") {
+				return value
+					.split("\n")
+					.map((line) => line.trim())
+					.filter(Boolean);
+			}
+
+			if (element instanceof HTMLElement && element.dataset.array === "true") {
+				return value ? [value] : undefined;
+			}
+
+			return value || undefined;
+		}
+
+		function findPayloadValue(source, key) {
+			if (!source || typeof source !== "object") return undefined;
+
+			if (Array.isArray(source)) {
+				for (const item of source) {
+					const value = findPayloadValue(item, key);
+					if (value !== undefined) return value;
+				}
+				return undefined;
+			}
+
+			const record = source;
+			const direct = record[key];
+
+			if (typeof direct === "string" || typeof direct === "number") {
+				return String(direct);
+			}
+
+			for (const value of Object.values(record)) {
+				const nested = findPayloadValue(value, key);
+				if (nested !== undefined) return nested;
+			}
+
+			return undefined;
+		}
+
+		function applyRedirectTemplate(template, payload) {
+			return template.replace(REDIRECT_TOKEN_PATTERN, function (_match, key) {
+				const value = findPayloadValue(payload, key);
+				return value ? encodeURIComponent(value) : "";
+			});
+		}
+
+		function statusMessageForError(error) {
+			if (error instanceof Error && error.message.trim() !== "") {
+				return error.message;
+			}
+
+			const message = String(error).trim();
+			return message === "" ? "Request failed" : message;
+		}
+
+		function formElapsedSeconds(form) {
+			const input = form.querySelector('[name="prescreenStartedAt"]');
+			if (!(input instanceof HTMLInputElement)) return MIN_PRESCREEN_SECONDS;
+
+			const timestamp = Date.parse(input.value);
+			if (!Number.isFinite(timestamp)) return MIN_PRESCREEN_SECONDS;
+
+			return Math.floor((Date.now() - timestamp) / 1000);
+		}
+
+		function validateClientTiming(form) {
+			const elapsedSeconds = formElapsedSeconds(form);
+
+			if (elapsedSeconds >= MIN_PRESCREEN_SECONDS) {
+				return "";
+			}
+
+			const remainingSeconds = MIN_PRESCREEN_SECONDS - elapsedSeconds;
+			return `Please review the application for ${remainingSeconds} more second(s), then submit.`;
+		}
+
+		function buildBodyFromForm(form) {
+			const body = {};
+			const data = new FormData(form);
+
+			for (const [name, raw] of data.entries()) {
+				const element = form.querySelector(`[name="${CSS.escape(name)}"]`);
+				if (!element) continue;
+
+				const value = valueFrom(raw, element);
+
+				if (value === undefined || value === false) {
+					continue;
+				}
+
+				setNested(body, name, value);
+			}
+
+			return body;
+		}
+
+		function localRedirectFromPayload(payload, fallbackTemplate) {
+			const redirectTo = findPayloadValue(payload, "redirectTo");
+
+			if (redirectTo && redirectTo.startsWith("/")) {
+				return redirectTo;
+			}
+
+			if (fallbackTemplate) {
+				return applyRedirectTemplate(fallbackTemplate, payload);
+			}
+
+			return "";
+		}
+
+		function initExpressInterestForm() {
+			const form = document.querySelector("[data-express-interest-form]");
+
+			if (!(form instanceof HTMLFormElement)) {
+				return;
+			}
+
+			const status = form.querySelector("[data-express-interest-status]");
+			const submit = form.querySelector("[data-express-interest-submit]");
+
+			form.addEventListener("submit", async function (event) {
+				event.preventDefault();
+
+				if (status instanceof HTMLElement) {
+					status.removeAttribute("data-state");
+					status.textContent = "";
+				}
+
+				const timingError = validateClientTiming(form);
+
+				if (timingError !== "") {
+					if (status instanceof HTMLElement) {
+						status.dataset.state = "error";
+						status.textContent = timingError;
+					}
+					return;
+				}
+
+				if (status instanceof HTMLElement) {
+					status.textContent = "Submitting...";
+				}
+
+				if (submit instanceof HTMLButtonElement) {
+					submit.disabled = true;
+				}
+
+				try {
+					const body = buildBodyFromForm(form);
+					const response = await fetch(form.action, {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"X-EmDash-Request": "1",
+						},
+						body: JSON.stringify(body),
+					});
+
+					const payload = await response.json().catch(function () {
+						return {};
+					});
+
+					if (!response.ok) {
+						throw new Error(payload?.error?.message ?? "Request failed");
+					}
+
+					const redirectTo = localRedirectFromPayload(payload, form.dataset.success);
+
+					if (redirectTo !== "") {
+						location.href = redirectTo;
+						return;
+					}
+
+					if (status instanceof HTMLElement) {
+						status.textContent = "Application submitted.";
+					}
+				} catch (error) {
+					if (status instanceof HTMLElement) {
+						status.dataset.state = "error";
+						status.textContent = statusMessageForError(error);
+					}
+				} finally {
+					if (submit instanceof HTMLButtonElement) {
+						submit.disabled = false;
+					}
+				}
+			});
+		}
+
+		function existingTurnstileScriptElement() {
+			return document.querySelector(`script[src="${TURNSTILE_SCRIPT_URL}"]`);
+		}
+
+		function loadTurnstileScript() {
+			return new Promise(function (resolve, reject) {
+				if (window.turnstile) {
+					resolve();
+					return;
+				}
+
+				const existingScript = existingTurnstileScriptElement();
+
+				if (existingScript instanceof HTMLScriptElement) {
+					existingScript.addEventListener("load", function () {
+						resolve();
+					}, { once: true });
+					existingScript.addEventListener("error", function () {
+						reject(new Error("Turnstile failed to load."));
+					}, { once: true });
+					return;
+				}
+
+				const script = document.createElement("script");
+				script.src = TURNSTILE_SCRIPT_URL;
+				script.async = true;
+				script.addEventListener("load", function () {
+					resolve();
+				}, { once: true });
+				script.addEventListener("error", function () {
+					reject(new Error("Turnstile failed to load."));
+				}, { once: true });
+				document.head.appendChild(script);
+			});
+		}
+
+		function initTurnstileForNormalForm() {
+			const turnstileSlot = document.querySelector("[data-express-turnstile]");
+			const tokenInput = document.querySelector("[data-express-turnstile-token]");
+			const status = document.querySelector("[data-express-turnstile-status]");
+
+			if (!(turnstileSlot instanceof HTMLElement)) {
+				return;
+			}
+
+			if (!(tokenInput instanceof HTMLInputElement)) {
+				return;
+			}
+
+			const siteKey = turnstileSlot.dataset.siteKey || "";
+
+			if (siteKey === "") {
+				return;
+			}
+
+			loadTurnstileScript()
+				.then(function () {
+					if (!window.turnstile) {
+						throw new Error("Turnstile API is unavailable.");
+					}
+
+					window.turnstile.render(turnstileSlot, {
+						sitekey: siteKey,
+						appearance: "interaction-only",
+						callback: function (token) {
+							tokenInput.value = token;
+							if (status instanceof HTMLElement) {
+								status.textContent = "Spam verification complete.";
+							}
+						},
+						"expired-callback": function () {
+							tokenInput.value = "";
+							if (status instanceof HTMLElement) {
+								status.textContent = "Spam verification expired. Please verify again.";
+							}
+						},
+						"error-callback": function () {
+							tokenInput.value = "";
+							if (status instanceof HTMLElement) {
+								status.textContent = "Spam verification failed. Please retry.";
+							}
+						},
+					});
+				})
+				.catch(function (error) {
+					if (status instanceof HTMLElement) {
+						status.textContent = statusMessageForError(error);
+					}
+				});
+		}
+
+		function initChatbotifyDialog() {
+			const openButton = document.querySelector("[data-chatbotify-open]");
+			const closeButton = document.querySelector("[data-chatbotify-close]");
+			const dialog = document.querySelector("[data-chatbotify-dialog]");
+
+			if (!(openButton instanceof HTMLButtonElement)) return;
+			if (!(closeButton instanceof HTMLButtonElement)) return;
+			if (!(dialog instanceof HTMLDialogElement)) return;
+
+			openButton.addEventListener("click", function () {
+				if (!dialog.open) {
+					dialog.showModal();
+				}
+			});
+
+			closeButton.addEventListener("click", function () {
+				dialog.close();
+			});
+
+			dialog.addEventListener("click", function (event) {
+				if (event.target === dialog) {
+					dialog.close();
+				}
+			});
+		}
+
+		initExpressInterestForm();
+		initTurnstileForNormalForm();
+		initChatbotifyDialog();
+	})();
+</script>
 
 <style>
 	.detail-grid {
@@ -340,6 +877,60 @@ const turnstileSiteKey = publicTurnstileSiteKeyFromEnv(runtimeEnv);
 	.detail-side {
 		display: grid;
 		gap: 18px;
+	}
+
+	.application-panel,
+	.express-interest-form,
+	.login-application-panel {
+		display: grid;
+		gap: 16px;
+	}
+
+	.application-action-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		align-items: center;
+	}
+
+	.chatbotify-agent-dialog {
+		width: min(430px, calc(100vw - 24px));
+		max-height: calc(100vh - 40px);
+		padding: 0;
+		border: 0;
+		border-radius: 24px;
+		background: transparent;
+	}
+
+	.chatbotify-agent-dialog::backdrop {
+		background: rgba(15, 23, 42, 0.62);
+	}
+
+	.chatbotify-agent-shell {
+		display: grid;
+		gap: 14px;
+		max-height: calc(100vh - 40px);
+		overflow: auto;
+		padding: 16px;
+		border: 1px solid var(--r-border);
+		border-radius: 24px;
+		background: var(--r-panel);
+		box-shadow: 0 24px 80px rgba(15, 23, 42, 0.32);
+	}
+
+	.chatbotify-agent-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.chatbotify-agent-header h2 {
+		margin: 0;
+	}
+
+	.express-interest-turnstile {
+		min-height: 72px;
 	}
 
 	@media (max-width: 900px) {
