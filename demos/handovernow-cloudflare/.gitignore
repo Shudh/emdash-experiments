@@ -10,3 +10,6 @@ dist/
 .wrangler/
 uploads/
 docs/generated/
+playwright/.auth
+playwright/.profiles
+playwright/.logs

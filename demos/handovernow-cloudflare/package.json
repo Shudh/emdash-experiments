@@ -17,7 +17,11 @@
 		"db:reset:remote": "./scripts/reset-db.sh",
 		"typecheck": "astro check",
 		"typecheck:local-db": "HANDOVERNOW_DB_TARGET=local astro check",
-		"typecheck:d1-cloud": "astro check"
+		"typecheck:d1-cloud": "astro check",
+		"corridor:auth:shudh": "HN_TEST_BASE_URL=https://cms.handovernow.com HN_AUTH_ROLE=shudh HN_AUTH_EMAIL=shudh.datta@gmail.com node scripts/test-corridor-auth-refresh.mjs",
+		"corridor:auth:raphael": "HN_TEST_BASE_URL=https://cms.handovernow.com HN_AUTH_ROLE=raphael HN_AUTH_EMAIL=raphael.datta.2009@gmail.com node scripts/test-corridor-auth-refresh.mjs",
+		"corridor:check:shudh": "HN_TEST_BASE_URL=https://cms.handovernow.com HN_AUTH_ROLE=shudh HN_AUTH_EMAIL=shudh.datta@gmail.com node scripts/test-corridor-fundamentals.mjs",
+		"corridor:check:shudh:headless": "HN_TEST_BASE_URL=https://cms.handovernow.com HN_AUTH_ROLE=shudh HN_AUTH_EMAIL=shudh.datta@gmail.com HN_HEADLESS=1 node scripts/test-corridor-fundamentals.mjs"
 	},
 	"dependencies": {
 		"@astrojs/cloudflare": "catalog:",
