@@ -5,6 +5,7 @@ interface Props {
 	availableCardTypes: Array<Record<string, unknown>>;
 	workflowInstanceId: string;
 	workspaceHref: string;
+	viewerRole?: string;
 }
 
 type McqOption = {
@@ -12,7 +13,8 @@ type McqOption = {
 	label: string;
 };
 
-const { availableCardTypes, workflowInstanceId, workspaceHref } = Astro.props;
+const { availableCardTypes, workflowInstanceId, workspaceHref, viewerRole = "unknown" } = Astro.props;
+const ownerView = viewerRole === "owner";
 
 function objectValue(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value)
@@ -39,33 +41,77 @@ function isRequiredEvidenceTask(cardTypeId: string): boolean {
 	return cardTypeId.includes("required_evidence");
 }
 
+function panelKicker(): string {
+	return ownerView ? "Applicant requests" : "Owner updates";
+}
+
+function panelTitle(): string {
+	return ownerView ? "Need something from the applicant?" : "Need to tell the owner something?";
+}
+
+function panelDescription(): string {
+	return ownerView
+		? "Create a request card. The applicant answers it in their workspace; evidence cards can require image/PDF proof."
+		: "Send an update or acknowledgement card to the owner. Owner-facing cards appear in the same work queue.";
+}
+
+function openButtonLabel(): string {
+	return ownerView ? "Request from applicant" : "Send update to owner";
+}
+
+function stepTitle(): string {
+	return ownerView ? "Choose what you need" : "Choose what to send";
+}
+
+function stepDescription(): string {
+	return ownerView
+		? "Select a request type. The exact compose form appears only after you choose."
+		: "Select the update type. The exact compose form appears only after you choose.";
+}
+
+function emptyComposerText(): string {
+	return ownerView
+		? "Choose one request type above. The owner creates the card; the applicant answers it."
+		: "Choose one update type above. You send the card; the owner sees it in their work queue.";
+}
+
+function noTypesText(): string {
+	return ownerView
+		? "No applicant request card types are available for your role now."
+		: "No owner update card types are available for your role now.";
+}
+
+function requestTypeLabel(): string {
+	return ownerView ? "Request type" : "Update type";
+}
+
 function requestTitleFor(cardTypeId: string, fallback: unknown): string {
 	if (cardTypeId === "info_ack_to_counterparty" || cardTypeId === "info_ack_to_owner") {
-		return "Send information";
+		return ownerView ? "Send information" : "Send information to owner";
 	}
 
 	if (cardTypeId === "mcq_single") {
-		return "Ask yes/no or single-choice";
+		return ownerView ? "Ask yes/no or single-choice" : "Ask owner yes/no";
 	}
 
 	if (cardTypeId === "mcq_single_required_evidence") {
-		return "Ask choice + request proof";
+		return ownerView ? "Ask choice + request proof" : "Ask owner choice + proof";
 	}
 
 	if (cardTypeId === "mcq_multi") {
-		return "Ask checklist";
+		return ownerView ? "Ask checklist" : "Send checklist to owner";
 	}
 
 	if (cardTypeId === "mcq_multi_required_evidence") {
-		return "Ask checklist + request proof";
+		return ownerView ? "Ask checklist + request proof" : "Send checklist + proof request";
 	}
 
 	if (cardTypeId === "free_text") {
-		return "Ask written question";
+		return ownerView ? "Ask written question" : "Send written update";
 	}
 
 	if (cardTypeId === "free_text_required_evidence") {
-		return "Request document or evidence";
+		return ownerView ? "Request document or evidence" : "Send update with evidence";
 	}
 
 	return String(fallback ?? cardTypeId);
@@ -73,63 +119,89 @@ function requestTitleFor(cardTypeId: string, fallback: unknown): string {
 
 function requestDescriptionFor(cardTypeId: string, fallback: unknown): string {
 	if (cardTypeId === "info_ack_to_counterparty" || cardTypeId === "info_ack_to_owner") {
-		return "Tell the applicant something and ask them to acknowledge.";
+		return ownerView
+			? "Tell the applicant something and ask them to acknowledge."
+			: "Tell the owner something and ask them to acknowledge.";
 	}
 
 	if (cardTypeId === "mcq_single") {
-		return "Ask one question where the applicant chooses one answer.";
+		return ownerView
+			? "Ask one question where the applicant chooses one answer."
+			: "Ask one question where the owner chooses one answer.";
 	}
 
 	if (cardTypeId === "mcq_single_required_evidence") {
-		return "Ask one question and require image/PDF evidence.";
+		return ownerView
+			? "Ask one question and require image/PDF evidence."
+			: "Ask one question and require image/PDF evidence from the owner.";
 	}
 
 	if (cardTypeId === "mcq_multi") {
-		return "Ask the applicant to select all matching items.";
+		return ownerView
+			? "Ask the applicant to select all matching items."
+			: "Ask the owner to select all matching items.";
 	}
 
 	if (cardTypeId === "mcq_multi_required_evidence") {
-		return "Ask for multiple selections and require image/PDF evidence.";
+		return ownerView
+			? "Ask for multiple selections and require image/PDF evidence."
+			: "Ask for multiple selections and require image/PDF evidence from the owner.";
 	}
 
 	if (cardTypeId === "free_text") {
-		return "Ask for a written reply.";
+		return ownerView ? "Ask for a written reply." : "Send a written update.";
 	}
 
 	if (cardTypeId === "free_text_required_evidence") {
-		return "Ask for a written reply with image/PDF evidence.";
+		return ownerView
+			? "Ask for a written reply with image/PDF evidence."
+			: "Send or request a written reply with image/PDF evidence.";
 	}
 
-	return String(fallback ?? "Create a request card for the applicant.");
+	return String(fallback ?? "Create a workflow card.");
 }
 
 function shortHelpFor(cardTypeId: string, fallback: unknown): string {
 	if (cardTypeId === "info_ack_to_counterparty" || cardTypeId === "info_ack_to_owner") {
-		return "This creates an acknowledgement card. The applicant only confirms they have read it.";
+		return ownerView
+			? "This creates an acknowledgement card. The applicant confirms they have read it."
+			: "This creates an acknowledgement card for the owner.";
 	}
 
 	if (cardTypeId === "mcq_single") {
-		return "This creates a single-choice request card for the applicant.";
+		return ownerView
+			? "This creates a single-choice request card for the applicant."
+			: "This creates a single-choice card for the owner.";
 	}
 
 	if (cardTypeId === "mcq_single_required_evidence") {
-		return "This creates a required request card. The applicant must choose one answer and attach proof.";
+		return ownerView
+			? "This creates a required request card. The applicant must choose one answer and attach proof."
+			: "This creates a required card. The owner must choose one answer and attach proof.";
 	}
 
 	if (cardTypeId === "mcq_multi") {
-		return "This creates a checklist-style request card for the applicant.";
+		return ownerView
+			? "This creates a checklist-style request card for the applicant."
+			: "This creates a checklist-style card for the owner.";
 	}
 
 	if (cardTypeId === "mcq_multi_required_evidence") {
-		return "This creates a required checklist card. The applicant must answer and attach proof.";
+		return ownerView
+			? "This creates a required checklist card. The applicant must answer and attach proof."
+			: "This creates a required checklist card. The owner must answer and attach proof.";
 	}
 
 	if (cardTypeId === "free_text") {
-		return "This creates a written-answer request card for the applicant.";
+		return ownerView
+			? "This creates a written-answer request card for the applicant."
+			: "This creates a written update card for the owner.";
 	}
 
 	if (cardTypeId === "free_text_required_evidence") {
-		return "This creates a required evidence card. The applicant must answer and attach image/PDF evidence.";
+		return ownerView
+			? "This creates a required evidence card. The applicant must answer and attach image/PDF evidence."
+			: "This creates a required evidence card for the owner.";
 	}
 
 	return String(fallback ?? "Create a task card.");
@@ -137,22 +209,30 @@ function shortHelpFor(cardTypeId: string, fallback: unknown): string {
 
 function promptPlaceholderFor(cardTypeId: string, fallback: unknown): string {
 	if (cardTypeId === "mcq_single" || cardTypeId === "mcq_single_required_evidence") {
-		return "Example: Do you agree to the 11-month minimum stay and security deposit deduction terms?";
+		return ownerView
+			? "Example: Do you agree to the 11-month minimum stay and security deposit deduction terms?"
+			: "Example: Do you approve this move-in timing?";
 	}
 
 	if (cardTypeId === "mcq_multi" || cardTypeId === "mcq_multi_required_evidence") {
-		return "Example: Which items have you received in working condition?";
+		return ownerView
+			? "Example: Which items have you received in working condition?"
+			: "Example: Which owner approvals are pending?";
 	}
 
 	if (cardTypeId === "info_ack_to_counterparty" || cardTypeId === "info_ack_to_owner") {
-		return "Example: Please note that society move-in timing is 9 AM to 5 PM.";
+		return ownerView
+			? "Example: Please note that society move-in timing is 9 AM to 5 PM."
+			: "Example: I have reviewed the move-in timing and will follow it.";
 	}
 
 	if (cardTypeId === "free_text" || cardTypeId === "free_text_required_evidence") {
-		return "Example: Please confirm your planned move-in date and who will be staying.";
+		return ownerView
+			? "Example: Please confirm your planned move-in date and who will be staying."
+			: "Example: I want to share an update about my move-in plan.";
 	}
 
-	return String(fallback ?? "Write the request clearly.");
+	return String(fallback ?? "Write the card clearly.");
 }
 
 function mcqOptionsFor(cardType: Record<string, unknown>): McqOption[] {
@@ -180,15 +260,13 @@ function mcqOptionsFor(cardType: Record<string, unknown>): McqOption[] {
 <section class="rental-panel wf1-panel" data-testid="wf1-card-composer">
 	<div class="wf1-composer-head">
 		<div>
-			<p class="rental-kicker">Applicant requests</p>
-			<h2>Need something from the applicant?</h2>
-			<p class="rental-muted">
-				Create a request card. The applicant answers it in their workspace; evidence cards can require image/PDF proof.
-			</p>
+			<p class="rental-kicker">{panelKicker()}</p>
+			<h2>{panelTitle()}</h2>
+			<p class="rental-muted">{panelDescription()}</p>
 		</div>
 		{availableCardTypes.length ? (
 			<button class="rental-button" type="button" data-wf1-open-composer>
-				Request from applicant
+				{openButtonLabel()}
 			</button>
 		) : null}
 	</div>
@@ -197,17 +275,15 @@ function mcqOptionsFor(cardType: Record<string, unknown>): McqOption[] {
 		<div class="wf1-task-builder" data-wf1-task-builder hidden>
 			<div class="wf1-request-picker">
 				<div>
-					<p class="rental-kicker">Step 1</p>
-					<h3>Choose what you need</h3>
-					<p class="rental-muted">
-						Select a request type. The exact compose form appears only after you choose.
-					</p>
+					<p class="rental-kicker">Compose card</p>
+					<h3>{stepTitle()}</h3>
+					<p class="rental-muted">{stepDescription()}</p>
 				</div>
 
 				<div class="rental-field full">
-					<label for="wf1-task-type">Request type</label>
+					<label for="wf1-task-type">{requestTypeLabel()}</label>
 					<select id="wf1-task-type" data-wf1-task-type>
-						<option value="" selected>Choose a request type...</option>
+						<option value="" selected>Choose a type...</option>
 						{availableCardTypes.map((cardType) => {
 							const cardTypeId = String(cardType.id ?? "");
 
@@ -236,9 +312,7 @@ function mcqOptionsFor(cardType: Record<string, unknown>): McqOption[] {
 
 			<div class="wf1-compose-forms">
 				<div class="wf1-empty-composer" data-wf1-empty-composer>
-					<p class="rental-muted">
-						Choose one request type above. The owner creates the card; the applicant answers it.
-					</p>
+					<p class="rental-muted">{emptyComposerText()}</p>
 				</div>
 
 				{availableCardTypes.map((cardType) => {
@@ -247,26 +321,22 @@ function mcqOptionsFor(cardType: Record<string, unknown>): McqOption[] {
 					const customMcqTask = isCustomMcqTask(cardTypeId);
 					const options = mcqOptionsFor(cardType);
 					const evidenceText = isRequiredEvidenceTask(cardTypeId)
-						? "This request blocks the next stage until the applicant answers and attaches image/PDF evidence."
+						? "This card blocks the next stage until the answering side replies and attaches image/PDF evidence."
 						: "";
 
 					return (
-						<div
-							class="wf1-compose-form"
-							data-wf1-compose-form={cardTypeId}
-							hidden
-						>
+						<div class="wf1-compose-form" data-wf1-compose-form={cardTypeId} hidden>
 							<ActionForm
-								title={`Compose request: ${requestTitleFor(cardTypeId, cardType.label)}`}
+								title={`Compose: ${requestTitleFor(cardTypeId, cardType.label)}`}
 								action="/test-corridor/api/wf1-rental/workflow/cards"
-								submitLabel={String(ui.submitLabel ?? "Send request")}
+								submitLabel={String(ui.submitLabel ?? "Send card")}
 								successRedirect={workspaceHref}
 							>
 								<input type="hidden" name="workflowInstanceId" value={workflowInstanceId} />
 								<input type="hidden" name="cardType" value={cardTypeId} />
 
 								<div class="rental-field full">
-									<label for={`prompt-${cardTypeId}`}>{String(ui.promptLabel ?? "Request")}</label>
+									<label for={`prompt-${cardTypeId}`}>{String(ui.promptLabel ?? "Message")}</label>
 									<textarea
 										id={`prompt-${cardTypeId}`}
 										name="prompt"
@@ -279,7 +349,7 @@ function mcqOptionsFor(cardType: Record<string, unknown>): McqOption[] {
 									<fieldset class="rental-field full wf1-option-editor">
 										<legend>Answer options</legend>
 										<p class="rental-muted">
-											Edit the labels if needed. The applicant will choose from these options.
+											Edit the labels if needed. The answering side will choose from these options.
 										</p>
 
 										{options.map((option, index) => (
@@ -306,7 +376,7 @@ function mcqOptionsFor(cardType: Record<string, unknown>): McqOption[] {
 			</div>
 		</div>
 	) : (
-		<p class="rental-muted">No request card types are available for your role now.</p>
+		<p class="rental-muted">{noTypesText()}</p>
 	)}
 </section>
 
@@ -419,8 +489,8 @@ function mcqOptionsFor(cardType: Record<string, unknown>): McqOption[] {
 
 	.wf1-type-card:hover,
 	.wf1-type-card[data-selected="true"] {
-		border-color: var(--r-accent);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--r-accent) 18%, transparent);
+		border-color: var(--r-accent, var(--r-border));
+		box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.12);
 	}
 
 	.wf1-type-card strong {

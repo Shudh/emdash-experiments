@@ -6,9 +6,10 @@ interface Props {
 	taskBuckets: Record<string, Array<Record<string, unknown>>>;
 	responses: Array<Record<string, unknown>>;
 	workspaceHref: string;
+	viewerRole?: string;
 }
 
-const { taskBuckets, responses, workspaceHref } = Astro.props;
+const { taskBuckets, responses, workspaceHref, viewerRole = "unknown" } = Astro.props;
 
 function numberTime(value: unknown): number {
 	if (typeof value !== "string") return 0;
@@ -30,30 +31,211 @@ function latestCardsFirst(cards: Array<Record<string, unknown>> | undefined): Ar
 	return (cards ?? []).toSorted((left, right) => cardStamp(right) - cardStamp(left));
 }
 
+function countLabel(count: number, singular: string, plural: string): string {
+	return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function otherSideLabel(role: string): string {
+	if (role === "owner") return "Waiting on applicant";
+	if (role === "applicant" || role === "renter") return "Waiting on owner";
+	return "Waiting on other side";
+}
+
+function otherSideEmptyLabel(role: string): string {
+	if (role === "owner") return "No open request is waiting on the applicant.";
+	if (role === "applicant" || role === "renter") return "Nothing is waiting on the owner.";
+	return "No open request is waiting on the other side.";
+}
+
+function dashboardHint(role: string): string {
+	if (role === "owner") {
+		return "Track what needs your action, what the applicant still has to answer, and what is already complete.";
+	}
+
+	if (role === "applicant" || role === "renter") {
+		return "Start here. Anything you need to answer appears under To do now.";
+	}
+
+	return "Track open and completed workflow cards.";
+}
+
 const myOpenTasks = latestCardsFirst(taskBuckets.myOpenTasks);
 const otherSideOpenTasks = latestCardsFirst(taskBuckets.otherSideOpenTasks);
 const completedCards = latestCardsFirst(taskBuckets.completedCards);
+const hasAnyCards = myOpenTasks.length + otherSideOpenTasks.length + completedCards.length > 0;
 ---
 
-<section class="bucket-grid">
-	<div class="rental-panel" data-testid="wf1-my-open-tasks">
-		<h2>My Open Tasks</h2>
-		{myOpenTasks.length ? myOpenTasks.map((card) => <Wf1PendingTaskCard card={card} workspaceHref={workspaceHref} />) : <p class="rental-muted">No open task for you.</p>}
+<section class="rental-panel wf1-work-queue" data-testid="wf1-work-queue">
+	<div class="wf1-work-queue-head">
+		<div>
+			<p class="rental-kicker">Work queue</p>
+			<h2>Tasks and requests</h2>
+			<p class="rental-muted">{dashboardHint(viewerRole)}</p>
+		</div>
+
+		<div class="wf1-work-stats" aria-label="Task summary">
+			<span class={myOpenTasks.length ? "rental-badge wf1-badge-hot" : "rental-badge"}>
+				{countLabel(myOpenTasks.length, "to do", "to do")}
+			</span>
+			<span class="rental-badge">
+				{countLabel(otherSideOpenTasks.length, "waiting", "waiting")}
+			</span>
+			<span class="rental-badge">
+				{countLabel(completedCards.length, "done", "done")}
+			</span>
+		</div>
 	</div>
-	<div class="rental-panel" data-testid="wf1-other-open-tasks">
-		<h2>Other Side's Open Tasks</h2>
-		{otherSideOpenTasks.length ? otherSideOpenTasks.map((card) => <Wf1Card card={card} responses={responses} />) : <p class="rental-muted">No open task waiting on the other side.</p>}
-	</div>
-	<div class="rental-panel" data-testid="wf1-completed-cards">
-		<h2>Completed / History Cards</h2>
-		{completedCards.length ? completedCards.map((card) => <Wf1Card card={card} responses={responses} />) : <p class="rental-muted">No completed cards yet.</p>}
-	</div>
+
+	{hasAnyCards ? (
+		<div class="wf1-dashboard-grid">
+			<section class={myOpenTasks.length ? "wf1-queue-card wf1-queue-card-primary" : "wf1-queue-card"}>
+				<div class="wf1-queue-card-head">
+					<div>
+						<h3>To do now</h3>
+						<p class="rental-muted">
+							{viewerRole === "owner"
+								? "Cards waiting for your reply or acknowledgement."
+								: "Requests waiting for your answer."}
+						</p>
+					</div>
+					<span class="rental-badge">{myOpenTasks.length}</span>
+				</div>
+
+				<div class="wf1-card-list">
+					{myOpenTasks.length ? (
+						myOpenTasks.map((card) => <Wf1PendingTaskCard card={card} workspaceHref={workspaceHref} />)
+					) : (
+						<p class="rental-muted">Nothing needs your action now.</p>
+					)}
+				</div>
+			</section>
+
+			<section class="wf1-queue-card">
+				<details open={otherSideOpenTasks.length > 0 && myOpenTasks.length === 0}>
+					<summary>
+						<span>{otherSideLabel(viewerRole)}</span>
+						<span class="rental-badge">{otherSideOpenTasks.length}</span>
+					</summary>
+
+					<div class="wf1-card-list">
+						{otherSideOpenTasks.length ? (
+							otherSideOpenTasks.map((card) => <Wf1Card card={card} responses={responses} />)
+						) : (
+							<p class="rental-muted">{otherSideEmptyLabel(viewerRole)}</p>
+						)}
+					</div>
+				</details>
+			</section>
+
+			<section class="wf1-queue-card">
+				<details>
+					<summary>
+						<span>Completed / history</span>
+						<span class="rental-badge">{completedCards.length}</span>
+					</summary>
+
+					<div class="wf1-card-list">
+						{completedCards.length ? (
+							completedCards.map((card) => <Wf1Card card={card} responses={responses} />)
+						) : (
+							<p class="rental-muted">No completed cards yet.</p>
+						)}
+					</div>
+				</details>
+			</section>
+		</div>
+	) : (
+		<div class="wf1-empty-queue">
+			<h3>No task cards yet</h3>
+			<p class="rental-muted">
+				When the owner or applicant sends a request, it will appear here first.
+			</p>
+		</div>
+	)}
 </section>
 
 <style>
-	.bucket-grid,
-	.bucket-grid > section {
+	.wf1-work-queue,
+	.wf1-dashboard-grid,
+	.wf1-card-list {
 		display: grid;
-		gap: 16px;
+		gap: 14px;
+	}
+
+	.wf1-work-queue-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.wf1-work-queue-head h2,
+	.wf1-queue-card h3,
+	.wf1-empty-queue h3 {
+		margin: 0;
+	}
+
+	.wf1-work-stats {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		justify-content: flex-end;
+	}
+
+	.wf1-dashboard-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.wf1-queue-card,
+	.wf1-empty-queue {
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		background: var(--r-panel-soft);
+		padding: 14px;
+	}
+
+	.wf1-queue-card-primary {
+		border-color: var(--r-accent, var(--r-border));
+		background: var(--r-panel);
+	}
+
+	.wf1-queue-card-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 12px;
+	}
+
+	.wf1-queue-card details {
+		display: grid;
+		gap: 12px;
+	}
+
+	.wf1-queue-card summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		cursor: pointer;
+		color: var(--r-text);
+		font-weight: 900;
+	}
+
+	.wf1-queue-card details[open] summary {
+		margin-bottom: 12px;
+	}
+
+	.wf1-badge-hot {
+		border-color: var(--r-accent, var(--r-border));
+	}
+
+	@media (max-width: 760px) {
+		.wf1-work-queue-head,
+		.wf1-work-stats {
+			display: grid;
+			justify-content: stretch;
+		}
 	}
 </style>

@@ -10,16 +10,23 @@ interface Props {
 const { availableActions, workflowInstanceId, workspaceHref } = Astro.props;
 ---
 
-<section class="rental-panel wf1-panel" data-testid="wf1-actions">
-	<h2>Available Stage Actions</h2>
-	<p class="rental-muted">Actions move Application Form's State and sometimes Asset State. Cards do not move state by themselves.</p>
-	{availableActions.length ? (
+{availableActions.length ? (
+	<section class="rental-panel wf1-panel" data-testid="wf1-actions">
+		<div>
+			<p class="rental-kicker">Stage controls</p>
+			<h2>Available actions</h2>
+			<p class="rental-muted">
+				Use these only when you are ready to move the application or asset to the next stage.
+			</p>
+		</div>
+
 		<div class="wf1-action-grid">
 			{availableActions.map((action) => {
 				const actionId = String(action.id ?? "");
 				const label = String(action.label ?? actionId);
 				const warnings = Array.isArray(action.warnings) ? action.warnings.map(String) : [];
 				const blocked = action.blocked === true;
+
 				return (
 					<div class="wf1-action">
 						{warnings.map((warning) => <p class="rental-muted">{warning}</p>)}
@@ -35,8 +42,8 @@ const { availableActions, workflowInstanceId, workspaceHref } = Astro.props;
 				);
 			})}
 		</div>
-	) : <p class="rental-muted">No stage actions are available for your role now.</p>}
-</section>
+	</section>
+) : null}
 
 <style>
 	.wf1-panel,

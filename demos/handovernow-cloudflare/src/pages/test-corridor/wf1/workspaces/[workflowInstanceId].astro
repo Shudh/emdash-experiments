@@ -315,18 +315,36 @@ const agentFolderKey = agentFolderKeyFor(asset, interest, instance);
 						</aside>
 
 						<main class="thread">
-							<Wf1ActionPanel availableActions={availableActions} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
-							<Wf1CardComposerPanel availableCardTypes={availableCardTypes} workflowInstanceId={String(instance.id ?? "")} workspaceHref={workspaceHref} />
-							{canGenerateMoveoutTasks ? (
-								<Wf1MoveoutTaskGenerator
-									assetConfigItems={assetConfigItems}
-									workflowInstanceId={String(instance.id ?? "")}
-									workspaceHref={workspaceHref}
-								/>
-							) : null}
-							<Wf1TaskBuckets taskBuckets={taskBuckets} responses={responses} workspaceHref={workspaceHref} />
-							<Wf1Timeline events={events} />
-						</main>
+                            <Wf1TaskBuckets
+                                taskBuckets={taskBuckets}
+                                responses={responses}
+                                workspaceHref={workspaceHref}
+                                viewerRole={viewerRole}
+                            />
+
+                            <Wf1ActionPanel
+                                availableActions={availableActions}
+                                workflowInstanceId={String(instance.id ?? "")}
+                                workspaceHref={workspaceHref}
+                            />
+
+                            <Wf1CardComposerPanel
+                                availableCardTypes={availableCardTypes}
+                                workflowInstanceId={String(instance.id ?? "")}
+                                workspaceHref={workspaceHref}
+                                viewerRole={viewerRole}
+                            />
+
+                            {canGenerateMoveoutTasks ? (
+                                <Wf1MoveoutTaskGenerator
+                                    assetConfigItems={assetConfigItems}
+                                    workflowInstanceId={String(instance.id ?? "")}
+                                    workspaceHref={workspaceHref}
+                                />
+                            ) : null}
+
+                            <Wf1Timeline events={events} />
+                        </main>
 					</div>
 				</>
 			) : (
@@ -341,11 +359,7 @@ const agentFolderKey = agentFolderKeyFor(asset, interest, instance);
 
 <style>
 	.workspace-grid,
-	.thread,
-	.sidebar {
-		display: grid;
-		gap: 18px;
-	}
+
 
 	.workspace-header {
 		display: flex;
@@ -355,12 +369,21 @@ const agentFolderKey = agentFolderKeyFor(asset, interest, instance);
 		gap: 12px;
 	}
 
-	.workspace-columns {
-		display: grid;
-		grid-template-columns: 340px minmax(0, 1fr);
-		gap: 18px;
-		align-items: start;
-	}
+	    .workspace-columns {
+            display: grid;
+            grid-template-columns: 340px minmax(0, 1fr);
+            grid-template-areas: "sidebar thread";
+            gap: 18px;
+            align-items: start;
+        }
+
+        .sidebar {
+            grid-area: sidebar;
+        }
+
+        .thread {
+            grid-area: thread;
+        }
 
 	.screening-report-panel {
 		display: grid;
@@ -467,12 +490,15 @@ const agentFolderKey = agentFolderKeyFor(asset, interest, instance);
 	}
 
 	@media (max-width: 900px) {
-		.workspace-columns {
-			grid-template-columns: 1fr;
-		}
+        .workspace-columns {
+            grid-template-columns: 1fr;
+            grid-template-areas:
+                "thread"
+                "sidebar";
+        }
 
-		.screening-meta-grid {
-			grid-template-columns: 1fr;
-		}
-	}
+        .screening-meta-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>

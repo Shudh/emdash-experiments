@@ -13,3 +13,5 @@ docs/generated/
 playwright/.auth
 playwright/.profiles
 playwright/.logs
+tmp/
+
