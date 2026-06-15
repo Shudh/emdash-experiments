@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { PrescreenConfig, PrescreenQuestion, PrescreenState, SubmitState } from "./types";
 import { buildExpressInterestPayload } from "./prescreenMapper";
 import {
@@ -15,6 +15,7 @@ const TRACE_SCOPE = "PrescreenConversationCard";
 const MIN_PRESCREEN_SECONDS = 8;
 const MAX_SHORT_ANSWER_LENGTH = 300;
 const MAX_LONG_ANSWER_LENGTH = 1500;
+const BOT_THINKING_MS = 520;
 
 type PrescreenPhase = "question" | "final_check";
 
@@ -348,6 +349,19 @@ function TextInput(props: {
 	);
 }
 
+function BotTypingIndicator() {
+	return (
+		<div className="hn-prescreen-message bot hn-typing-indicator" aria-live="polite" aria-label="HandoverNow agent is typing">
+			<span>Typing</span>
+			<span className="hn-typing-dots" aria-hidden="true">
+				<span></span>
+				<span></span>
+				<span></span>
+			</span>
+		</div>
+	);
+}
+
 export default function PrescreenConversationCard(props: { config: PrescreenConfig }) {
 	const trace = startTrace(TRACE_SCOPE, "render", {
 		assetId: props.config.assetId,
@@ -358,6 +372,8 @@ export default function PrescreenConversationCard(props: { config: PrescreenConf
 	const [state, setState] = useState<PrescreenState>(() => loadPrescreenState(config));
 	const [submitState, setSubmitState] = useState<SubmitState>(initialSubmitState);
 	const [honeypotValue, setHoneypotValue] = useState("");
+	const [botIsThinking, setBotIsThinking] = useState(false);
+	const thinkingTimerRef = useRef<number | null>(null);
 
 	const transcript = useMemo(() => transcriptItems(config, state), [config, state]);
 
@@ -377,6 +393,28 @@ export default function PrescreenConversationCard(props: { config: PrescreenConf
 		setSubmitState(initialSubmitState());
 	}
 
+	function clearThinkingTimer(): void {
+		if (thinkingTimerRef.current !== null) {
+			window.clearTimeout(thinkingTimerRef.current);
+			thinkingTimerRef.current = null;
+		}
+	}
+
+	function showBotThinking(): void {
+		clearThinkingTimer();
+		setBotIsThinking(true);
+		thinkingTimerRef.current = window.setTimeout(() => {
+			setBotIsThinking(false);
+			thinkingTimerRef.current = null;
+		}, BOT_THINKING_MS);
+	}
+
+	useEffect(() => {
+		return () => {
+			clearThinkingTimer();
+		};
+	}, []);
+
 	function answerCurrentQuestion(value: string): void {
 		const question = activeQuestionFor(config, state);
 
@@ -394,6 +432,7 @@ export default function PrescreenConversationCard(props: { config: PrescreenConf
 		}));
 
 		resetSubmitState();
+		showBotThinking();
 	}
 
 	function goBack(): void {
@@ -401,15 +440,18 @@ export default function PrescreenConversationCard(props: { config: PrescreenConf
 			...current,
 			index: Math.max(0, current.index - 1),
 		}));
+		setBotIsThinking(false);
 		resetSubmitState();
 	}
 
 	function resetPrescreen(): void {
 		const emptyState = createEmptyPrescreenState(config);
+		clearThinkingTimer();
 		clearPrescreenState(config);
 		setState(emptyState);
 		setHoneypotValue("");
 		setSubmitState(initialSubmitState());
+		setBotIsThinking(false);
 	}
 
 	function setHumanCheckAnswer(value: string): void {
@@ -476,7 +518,7 @@ export default function PrescreenConversationCard(props: { config: PrescreenConf
 	const activeQuestion = activeQuestionFor(config, state);
 	const showTurnstile = phase === "final_check" && config.turnstileSiteKey !== "" && config.canSubmit;
 
-	trace.end({ phase, activeQuestionKey: activeQuestion?.key ?? "", showTurnstile });
+	trace.end({ phase, activeQuestionKey: activeQuestion?.key ?? "", showTurnstile, botIsThinking });
 
 	return (
 		<div className="hn-prescreen-card">
@@ -489,7 +531,9 @@ export default function PrescreenConversationCard(props: { config: PrescreenConf
 					<div key={`${item.role}-${index}`} className={`hn-prescreen-message ${item.role}`}>{item.text}</div>
 				))}
 
-				{activeQuestion !== null ? (
+				{botIsThinking ? (
+					<BotTypingIndicator />
+				) : activeQuestion !== null ? (
 					<div className="hn-prescreen-message bot">{activeQuestion.label}</div>
 				) : (
 					<div className="hn-prescreen-message bot">{`One quick check before submitting: ${config.humanCheckChallenge.question}`}</div>
@@ -497,7 +541,7 @@ export default function PrescreenConversationCard(props: { config: PrescreenConf
 			</div>
 
 			<div className="hn-prescreen-control">
-				{activeQuestion !== null ? (
+				{botIsThinking ? null : activeQuestion !== null ? (
 					activeQuestion.kind === "single_choice" ? (
 						<ChoiceInput question={activeQuestion} onAnswer={answerCurrentQuestion} />
 					) : (

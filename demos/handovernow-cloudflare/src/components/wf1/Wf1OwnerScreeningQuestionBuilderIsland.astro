@@ -1,0 +1,17 @@
+---
+import OwnerScreeningQuestionBuilder from "../../features/wf1-chatbotify/OwnerScreeningQuestionBuilder";
+import type { PrescreenQuestion } from "../../features/wf1-chatbotify/types";
+
+type Props = {
+	fieldName?: string;
+	initialQuestions?: PrescreenQuestion[];
+};
+
+const props = Astro.props as Props;
+---
+
+<OwnerScreeningQuestionBuilder
+	fieldName={props.fieldName ?? "preScreenQuestionsJson"}
+	initialQuestions={props.initialQuestions ?? []}
+	client:only="react"
+/>
