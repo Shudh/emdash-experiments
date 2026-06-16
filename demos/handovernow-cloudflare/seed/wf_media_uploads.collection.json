@@ -1,0 +1,28 @@
+{
+  "slug": "wf_media_uploads",
+  "label": "WF1 Media Uploads",
+  "labelSingular": "WF1 Media Upload",
+  "supports": [],
+  "fields": [
+    { "slug": "title", "label": "Title", "type": "string" },
+    { "slug": "lane", "label": "Lane", "type": "string" },
+    { "slug": "purpose", "label": "Purpose", "type": "string" },
+    { "slug": "created_by_user_id", "label": "Created By User Id", "type": "string" },
+    { "slug": "owner_user_id", "label": "Owner User Id", "type": "string" },
+    { "slug": "asset_id", "label": "Asset Id", "type": "string" },
+    { "slug": "interest_id", "label": "Interest Id", "type": "string" },
+    { "slug": "workflow_instance_id", "label": "Workflow Instance Id", "type": "string" },
+    { "slug": "card_id", "label": "Card Id", "type": "string" },
+    { "slug": "draft_id", "label": "Draft Id", "type": "string" },
+    { "slug": "client_item_id", "label": "Client Item Id", "type": "string" },
+    { "slug": "media_id", "label": "EmDash Media Id", "type": "string" },
+    { "slug": "storage_key", "label": "Storage Key", "type": "string" },
+    { "slug": "filename", "label": "Filename", "type": "string" },
+    { "slug": "mime_type", "label": "Mime Type", "type": "string" },
+    { "slug": "size_bytes", "label": "Size Bytes", "type": "number" },
+    { "slug": "content_hash", "label": "Content Hash", "type": "string" },
+    { "slug": "upload_state", "label": "Upload State", "type": "string" },
+    { "slug": "attached_state", "label": "Attached State", "type": "string" },
+    { "slug": "upload_spec", "label": "Upload Spec", "type": "json" }
+  ]
+}

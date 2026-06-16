@@ -28,6 +28,8 @@ import { validateLeadProtection } from "../security/lead-guard.js";
 import type { RuntimeEnv } from "../security/runtime-env.js";
 import { WORKFLOW_RENTAL_COLLECTIONS } from "../store/collections.js";
 import { actorRoleFor, getAssetOrThrow, getInterestOrThrow } from "../store/repository.js";
+import type { Wf1EmDashMediaRuntime } from "../uploads/types.js";
+import { handleWf1UploadRoute, streamWf1EvidenceAttachment } from "./upload-route.js";
 import {
 	optionalArray,
 	optionalNumber,
@@ -47,6 +49,7 @@ export type WorkflowRentalRouteInput = {
 	user: UserContext | null;
 	env?: RuntimeEnv;
 	lane?: Wf1Lane;
+	emdash?: Wf1EmDashMediaRuntime | null;
 };
 
 export async function handleWorkflowRentalRoute(
@@ -54,11 +57,6 @@ export async function handleWorkflowRentalRoute(
 ): Promise<Response> {
 	try {
 		const parts = input.path.split("/").filter(Boolean);
-		const jsonLimit = isExpressInterestRoute(input.request.method, parts)
-			? MAX_WF1_LEAD_JSON_BYTES
-			: MAX_WF1_DEFAULT_JSON_BYTES;
-
-		const body = input.request.method === "GET" ? {} : parseRecord(await readJson(input.request, jsonLimit));
 		const lane = input.lane ?? "public";
 
 		if (input.request.method === "GET" && input.path === "marketplace/assets") {
@@ -76,9 +74,41 @@ export async function handleWorkflowRentalRoute(
 			return jsonOk(details);
 		}
 
-		await assertWf1RouteLane(input.store, lane, input.request.method, parts, body);
-
 		const user = requireUser(input.user);
+
+		if (input.request.method === "POST" && input.path === "uploads") {
+			return jsonOk(
+				await handleWf1UploadRoute({
+					request: input.request,
+					store: input.store,
+					user,
+					lane,
+					emdash: input.emdash,
+				}),
+				201,
+			);
+		}
+
+		if (
+			input.request.method === "GET" &&
+			parts[0] === "evidence" &&
+			parts[1] &&
+			parts[2] === "file"
+		) {
+			return streamWf1EvidenceAttachment({
+				store: input.store,
+				user,
+				emdash: input.emdash,
+				attachmentId: parts[1],
+			});
+		}
+
+		const jsonLimit = isExpressInterestRoute(input.request.method, parts)
+			? MAX_WF1_LEAD_JSON_BYTES
+			: MAX_WF1_DEFAULT_JSON_BYTES;
+		const body = input.request.method === "GET" ? {} : parseRecord(await readJson(input.request, jsonLimit));
+
+		await assertWf1RouteLane(input.store, lane, input.request.method, parts, body);
 
 		if (input.request.method === "GET" && input.path === "my/workspaces") {
 			return jsonOk(

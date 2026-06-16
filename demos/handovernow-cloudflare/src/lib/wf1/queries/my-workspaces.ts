@@ -14,7 +14,6 @@ type WorkspaceKind = "asset" | "application";
 type WorkspaceRelationship = "owner" | "applicant" | "renter";
 type WorkspaceSource = "owned_asset" | "submitted_interest" | "granted_access" | "active_renter";
 
-type JsonObject = Record<string, unknown>;
 
 export type MyWorkflowWorkspaceIndexOptions = {
 	lane?: Wf1Lane;

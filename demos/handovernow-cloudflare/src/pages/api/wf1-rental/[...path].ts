@@ -27,6 +27,7 @@ export const ALL: APIRoute = async (context) => {
 			store: new KyselyWorkflowStore(db as never),
 			user: getOptionalUser(context),
 			env: getRuntimeEnvFromLocals(context.locals),
+			emdash: context.locals.emdash as never,
 		});
 	} catch (error) {
 		return jsonError(error);

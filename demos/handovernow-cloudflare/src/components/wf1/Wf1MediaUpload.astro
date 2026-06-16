@@ -4,6 +4,15 @@ interface Props {
 	label?: string;
 	required?: boolean;
 	accept?: string;
+	uploadUrl?: string;
+	purpose?: string;
+	assetId?: string;
+	workflowInstanceId?: string;
+	cardId?: string;
+	draftId?: string;
+	clientItemId?: string;
+	attachmentLabel?: string;
+	documentKind?: string;
 }
 
 const {
@@ -11,16 +20,39 @@ const {
 	label = "Upload image or PDF",
 	required = false,
 	accept = "image/*,application/pdf",
+	uploadUrl = "/api/wf1-rental/uploads",
+	purpose = "asset_draft_media",
+	assetId = "",
+	workflowInstanceId = "",
+	cardId = "",
+	draftId = "",
+	clientItemId = "",
+	attachmentLabel = "",
+	documentKind = "",
 } = Astro.props;
 
 const MEDIA_ID_UNSAFE_PATTERN = /[^a-zA-Z0-9_-]/g;
 const id = `media-${prefix.replace(MEDIA_ID_UNSAFE_PATTERN, "-")}`;
+const resolvedDraftId = draftId || (purpose === "asset_draft_media" ? crypto.randomUUID() : "");
 ---
 
-<div class="rental-field full" data-wf1-media-upload>
+<div
+	class="rental-field full"
+	data-wf1-media-upload
+	data-upload-url={uploadUrl}
+	data-upload-purpose={purpose}
+	data-asset-id={assetId}
+	data-workflow-instance-id={workflowInstanceId}
+	data-card-id={cardId}
+	data-draft-id={resolvedDraftId}
+	data-client-item-id={clientItemId}
+	data-attachment-label={attachmentLabel}
+	data-document-kind={documentKind}
+>
 	<label for={id}>{label}</label>
 	<input id={id} type="file" accept={accept} data-media-file required={required} />
 	<input type="hidden" name={`${prefix}.mediaId`} data-media-id />
+	<input type="hidden" name={`${prefix}.uploadId`} data-media-upload-id />
 	<input type="hidden" name={`${prefix}.storageKey`} data-media-storage-key />
 	<input type="hidden" name={`${prefix}.mimeType`} data-media-mime-type />
 	<input type="hidden" name={`${prefix}.filename`} data-media-filename />
@@ -29,11 +61,24 @@ const id = `media-${prefix.replace(MEDIA_ID_UNSAFE_PATTERN, "-")}`;
 </div>
 
 <script>
-	async function uploadWf1Media(file: File) {
+	function appendIfPresent(body: FormData, name: string, value: string | undefined) {
+		if (value && value.trim()) body.append(name, value.trim());
+	}
+
+	async function uploadWf1Media(root: HTMLElement, file: File) {
 		const body = new FormData();
 		body.append("file", file);
+		body.append("purpose", root.dataset.uploadPurpose || "asset_draft_media");
+		appendIfPresent(body, "assetId", root.dataset.assetId);
+		appendIfPresent(body, "workflowInstanceId", root.dataset.workflowInstanceId);
+		appendIfPresent(body, "cardId", root.dataset.cardId);
+		appendIfPresent(body, "draftId", root.dataset.draftId);
+		appendIfPresent(body, "clientItemId", root.dataset.clientItemId);
+		appendIfPresent(body, "attachmentLabel", root.dataset.attachmentLabel);
+		appendIfPresent(body, "documentKind", root.dataset.documentKind);
 
-		const response = await fetch("/_emdash/api/media", {
+		const uploadUrl = root.dataset.uploadUrl || "/api/wf1-rental/uploads";
+		const response = await fetch(uploadUrl, {
 			method: "POST",
 			credentials: "same-origin",
 			headers: {
@@ -48,7 +93,11 @@ const id = `media-${prefix.replace(MEDIA_ID_UNSAFE_PATTERN, "-")}`;
 			throw new Error(payload?.error?.message ?? "Media upload failed");
 		}
 
-		return payload?.data?.item ?? payload?.item;
+		const data = payload?.data ?? payload;
+		const item = data?.item ?? data?.media ?? data;
+		const upload = data?.upload ?? {};
+
+		return { item, upload };
 	}
 
 	for (const root of document.querySelectorAll<HTMLElement>("[data-wf1-media-upload]")) {
@@ -58,37 +107,30 @@ const id = `media-${prefix.replace(MEDIA_ID_UNSAFE_PATTERN, "-")}`;
 		fileInput?.addEventListener("change", async () => {
 			const file = fileInput.files?.[0];
 
-			if (!file) {
-				return;
-			}
+			if (!file) return;
 
-			if (status) {
-				status.textContent = "Uploading...";
-			}
+			if (status) status.textContent = "Uploading to HandoverNow workspace...";
 
 			try {
-				const item = await uploadWf1Media(file);
+				const { item, upload } = await uploadWf1Media(root, file);
 
 				const mediaIdInput = root.querySelector<HTMLInputElement>("[data-media-id]");
+				const uploadIdInput = root.querySelector<HTMLInputElement>("[data-media-upload-id]");
 				const storageKeyInput = root.querySelector<HTMLInputElement>("[data-media-storage-key]");
 				const mimeTypeInput = root.querySelector<HTMLInputElement>("[data-media-mime-type]");
 				const filenameInput = root.querySelector<HTMLInputElement>("[data-media-filename]");
 				const urlInput = root.querySelector<HTMLInputElement>("[data-media-url]");
 
-				if (mediaIdInput) mediaIdInput.value = String(item.id ?? "");
-				if (storageKeyInput && mediaIdInput) storageKeyInput.value = String(item.storageKey ?? "");
-				if (mimeTypeInput) mimeTypeInput.value = String(item.mimeType ?? file.type);
-				if (filenameInput) filenameInput.value = String(item.filename ?? file.name);
-				if (urlInput) urlInput.value = String(item.url ?? "");
+				if (mediaIdInput) mediaIdInput.value = String(item?.id ?? "");
+				if (uploadIdInput) uploadIdInput.value = String(upload?.id ?? "");
+				if (storageKeyInput) storageKeyInput.value = String(item?.storageKey ?? "");
+				if (mimeTypeInput) mimeTypeInput.value = String(item?.mimeType ?? file.type);
+				if (filenameInput) filenameInput.value = String(item?.filename ?? file.name);
+				if (urlInput) urlInput.value = String(item?.url ?? "");
 
-				if (status) {
-					status.textContent = "Uploaded.";
-				}
+				if (status) status.textContent = "Uploaded.";
 			} catch (error) {
-				if (status) {
-					status.textContent = error instanceof Error ? error.message : "Upload failed";
-				}
-
+				if (status) status.textContent = error instanceof Error ? error.message : "Upload failed";
 				fileInput.value = "";
 			}
 		});

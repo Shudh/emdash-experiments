@@ -20,6 +20,8 @@ if (rejection) {
 
 applyTestLaneNoStoreHeaders(Astro.response.headers);
 
+const assetDraftId = crypto.randomUUID();
+const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 ---
 
 <Wf1TestBase title="Add asset under management" description="Create a managed rental asset">
@@ -31,23 +33,23 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 				<p class="rental-kicker">Owner asset</p>
 				<h1>Create draft asset</h1>
 				<p class="rental-muted">
-						Create the property or rentable asset here. Add the listing image, owner conditions,
-	                    furnishings, fixtures, and optional evidence. The application workflow starts only
-	                    after an interested applicant applies.This configuration specification will be used to manage asset lifecycle changes
+					Create the property or rentable asset here. Add the listing image, owner conditions,
+					furnishings, fixtures, and optional evidence. The application workflow starts only
+					after an interested applicant applies. This configuration specification will be used to manage asset lifecycle changes.
 				</p>
 			</div>
 
-			<form class="rental-panel create-form" id="asset-form">
+			<form class="rental-panel create-form" id="asset-form" data-asset-draft-id={assetDraftId} data-wf1-upload-url={wf1UploadUrl}>
 				<div class="rental-form-grid">
 					<div class="rental-field">
 						<label for="assetKind">Asset kind</label>
 						<select id="assetKind" name="assetKind">
 							<option value="flat">Flat</option>
-                            <option value="villa">Villa</option>
-                            <option value="independent_house">Independent house</option>
-                            <option value="room">Room / PG unit</option>
-                            <option value="commercial_unit">Commercial unit</option>
-                            <option value="rentable_asset">Other rentable asset</option>
+							<option value="villa">Villa</option>
+							<option value="independent_house">Independent house</option>
+							<option value="room">Room / PG unit</option>
+							<option value="commercial_unit">Commercial unit</option>
+							<option value="rentable_asset">Other rentable asset</option>
 						</select>
 					</div>
 
@@ -97,6 +99,10 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 						prefix="assetMedia"
 						label="Primary property image or PDF"
 						required={false}
+						uploadUrl={wf1UploadUrl}
+						purpose="asset_draft_media"
+						draftId={assetDraftId}
+						clientItemId="primary"
 					/>
 
 					<div class="rental-field">
@@ -142,9 +148,12 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 	const inventoryEditor = document.querySelector<HTMLElement>("#inventory-editor");
 	const addInventoryRowButton = document.querySelector<HTMLButtonElement>("#add-inventory-row");
 	const addStarterInventoryButton = document.querySelector<HTMLButtonElement>("#add-starter-inventory");
+	const assetDraftId = form?.dataset.assetDraftId ?? crypto.randomUUID();
+	const wf1UploadUrl = form?.dataset.wf1UploadUrl ?? "/test-corridor/api/wf1-rental/uploads";
 
 	type MediaRef = {
 		mediaId: string;
+		uploadId?: string;
 		storageKey: string;
 		mimeType: string;
 		filename: string;
@@ -164,118 +173,20 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 	};
 
 	const starterInventory: InventoryItem[] = [
-		{
-			itemLabel: "Geyser",
-			itemKind: "appliance",
-			itemGroup: "bathroom",
-			quantity: "1",
-			ownerDeclaredState: "working",
-			conditionDetails: "Heats water, no leakage.",
-		},
-		{
-			itemLabel: "Fridge",
-			itemKind: "appliance",
-			itemGroup: "kitchen",
-			quantity: "1",
-			ownerDeclaredState: "working",
-			conditionDetails: "Silent, cooling is ok.",
-		},
-		{
-			itemLabel: "Washing machine",
-			itemKind: "appliance",
-			itemGroup: "utility",
-			quantity: "1",
-			ownerDeclaredState: "working",
-			conditionDetails: "",
-		},
-		{
-			itemLabel: "RO purifier",
-			itemKind: "appliance",
-			itemGroup: "kitchen",
-			quantity: "1",
-			ownerDeclaredState: "working",
-			conditionDetails: "",
-		},
-		{
-			itemLabel: "Fans",
-			itemKind: "fixture",
-			itemGroup: "all rooms",
-			quantity: "4",
-			ownerDeclaredState: "working",
-			conditionDetails: "",
-		},
-		{
-			itemLabel: "Lights",
-			itemKind: "fixture",
-			itemGroup: "all rooms",
-			quantity: "8",
-			ownerDeclaredState: "working",
-			conditionDetails: "",
-		},
-		{
-			itemLabel: "Curtains",
-			itemKind: "furnishing",
-			itemGroup: "bedrooms",
-			quantity: "4",
-			ownerDeclaredState: "good",
-			conditionDetails: "",
-		},
-		{
-			itemLabel: "Wardrobe",
-			itemKind: "furniture",
-			itemGroup: "bedroom",
-			quantity: "2",
-			ownerDeclaredState: "good",
-			conditionDetails: "",
-		},
-		{
-			itemLabel: "Sofa",
-			itemKind: "furniture",
-			itemGroup: "living room",
-			quantity: "1",
-			ownerDeclaredState: "worn",
-			conditionDetails: "Minor fabric marks.",
-		},
-		{
-			itemLabel: "Dining table",
-			itemKind: "furniture",
-			itemGroup: "dining",
-			quantity: "1",
-			ownerDeclaredState: "good",
-			conditionDetails: "",
-		},
-		{
-			itemLabel: "Bed",
-			itemKind: "furniture",
-			itemGroup: "bedroom",
-			quantity: "2",
-			ownerDeclaredState: "good",
-			conditionDetails: "",
-		},
-		{
-			itemLabel: "Mattress",
-			itemKind: "furnishing",
-			itemGroup: "bedroom",
-			quantity: "2",
-			ownerDeclaredState: "good",
-			conditionDetails: "",
-		},
-		{
-			itemLabel: "Keys",
-			itemKind: "access",
-			itemGroup: "main door",
-			quantity: "2",
-			ownerDeclaredState: "handed over",
-			conditionDetails: "Two physical keys.",
-		},
-		{
-			itemLabel: "Remote controls",
-			itemKind: "accessory",
-			itemGroup: "living room",
-			quantity: "2",
-			ownerDeclaredState: "working",
-			conditionDetails: "",
-		},
+		{ itemLabel: "Geyser", itemKind: "appliance", itemGroup: "bathroom", quantity: "1", ownerDeclaredState: "working", conditionDetails: "Heats water, no leakage." },
+		{ itemLabel: "Fridge", itemKind: "appliance", itemGroup: "kitchen", quantity: "1", ownerDeclaredState: "working", conditionDetails: "Silent, cooling is ok." },
+		{ itemLabel: "Washing machine", itemKind: "appliance", itemGroup: "utility", quantity: "1", ownerDeclaredState: "working", conditionDetails: "" },
+		{ itemLabel: "RO purifier", itemKind: "appliance", itemGroup: "kitchen", quantity: "1", ownerDeclaredState: "working", conditionDetails: "" },
+		{ itemLabel: "Fans", itemKind: "fixture", itemGroup: "all rooms", quantity: "4", ownerDeclaredState: "working", conditionDetails: "" },
+		{ itemLabel: "Lights", itemKind: "fixture", itemGroup: "all rooms", quantity: "8", ownerDeclaredState: "working", conditionDetails: "" },
+		{ itemLabel: "Curtains", itemKind: "furnishing", itemGroup: "bedrooms", quantity: "4", ownerDeclaredState: "good", conditionDetails: "" },
+		{ itemLabel: "Wardrobe", itemKind: "furniture", itemGroup: "bedroom", quantity: "2", ownerDeclaredState: "good", conditionDetails: "" },
+		{ itemLabel: "Sofa", itemKind: "furniture", itemGroup: "living room", quantity: "1", ownerDeclaredState: "worn", conditionDetails: "Minor fabric marks." },
+		{ itemLabel: "Dining table", itemKind: "furniture", itemGroup: "dining", quantity: "1", ownerDeclaredState: "good", conditionDetails: "" },
+		{ itemLabel: "Bed", itemKind: "furniture", itemGroup: "bedroom", quantity: "2", ownerDeclaredState: "good", conditionDetails: "" },
+		{ itemLabel: "Mattress", itemKind: "furnishing", itemGroup: "bedroom", quantity: "2", ownerDeclaredState: "good", conditionDetails: "" },
+		{ itemLabel: "Keys", itemKind: "access", itemGroup: "main door", quantity: "2", ownerDeclaredState: "handed over", conditionDetails: "Two physical keys." },
+		{ itemLabel: "Remote controls", itemKind: "accessory", itemGroup: "living room", quantity: "2", ownerDeclaredState: "working", conditionDetails: "" },
 	];
 
 	function htmlEscape(value = "") {
@@ -289,6 +200,7 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 			(form.querySelector<HTMLInputElement>(`[name="${prefix}.${name}"]`)?.value ?? "").trim();
 
 		const mediaId = read("mediaId");
+		const uploadId = read("uploadId");
 		const storageKey = read("storageKey");
 		const mimeType = read("mimeType");
 		const filename = read("filename");
@@ -298,6 +210,7 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 
 		return {
 			mediaId,
+			uploadId,
 			storageKey,
 			mimeType,
 			filename,
@@ -308,11 +221,14 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 		};
 	}
 
-	async function uploadMediaFile(file: File, kind: string, scope: string): Promise<MediaRef> {
+	async function uploadMediaFile(file: File, kind: string, scope: string, clientItemId: string): Promise<MediaRef> {
 		const body = new FormData();
 		body.append("file", file);
+		body.append("purpose", "asset_draft_media");
+		body.append("draftId", assetDraftId);
+		body.append("clientItemId", clientItemId);
 
-		const response = await fetch("/_emdash/api/media", {
+		const response = await fetch(wf1UploadUrl, {
 			method: "POST",
 			credentials: "same-origin",
 			headers: {
@@ -327,10 +243,13 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 			throw new Error(payload?.error?.message ?? "Media upload failed");
 		}
 
-		const item = payload?.data?.item ?? payload?.item;
+		const data = payload?.data ?? payload;
+		const item = data?.item ?? {};
+		const upload = data?.upload ?? {};
 
 		return {
 			mediaId: String(item?.id ?? ""),
+			uploadId: String(upload?.id ?? ""),
 			storageKey: String(item?.storageKey ?? ""),
 			mimeType: String(item?.mimeType ?? file.type),
 			filename: String(item?.filename ?? file.name),
@@ -346,6 +265,7 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 
 		const row = document.createElement("article");
 		row.className = "inventory-row";
+		row.dataset.clientItemId = crypto.randomUUID();
 		row.innerHTML = `
 			<label>
 				Item label
@@ -370,7 +290,7 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 			<label>
 				Item image/PDF evidence
 				<input name="mediaFile" type="file" accept="image/*,application/pdf" />
-				<span class="media-note">Optional. Stored through EmDash media.</span>
+				<span class="media-note">Optional. Stored through HandoverNow upload API using EmDash media storage.</span>
 			</label>
 			<label class="wide">
 				Condition details
@@ -394,9 +314,10 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 			const itemLabel = scoped("itemLabel");
 			if (!itemLabel) continue;
 
+			const clientItemId = row.dataset.clientItemId ?? crypto.randomUUID();
 			const mediaFile = row.querySelector<HTMLInputElement>('[name="mediaFile"]')?.files?.[0];
 			const mediaRefs = mediaFile
-				? [await uploadMediaFile(mediaFile, "item_evidence", "asset_config_item")]
+				? [await uploadMediaFile(mediaFile, "item_evidence", "asset_config_item", clientItemId)]
 				: [];
 
 			items.push({
@@ -408,6 +329,8 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 					quantity: Number(scoped("quantity") || "1"),
 					room: scoped("itemGroup"),
 					conditionDetails: scoped("conditionDetails"),
+					draftId: assetDraftId,
+					clientItemId,
 				},
 				mediaRefs,
 			});
@@ -491,6 +414,7 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 					furnishing: data.get("furnishing"),
 					thumbnailMediaRef: assetMediaRef,
 					mediaRefs: assetMediaRef ? [assetMediaRef] : [],
+					draftId: assetDraftId,
 				},
 				conditionSpec: {
 					walls: data.get("walls"),

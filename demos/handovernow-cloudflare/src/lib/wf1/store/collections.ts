@@ -10,6 +10,7 @@ export const WORKFLOW_RENTAL_COLLECTIONS = {
 	EVIDENCE_ATTACHMENTS: "wf_evidence_attachments",
 	ASSET_ACCESS: "wf_asset_access",
 	ASSET_EVENTS: "wf_asset_events",
+	MEDIA_UPLOADS: "wf_media_uploads",
 } as const;
 
 export const WF_STATUS = {

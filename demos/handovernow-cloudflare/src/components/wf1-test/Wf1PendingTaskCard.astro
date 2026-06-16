@@ -128,6 +128,8 @@ const evidenceMode = stringValue(evidencePolicy.attachment, "forbidden");
 const acceptsEvidence = evidenceMode !== "forbidden";
 const requiresEvidence = evidenceMode === "required";
 const options = mcqOptions(answerSchema, cardSpec);
+const uploadUrl = "/test-corridor/api/wf1-rental/uploads";
+const cardId = stringValue(card.id);
 ---
 
 <ActionForm
@@ -200,6 +202,10 @@ const options = mcqOptions(answerSchema, cardSpec);
 				prefix="attachments.0"
 				label={requiresEvidence ? "Required evidence image/PDF" : "Optional evidence image/PDF"}
 				required={requiresEvidence}
+				uploadUrl={uploadUrl}
+				purpose="workflow_card_evidence"
+				cardId={cardId}
+				attachmentLabel={String(card.prompt ?? card.card_type ?? "Evidence")}
 			/>
 		) : null
 	}

@@ -21,6 +21,68 @@ export type AnswerWorkflowCardInput = {
 	attachments?: Array<Record<string, unknown>>;
 };
 
+function attachmentLabel(attachment: Record<string, unknown>): string {
+	return (
+		asString(attachment.attachmentLabel) ||
+		asString(attachment.filename) ||
+		asString(attachment.mediaId) ||
+		"Evidence"
+	);
+}
+
+async function persistAnswerEvidence(input: {
+	tx: DomainStore;
+	user: UserContext;
+	asset: Record<string, unknown>;
+	interest: Record<string, unknown>;
+	instance: Record<string, unknown>;
+	card: Record<string, unknown>;
+	responseId: string;
+	attachments: Array<Record<string, unknown>>;
+}): Promise<void> {
+	for (const attachment of input.attachments) {
+		const storageKey = asString(attachment.storageKey);
+		const mediaId = asString(attachment.mediaId);
+		const uploadId = asString(attachment.uploadId);
+
+		if (!storageKey && !mediaId) continue;
+
+		if (uploadId) {
+			await input.tx.update(WORKFLOW_RENTAL_COLLECTIONS.MEDIA_UPLOADS, uploadId, {
+				attached_state: "attached",
+				upload_spec: {
+					...(typeof attachment === "object" && attachment ? attachment : {}),
+					attachedVia: "workflow_card_answer",
+					responseId: input.responseId,
+				},
+			});
+		}
+
+		await input.tx.insert(WORKFLOW_RENTAL_COLLECTIONS.EVIDENCE_ATTACHMENTS, {
+			status: WF_STATUS.PUBLISHED,
+			author_id: input.user.id,
+			tenant_document_id: asString(attachment.tenantDocumentId) || null,
+			asset_id: input.asset.id,
+			interest_id: input.interest.id,
+			workflow_instance_id: input.instance.id,
+			card_id: input.card.id,
+			response_id: input.responseId,
+			owner_user_id: input.asset.owner_user_id,
+			applicant_user_id: input.interest.interested_user_id,
+			document_kind: asString(attachment.documentKind) || null,
+			storage_key: storageKey || null,
+			mime_type: asString(attachment.mimeType) || null,
+			attachment_label: attachmentLabel(attachment),
+			attachment_spec: {
+				mediaId,
+				uploadId,
+				filename: asString(attachment.filename),
+				url: asString(attachment.url),
+			},
+		});
+	}
+}
+
 export async function answerWorkflowCard(
 	store: DomainStore,
 	user: UserContext,
@@ -56,7 +118,7 @@ export async function answerWorkflowCard(
 
 		const answerValue = validateAnswer(cardDefinition.answerSchema, input.answer);
 
-		await tx.insert(WORKFLOW_RENTAL_COLLECTIONS.WORKFLOW_CARD_RESPONSES, {
+		const response = await tx.insert(WORKFLOW_RENTAL_COLLECTIONS.WORKFLOW_CARD_RESPONSES, {
 			status: WF_STATUS.PUBLISHED,
 			author_id: user.id,
 			workflow_instance_id: instance.id,
@@ -70,6 +132,17 @@ export async function answerWorkflowCard(
 				attachments,
 			},
 			message: input.message ?? answerValue.text ?? null,
+		});
+
+		await persistAnswerEvidence({
+			tx,
+			user,
+			asset,
+			interest,
+			instance,
+			card,
+			responseId: response.id,
+			attachments,
 		});
 
 		await tx.update(WORKFLOW_RENTAL_COLLECTIONS.WORKFLOW_CARDS, card.id, {
@@ -99,6 +172,7 @@ export async function answerWorkflowCard(
 			toAssetState: asString(transitioned.asset.business_state),
 			eventSpec: {
 				attachments,
+				responseId: response.id,
 			},
 		});
 

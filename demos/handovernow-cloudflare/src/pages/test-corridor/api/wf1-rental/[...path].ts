@@ -67,6 +67,7 @@ export const ALL: APIRoute = async (context) => {
 			user: getOptionalUser(context),
 			env: getRuntimeEnvFromLocals(context.locals),
 			lane: "test",
+			emdash: context.locals.emdash as never,
 		});
 
 		applyTestLaneNoStoreHeaders(response.headers);
