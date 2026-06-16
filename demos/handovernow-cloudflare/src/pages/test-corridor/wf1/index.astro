@@ -2,7 +2,7 @@
 import Wf1TestBase from "../../../components/wf1-test/Wf1TestBase.astro";
 import Wf1TestLaneBanner from "../../../components/wf1-test/Wf1TestLaneBanner.astro";
 
-import { listWorkflowMarketplaceAssets } from "../../../lib/wf1/queries/marketplace.js";
+import { listMyWorkflowWorkspaces } from "../../../lib/wf1/queries/my-workspaces.js";
 import { getWf1PageContext } from "../../../lib/wf1/server/context.js";
 
 import {
@@ -28,58 +28,82 @@ function isObjectRecord(value: unknown): value is JsonObject {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function viewerFor(asset: JsonObject): JsonObject {
-	return isObjectRecord(asset.viewer) ? asset.viewer : {};
+function stringValue(value: unknown, fallback = ""): string {
+	return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
 }
 
-function numberTime(value: unknown): number {
-	if (typeof value !== "string") return 0;
-
-	const timestamp = Date.parse(value);
-	return Number.isFinite(timestamp) ? timestamp : 0;
+function arrayValue(value: unknown): Array<JsonObject> {
+	return Array.isArray(value)
+		? value.filter((item): item is JsonObject => isObjectRecord(item))
+		: [];
 }
 
-function latestStamp(row: JsonObject): number {
-	return Math.max(
-		numberTime(row.updated_at),
-		numberTime(row.created_at),
-		numberTime(row.published_at),
-		numberTime(row.submitted_at),
-	);
+function objectValue(value: unknown): JsonObject {
+	return isObjectRecord(value) ? value : {};
 }
 
-function latestFirst(rows: Array<JsonObject>): Array<JsonObject> {
-	return rows.toSorted((left, right) => latestStamp(right) - latestStamp(left));
+function roleLabel(value: unknown): string {
+	const role = stringValue(value, "participant");
+	if (role === "renter") return "tenant";
+	if (role === "owner") return "owner";
+	if (role === "applicant") return "applicant";
+	return role.replaceAll("_", " ");
 }
 
-function assetHref(asset: JsonObject): string {
-	return `/test-corridor/wf1/marketplace/assets/${String(asset.id ?? "")}`;
+function workspaceHref(row: JsonObject): string {
+	const links = objectValue(row.links);
+	return stringValue(links.workspace) || stringValue(links.asset) || "/test-corridor/wf1/marketplace";
 }
 
-function applicationHref(asset: JsonObject): string {
-	const viewer = viewerFor(asset);
-	const workflowInstanceId = typeof viewer.workflowInstanceId === "string" ? viewer.workflowInstanceId : "";
+function workspaceActionLabel(row: JsonObject): string {
+	const relationship = stringValue(row.relationship);
+	const kind = stringValue(row.kind);
+	const links = objectValue(row.links);
 
-	return workflowInstanceId ? `/test-corridor/wf1/workspaces/${workflowInstanceId}` : assetHref(asset);
+	if (stringValue(links.workspace) !== "") return "Open workspace";
+	if (relationship === "owner" && kind === "asset") return "Manage asset";
+	return "Open asset";
 }
 
-function myApplicationAssets(assets: Array<JsonObject>): Array<JsonObject> {
-	return latestFirst(
-		assets.filter((asset) => String(viewerFor(asset).relationship ?? "") === "interested_applicant"),
-	);
+function stateBadge(row: JsonObject): string {
+	const assetState = objectValue(row.assetState);
+	const visibility = stringValue(assetState.visibility);
+	const state = stringValue(assetState.id, "unknown");
+	return visibility ? `${state} / ${visibility}` : state;
 }
 
-let applications: Array<JsonObject> = [];
-
-try {
-	const rawAssets = await listWorkflowMarketplaceAssets(store, user, { lane: "test" });
-	const marketplaceAssets = latestFirst(rawAssets.filter(isObjectRecord));
-	applications = myApplicationAssets(marketplaceAssets);
-} catch (error) {
-	console.error("[wf1-test] Failed to load WF1 test home application summary", error);
+function applicationStateLabel(row: JsonObject): string {
+	const applicationState = objectValue(row.applicationState);
+	return stringValue(applicationState.label);
 }
 
-const latestApplicationHref = applications[0] ? applicationHref(applications[0]) : "/test-corridor/wf1/marketplace";
+function descriptionFor(row: JsonObject): string {
+	const applicationState = objectValue(row.applicationState);
+	const description = stringValue(applicationState.description);
+	if (description) return description;
+
+	const relationship = stringValue(row.relationship);
+	if (relationship === "owner") return "You own this asset or application workspace.";
+	if (relationship === "renter") return "This protected owner-tenant workspace is available to you.";
+	if (relationship === "applicant") return "This application workspace is available to you.";
+	return "This workspace is available to you.";
+}
+
+let myWorkspaceIndex: JsonObject = { items: [], counts: {} };
+let myWorkspaceError = "";
+
+if (user?.id) {
+	try {
+		myWorkspaceIndex = await listMyWorkflowWorkspaces(store, user, { lane: "test", limit: 100 }) as unknown as JsonObject;
+	} catch (error) {
+		console.error("[wf1-test] Failed to load WF1 my workspaces", error);
+		myWorkspaceError = "Your workspaces could not be loaded.";
+	}
+}
+
+const myWorkspaces = arrayValue(myWorkspaceIndex.items);
+const latestWorkspaceHref = myWorkspaces[0] ? workspaceHref(myWorkspaces[0]) : "/test-corridor/wf1/marketplace";
+const counts = objectValue(myWorkspaceIndex.counts);
 ---
 
 <Wf1TestBase title="WF1 test corridor" description="WF1 test corridor">
@@ -92,7 +116,7 @@ const latestApplicationHref = applications[0] ? applicationHref(applications[0])
 					<p class="rental-kicker">WF1 Test Corridor</p>
 					<h1>Clean rentals, safely isolated.</h1>
 					<p class="rental-muted">
-						Test-lane assets, applications, task cards, gates, and projection-derived actions.
+						Test-lane assets, applications, owner-tenant workspaces, task cards, gates, and projection-derived actions.
 					</p>
 				</div>
 				<div class="wf1-actions">
@@ -101,7 +125,7 @@ const latestApplicationHref = applications[0] ? applicationHref(applications[0])
 					<a class="rental-button secondary" href="/test-corridor/wf1/owner/assets/new">Create asset</a>
 					{
 						user?.email ? (
-							<a class="rental-button secondary" href={latestApplicationHref}>My applications</a>
+							<a class="rental-button secondary" href={latestWorkspaceHref}>My workspaces</a>
 						) : null
 					}
 				</div>
@@ -109,17 +133,19 @@ const latestApplicationHref = applications[0] ? applicationHref(applications[0])
 		</div>
 	</section>
 
-	<section id="my-applications" class="rental-section compact-section">
+	<section id="my-workspaces" class="rental-section compact-section">
 		<div class="rental-shell">
 			<div class="rental-section-header">
 				<div>
-					<p class="rental-kicker">My test applications</p>
-					<h2>{applications.length ? "Latest first." : "Nothing yet."}</h2>
+					<p class="rental-kicker">My protected workspaces</p>
+					<h2>{myWorkspaces.length ? "Latest first." : user?.email ? "Nothing yet." : "Login to see your workspaces."}</h2>
 					<p class="rental-muted">
 						{
-							applications.length
-								? "Open the test flat you are already interacting with. The newest application stays on top."
-								: "Apply from the test marketplace. Your test application workspaces will appear here."
+							myWorkspaces.length
+								? `Owner: ${String(counts.owner ?? 0)} · Applicant: ${String(counts.applicant ?? 0)} · Tenant: ${String(counts.renter ?? 0)}`
+								: user?.email
+									? "Apply from the marketplace or create an asset. Accepted tenant workspaces stay visible here even after the flat leaves marketplace."
+									: "Login first. Your owner, applicant, and tenant/renter workspaces will appear here."
 						}
 					</p>
 				</div>
@@ -127,26 +153,42 @@ const latestApplicationHref = applications[0] ? applicationHref(applications[0])
 			</div>
 
 			{
-				applications.length ? (
-					<div class="application-grid">
-						{applications.map((asset) => (
-							<article class="rental-panel application-card">
-								<p class="rental-kicker">{String(asset.asset_kind ?? "asset")}</p>
-								<h3>
-									<a href={applicationHref(asset)}>{String(asset.title ?? "Untitled asset")}</a>
-								</h3>
-								<p class="rental-muted">{String(asset.location_label ?? "Location pending")}</p>
-								<div class="rental-badges">
-									<span class="rental-badge">Asset State: {String(asset.business_state ?? "listed")}</span>
-									<span class="rental-badge">{String(asset.visibility_state ?? "marketplace")}</span>
+				myWorkspaceError ? (
+					<div class="rental-panel empty-state">
+						<p class="rental-muted">{myWorkspaceError}</p>
+					</div>
+				) : myWorkspaces.length ? (
+					<div class="workspace-index-grid">
+						{myWorkspaces.map((row) => (
+							<article class:list={["rental-panel", "workspace-index-card", `role-${stringValue(row.relationship, "participant")}`]}>
+								<div>
+									<p class="rental-kicker">{roleLabel(row.relationship)} workspace</p>
+									<h3>
+										<a href={workspaceHref(row)}>{stringValue(row.assetTitle, "Untitled asset")}</a>
+									</h3>
+									<p class="rental-muted">{stringValue(row.locationLabel, "Location pending")}</p>
 								</div>
-								<a class="rental-button" href={applicationHref(asset)}>Open application workspace</a>
+
+								<div class="rental-badges">
+									<span class="rental-badge">Role: {roleLabel(row.relationship)}</span>
+									<span class="rental-badge">Asset: {stateBadge(row)}</span>
+									{applicationStateLabel(row) ? (
+										<span class="rental-badge">Application: {applicationStateLabel(row)}</span>
+									) : null}
+								</div>
+
+								<p class="rental-muted">{descriptionFor(row)}</p>
+								<a class="rental-button" href={workspaceHref(row)}>{workspaceActionLabel(row)}</a>
 							</article>
 						))}
 					</div>
 				) : (
 					<div class="rental-panel empty-state">
-						<p class="rental-muted">No test applications yet. Go to the test marketplace, open a listed flat, and express interest.</p>
+						<p class="rental-muted">
+							{user?.email
+								? "No protected workspace yet. Go to the test marketplace, open a listed flat, and express interest."
+								: "Login to see owner, applicant, and tenant workspaces."}
+						</p>
 						<a class="rental-button" href="/test-corridor/wf1/marketplace">Open marketplace</a>
 					</div>
 				)
@@ -170,25 +212,39 @@ const latestApplicationHref = applications[0] ? applicationHref(applications[0])
 		padding-top: 24px;
 	}
 
-	.application-grid {
+	.workspace-index-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 		gap: 16px;
 	}
 
-	.application-card,
+	.workspace-index-card,
 	.empty-state {
 		display: grid;
 		gap: 12px;
 		align-content: start;
 	}
 
-	.application-card h3 a {
+	.workspace-index-card h3 a {
 		color: inherit;
 		text-decoration: none;
 	}
 
-	.application-card h3 a:hover {
+	.workspace-index-card h3 a:hover {
 		text-decoration: underline;
+	}
+
+	.workspace-index-card.role-renter {
+		border-color: rgba(22, 163, 74, 0.42);
+		background:
+			linear-gradient(180deg, rgba(240, 253, 244, 0.76), rgba(255, 255, 255, 0.96)),
+			var(--r-panel);
+	}
+
+	.workspace-index-card.role-applicant {
+		border-color: rgba(234, 88, 12, 0.42);
+		background:
+			linear-gradient(180deg, rgba(255, 247, 237, 0.76), rgba(255, 255, 255, 0.96)),
+			var(--r-panel);
 	}
 </style>

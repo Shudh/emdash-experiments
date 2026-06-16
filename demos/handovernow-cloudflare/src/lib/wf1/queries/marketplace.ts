@@ -13,11 +13,12 @@ import {
 } from "../store/collections.js";
 import { actorRoleFor } from "../store/repository.js";
 
-type MarketplaceViewerRelationship = "anonymous" | "owner" | "interested_applicant" | "logged_in";
+type MarketplaceViewerRelationship = "anonymous" | "owner" | "applicant" | "renter" | "interested_applicant" | "logged_in";
 
 export type MarketplaceQueryOptions = {
 	lane?: Wf1Lane;
 };
+
 export async function listWorkflowMarketplaceAssets(
 	store: DomainStore,
 	user: UserContext | null,
@@ -52,7 +53,7 @@ export async function getWorkflowMarketplaceAsset(
 
 	if (!isAssetVisibleInLane(asset, lane)) {
 		return null;
-}
+	}
 
 	const interest = user
 		? await store.findOne(WORKFLOW_RENTAL_COLLECTIONS.INTERESTS, {
@@ -113,40 +114,56 @@ function viewerAsset(
 	interest: DomainRow | null,
 	workflowInstance: DomainRow | null,
 ) {
-	const canExpressInterest = role !== "anonymous" && role !== "owner" && !interest;
+	const canExpressInterest = role !== "anonymous" && role !== "owner" && role !== "applicant" && role !== "renter" && !interest;
 	const relationship: MarketplaceViewerRelationship =
 		role === "owner"
 			? "owner"
-			: interest
-				? "interested_applicant"
-				: role === "anonymous"
-					? "anonymous"
-					: "logged_in";
+			: role === "renter"
+				? "renter"
+				: role === "applicant" && interest
+					? "interested_applicant"
+					: role === "anonymous"
+						? "anonymous"
+						: "logged_in";
 
 	const viewer =
 		relationship === "owner"
 			? {
 					relationship,
+					role,
 					canExpressInterest: false,
 					message: "This is your asset",
 				}
-			: relationship === "interested_applicant"
+			: relationship === "renter"
 				? {
 						relationship,
+						role,
 						canExpressInterest: false,
-						interestId: interest?.id ?? "",
+						interestId: interest?.id ?? asString(asset.active_interest_id),
 						interestState: asString(interest?.interest_state),
-						workflowInstanceId: workflowInstance?.id ?? "",
+						workflowInstanceId: workflowInstance?.id ?? asString(asset.active_workflow_instance_id),
+						message: "You are the tenant for this asset",
 					}
-				: relationship === "anonymous"
+				: relationship === "interested_applicant"
 					? {
 							relationship,
+							role,
 							canExpressInterest: false,
+							interestId: interest?.id ?? "",
+							interestState: asString(interest?.interest_state),
+							workflowInstanceId: workflowInstance?.id ?? "",
 						}
-					: {
-							relationship,
-							canExpressInterest,
-						};
+					: relationship === "anonymous"
+						? {
+								relationship,
+								role,
+								canExpressInterest: false,
+							}
+						: {
+								relationship,
+								role,
+								canExpressInterest,
+							};
 
 	return { ...asset, viewer };
 }

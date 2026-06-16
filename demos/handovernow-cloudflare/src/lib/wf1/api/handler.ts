@@ -19,8 +19,11 @@ import {
 	getWorkflowMarketplaceAsset,
 	listWorkflowMarketplaceAssets,
 } from "../queries/marketplace.js";
+import { listMyWorkflowWorkspaces } from "../queries/my-workspaces.js";
 import { getWorkflowOwnerDashboard } from "../queries/owner-dashboard.js";
 import { getWf1WorkflowInstanceWorkspace } from "../queries/workspace-instance.js";
+import { assertWf1RouteLane } from "../routing/lane-guard.js";
+import { wf1WorkspaceHref, type Wf1Lane } from "../routing/lane.js";
 import { validateLeadProtection } from "../security/lead-guard.js";
 import type { RuntimeEnv } from "../security/runtime-env.js";
 import { WORKFLOW_RENTAL_COLLECTIONS } from "../store/collections.js";
@@ -32,13 +35,11 @@ import {
 	parseRecord,
 	stringField,
 } from "./contracts.js";
-import { assertWf1RouteLane } from "../routing/lane-guard.js";
-import { wf1WorkspaceHref, type Wf1Lane } from "../routing/lane.js";
 
-
-// const MAX_WF1_JSON_BYTES = 32 * 1024;
 const MAX_WF1_DEFAULT_JSON_BYTES = 256 * 1024;
 const MAX_WF1_LEAD_JSON_BYTES = 32 * 1024;
+const MAX_WF1_INDEX_LIMIT = 300;
+
 export type WorkflowRentalRouteInput = {
 	request: Request;
 	path: string;
@@ -74,9 +75,19 @@ export async function handleWorkflowRentalRoute(
 			if (!details) throw new DomainError("ASSET_NOT_FOUND", "Asset not found", 404);
 			return jsonOk(details);
 		}
+
 		await assertWf1RouteLane(input.store, lane, input.request.method, parts, body);
 
 		const user = requireUser(input.user);
+
+		if (input.request.method === "GET" && input.path === "my/workspaces") {
+			return jsonOk(
+				await listMyWorkflowWorkspaces(input.store, user, {
+					lane,
+					limit: numberQueryParam(input.request, "limit", 100, MAX_WF1_INDEX_LIMIT),
+				}),
+			);
+		}
 
 		if (input.request.method === "GET" && input.path === "owner/dashboard") {
 			return jsonOk(await getWorkflowOwnerDashboard(input.store, user, { lane }));
@@ -362,6 +373,7 @@ function isExpressInterestRoute(method: string, parts: string[]): boolean {
 		parts[3] === "express-interest"
 	);
 }
+
 async function readJson(request: Request, maxBytes: number): Promise<unknown> {
 	const rawLength = request.headers.get("content-length");
 
@@ -398,6 +410,15 @@ function asOptionalString(value: unknown): string | undefined {
 
 function hasOwn(object: object, key: PropertyKey): boolean {
 	return Object.hasOwn(object, key);
+}
+
+function numberQueryParam(request: Request, name: string, fallback: number, max: number): number {
+	const url = new URL(request.url);
+	const raw = url.searchParams.get(name);
+	if (!raw) return fallback;
+	const value = Number(raw);
+	if (!Number.isFinite(value)) return fallback;
+	return Math.min(Math.max(Math.trunc(value), 1), max);
 }
 
 function jsonOk(data: unknown, status = 200): Response {
