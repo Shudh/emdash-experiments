@@ -30,7 +30,14 @@ import { listAdminPublishQueue } from "../queries/admin-publish-queue.js";
 import { getWf1WorkflowInstanceWorkspace } from "../queries/workspace-instance.js";
 import { assertWf1RouteLane } from "../routing/lane-guard.js";
 import { wf1WorkspaceHref, type Wf1Lane } from "../routing/lane.js";
+import {
+	assertAssetCreationBodyGuarded,
+	assertAssetDraftTokenForUser,
+	assertMarketplaceReviewAssetReady,
+	issueGuardedAssetDraftIntent,
+} from "../security/asset-creation-guard.js";
 import { validateLeadProtection } from "../security/lead-guard.js";
+import { assertWf1ExposedPostRateLimit } from "../security/rate-limit.js";
 import type { RuntimeEnv } from "../security/runtime-env.js";
 import { WORKFLOW_RENTAL_COLLECTIONS } from "../store/collections.js";
 import { actorRoleFor, getAssetOrThrow, getInterestOrThrow } from "../store/repository.js";
@@ -65,6 +72,8 @@ export async function handleWorkflowRentalRoute(
 		const parts = input.path.split("/").filter(Boolean);
 		const lane = input.lane ?? "public";
 
+		await assertWf1ExposedPostRateLimit(input.request, input.path);
+
 		if (input.request.method === "GET" && input.path === "marketplace/assets") {
 			return jsonOk({ items: await listWorkflowMarketplaceAssets(input.store, input.user, { lane }) });
 		}
@@ -90,6 +99,7 @@ export async function handleWorkflowRentalRoute(
 					user,
 					lane,
 					emdash: input.emdash,
+					env: input.env,
 				}),
 				201,
 			);
@@ -138,7 +148,30 @@ export async function handleWorkflowRentalRoute(
 			);
 		}
 
+		if (input.request.method === "POST" && input.path === "owner/assets/draft-intent") {
+			return jsonOk(
+				await issueGuardedAssetDraftIntent({
+					request: input.request,
+					body,
+					user,
+					lane,
+					env: input.env,
+				}),
+				201,
+			);
+		}
+
 		if (input.request.method === "POST" && input.path === "owner/assets/add") {
+			const assetCreateGuard = assertAssetCreationBodyGuarded({ body, lane });
+
+			await assertAssetDraftTokenForUser({
+				env: input.env,
+				user,
+				lane,
+				draftId: assetCreateGuard.draftId,
+				assetDraftToken: assetCreateGuard.assetDraftToken,
+			});
+
 			return jsonOk(
 				await createWorkflowAsset(input.store, user, {
 					assetKind: stringField(body, "assetKind"),
@@ -147,7 +180,7 @@ export async function handleWorkflowRentalRoute(
 					publicPrice: optionalNumber(body, "publicPrice"),
 					currency: asOptionalString(body.currency) ?? "INR",
 					ownerConditionsSpec: optionalRecord(body, "ownerConditionsSpec"),
-					configSpec: lane === "test" ? withTestLaneConfigSpec({}, user) : undefined,
+					configSpec: lane === "test" ? withTestLaneConfigSpec(assetCreateGuard.configSpec, user) : assetCreateGuard.configSpec,
 				}),
 				201,
 			);
@@ -195,6 +228,8 @@ export async function handleWorkflowRentalRoute(
 			}
 
 			if (parts[3] === "request-marketplace-review") {
+				await assertMarketplaceReviewAssetReady(input.store, user, parts[2]);
+
 				return jsonOk(
 					await requestMarketplaceReview(input.store, user, parts[2], {
 						lane,

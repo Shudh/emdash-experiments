@@ -517,6 +517,7 @@ export default function PrescreenConversationCard(props: { config: PrescreenConf
 	const phase = prescreenPhaseFor(config, state);
 	const activeQuestion = activeQuestionFor(config, state);
 	const showTurnstile = phase === "final_check" && config.turnstileSiteKey !== "" && config.canSubmit;
+	const finalSubmitReady = !turnstileTokenIsRequired(config) || turnstileTokenIsPresent(state);
 
 	trace.end({ phase, activeQuestionKey: activeQuestion?.key ?? "", showTurnstile, botIsThinking });
 
@@ -565,9 +566,13 @@ export default function PrescreenConversationCard(props: { config: PrescreenConf
 							aria-label="Human check answer"
 						/>
 						<button className="hn-chatbotify-button secondary" type="button" onClick={goBack}>Back</button>
-						<button className="hn-chatbotify-button" type="button" disabled={submitState.busy} onClick={submitApplication}>
-							{submitState.busy ? "Submitting..." : config.canSubmit ? "Submit application" : "Login and submit"}
-						</button>
+						{config.canSubmit && !finalSubmitReady ? (
+							<span className="hn-chatbotify-muted">Complete verification to submit.</span>
+						) : (
+							<button className="hn-chatbotify-button" type="button" disabled={submitState.busy} onClick={submitApplication}>
+								{submitState.busy ? "Submitting..." : config.canSubmit ? "Submit application" : "Continue securely"}
+							</button>
+						)}
 					</div>
 				)}
 			</div>

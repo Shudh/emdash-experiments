@@ -131,6 +131,10 @@ export async function assertWf1RouteLane(
 		return;
 	}
 
+	if (method === "POST" && parts[0] === "owner" && parts[1] === "assets" && parts[2] === "draft-intent") {
+		return;
+	}
+
 	if (method === "POST" && parts[0] === "owner" && parts[1] === "assets" && parts[2] === "add") {
 		return;
 	}

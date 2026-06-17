@@ -14,7 +14,7 @@ function localStorageIsAvailable(): boolean {
 	}
 
 	try {
-		return window.localStorage !== undefined && window.localStorage !== null;
+		return window.sessionStorage !== undefined && window.sessionStorage !== null;
 	} catch {
 		return false;
 	}
@@ -40,7 +40,7 @@ function removeStoredValue(storageKey: string, reason: string): void {
 	}
 
 	try {
-		window.localStorage.removeItem(storageKey);
+		window.sessionStorage.removeItem(storageKey);
 		trace.end({ removed: true });
 	} catch (error) {
 		trace.fail(error, { removed: false });
@@ -53,7 +53,7 @@ function readStoredRawValue(storageKey: string): string | null {
 	}
 
 	try {
-		return window.localStorage.getItem(storageKey);
+		return window.sessionStorage.getItem(storageKey);
 	} catch {
 		return null;
 	}
@@ -204,7 +204,7 @@ export function savePrescreenState(config: PrescreenConfig, state: PrescreenStat
 	}
 
 	try {
-		window.localStorage.setItem(config.storageKey, serialized);
+		window.sessionStorage.setItem(config.storageKey, serialized);
 		trace.end({ saved: true, serializedLength: serialized.length });
 	} catch (error) {
 		trace.fail(error, { saved: false, serializedLength: serialized.length });

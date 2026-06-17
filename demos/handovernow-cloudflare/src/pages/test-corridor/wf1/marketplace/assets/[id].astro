@@ -298,10 +298,12 @@ const prescreenStartedAt = new Date().toISOString();
 								</div>
 							) : humanCheckChallenge ? (
 								<div class="rental-panel application-panel">
-									{canExpressInterest ? (
+									{canExpressInterest || relationship === "anonymous" ? (
 										<form
 											class="express-interest-form"
 											data-express-interest-form
+											data-express-can-submit={canExpressInterest ? "true" : "false"}
+											data-login-href={loginHref}
 											action={expressInterestAction}
 											method="post"
 										>
@@ -375,7 +377,7 @@ const prescreenStartedAt = new Date().toISOString();
 													<textarea id="message" name="message">I am interested in this property.</textarea>
 												</div>
 
-												{turnstileSiteKey !== "" ? (
+												{turnstileSiteKey !== "" && canExpressInterest ? (
 													<div class="rental-field full">
 														<div
 															class="express-interest-turnstile"
@@ -390,8 +392,8 @@ const prescreenStartedAt = new Date().toISOString();
 											</div>
 
 											<div class="application-action-row">
-												<button class="rental-button" type="submit" data-express-interest-submit>
-													Express interest
+												<button class="rental-button" type="submit" data-express-interest-submit hidden={turnstileSiteKey !== ""} disabled={turnstileSiteKey !== ""}>
+													{canExpressInterest ? "Express interest" : "Continue securely"}
 												</button>
 												<button class="rental-button secondary" type="button" data-chatbotify-open>
 													Chat with agent
@@ -404,14 +406,14 @@ const prescreenStartedAt = new Date().toISOString();
 										<div class="login-application-panel">
 											<div>
 												<p class="rental-kicker">Application</p>
-												<h2>Login required</h2>
+												<h2>Continue when ready</h2>
 												<p class="rental-muted">
-													Login to express interest, or chat with the HandoverNow agent and continue after login.
+													You can answer screening questions now. Your answers are saved in this browser; continue securely only when submitting.
 												</p>
 											</div>
 
 											<div class="application-action-row">
-												<a class="rental-button" href={loginHref}>Login or register</a>
+												<a class="rental-button" href={loginHref}>Continue securely</a>
 												<button class="rental-button secondary" type="button" data-chatbotify-open>
 													Chat with agent
 												</button>
@@ -479,6 +481,7 @@ const prescreenStartedAt = new Date().toISOString();
 		const INDEX_PATTERN = /^\d+$/;
 		const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 		const MIN_PRESCREEN_SECONDS = 8;
+		const EXPRESS_DRAFT_KEY = "hn:wf1:test:express-interest:normal:v1";
 
 		function assignNestedValue(target, key, value) {
 			const existing = target[key];
@@ -650,6 +653,37 @@ const prescreenStartedAt = new Date().toISOString();
 			return "";
 		}
 
+		function saveNormalExpressDraft(form) {
+			const fields = {};
+			for (const control of form.querySelectorAll("input, textarea, select")) {
+				const key = control.name || control.id;
+				if (!key) continue;
+				if (control.type === "password") continue;
+				if (control.type === "checkbox" || control.type === "radio") {
+					fields[key] = { checked: Boolean(control.checked), value: control.value };
+				} else {
+					fields[key] = { value: control.value };
+				}
+			}
+			try { sessionStorage.setItem(EXPRESS_DRAFT_KEY, JSON.stringify({ savedAt: Date.now(), fields })); } catch {}
+		}
+
+		function restoreNormalExpressDraft(form) {
+			let parsed = null;
+			try { parsed = JSON.parse(sessionStorage.getItem(EXPRESS_DRAFT_KEY) || "null"); } catch {}
+			if (!parsed || !parsed.fields) return;
+			for (const control of form.querySelectorAll("input, textarea, select")) {
+				const key = control.name || control.id;
+				const saved = parsed.fields[key];
+				if (!saved) continue;
+				if (control.type === "checkbox" || control.type === "radio") {
+					control.checked = Boolean(saved.checked);
+				} else if (typeof saved.value === "string" && !control.value) {
+					control.value = saved.value;
+				}
+			}
+		}
+
 		function initExpressInterestForm() {
 			const form = document.querySelector("[data-express-interest-form]");
 
@@ -659,6 +693,10 @@ const prescreenStartedAt = new Date().toISOString();
 
 			const status = form.querySelector("[data-express-interest-status]");
 			const submit = form.querySelector("[data-express-interest-submit]");
+			const canSubmit = form.dataset.expressCanSubmit === "true";
+			restoreNormalExpressDraft(form);
+			form.addEventListener("input", function () { saveNormalExpressDraft(form); }, { passive: true });
+			form.addEventListener("change", function () { saveNormalExpressDraft(form); }, { passive: true });
 
 			form.addEventListener("submit", async function (event) {
 				event.preventDefault();
@@ -666,6 +704,13 @@ const prescreenStartedAt = new Date().toISOString();
 				if (status instanceof HTMLElement) {
 					status.removeAttribute("data-state");
 					status.textContent = "";
+				}
+
+				if (!canSubmit) {
+					saveNormalExpressDraft(form);
+					if (status instanceof HTMLElement) status.textContent = "Your answers are saved. Continuing securely...";
+					location.href = form.dataset.loginHref || "/login";
+					return;
 				}
 
 				const timingError = validateClientTiming(form);
@@ -768,10 +813,21 @@ const prescreenStartedAt = new Date().toISOString();
 			const turnstileSlot = document.querySelector("[data-express-turnstile]");
 			const tokenInput = document.querySelector("[data-express-turnstile-token]");
 			const status = document.querySelector("[data-express-turnstile-status]");
+			const submit = document.querySelector("[data-express-interest-submit]");
+
+			function setSubmitReady(ready, message) {
+				if (submit instanceof HTMLButtonElement) {
+					submit.disabled = !ready;
+					submit.hidden = !ready;
+				}
+				if (status instanceof HTMLElement && message) status.textContent = message;
+			}
 
 			if (!(turnstileSlot instanceof HTMLElement)) {
 				return;
 			}
+
+			setSubmitReady(false, "Complete verification to continue.");
 
 			if (!(tokenInput instanceof HTMLInputElement)) {
 				return;
@@ -795,19 +851,19 @@ const prescreenStartedAt = new Date().toISOString();
 						callback: function (token) {
 							tokenInput.value = token;
 							if (status instanceof HTMLElement) {
-								status.textContent = "Spam verification complete.";
+								setSubmitReady(true, "Spam verification complete.");
 							}
 						},
 						"expired-callback": function () {
 							tokenInput.value = "";
 							if (status instanceof HTMLElement) {
-								status.textContent = "Spam verification expired. Please verify again.";
+								setSubmitReady(false, "Spam verification expired. Please verify again.");
 							}
 						},
 						"error-callback": function () {
 							tokenInput.value = "";
 							if (status instanceof HTMLElement) {
-								status.textContent = "Spam verification failed. Please retry.";
+								setSubmitReady(false, "Spam verification failed. Please retry.");
 							}
 						},
 					});

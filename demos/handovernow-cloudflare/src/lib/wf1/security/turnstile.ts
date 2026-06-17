@@ -31,6 +31,7 @@ export async function verifyTurnstile(
 	secretKey: string,
 	httpFetch: (url: string, init?: RequestInit) => Promise<Response>,
 	remoteIp?: string | null,
+	idempotencyKey?: string | null,
 ): Promise<TurnstileResult> {
 	const body: Record<string, string> = {
 		secret: secretKey,
@@ -39,6 +40,10 @@ export async function verifyTurnstile(
 
 	if (remoteIp) {
 		body.remoteip = remoteIp;
+	}
+
+	if (idempotencyKey) {
+		body.idempotency_key = idempotencyKey;
 	}
 
 	const response = await httpFetch(VERIFY_URL, {

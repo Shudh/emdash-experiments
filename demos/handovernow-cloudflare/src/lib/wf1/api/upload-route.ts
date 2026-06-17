@@ -1,6 +1,8 @@
 import { DomainError, asString } from "../../domain/types.js";
 import type { DomainStore, UserContext } from "../../domain/types.js";
 import type { Wf1Lane } from "../routing/lane.js";
+import { assertAssetDraftTokenForUser } from "../security/asset-creation-guard.js";
+import type { RuntimeEnv } from "../security/runtime-env.js";
 import { WORKFLOW_RENTAL_COLLECTIONS } from "../store/collections.js";
 import { actorRoleFor, getAssetOrThrow, getInterestOrThrow } from "../store/repository.js";
 import {
@@ -30,6 +32,7 @@ export async function handleWf1UploadRoute(input: {
 	user: UserContext;
 	lane: Wf1Lane;
 	emdash: Wf1EmDashMediaRuntime | null | undefined;
+	env?: RuntimeEnv;
 }): Promise<Wf1UploadRouteResult> {
 	assertWf1UploadContentLength(input.request);
 	requireWf1MediaRuntime(input.emdash);
@@ -37,6 +40,17 @@ export async function handleWf1UploadRoute(input: {
 	const formData = await input.request.formData();
 	const file = fileFromFormData(formData);
 	const formInput = parseWf1UploadFormInput(formData);
+
+	if (formInput.purpose === "asset_draft_media") {
+		await assertAssetDraftTokenForUser({
+			env: input.env,
+			user: input.user,
+			lane: input.lane,
+			draftId: formInput.draftId ?? "",
+			assetDraftToken: formInput.assetDraftToken ?? "",
+		});
+	}
+
 	const authorization = defineStoreOnAuthorization(
 		await authorizeWf1Upload(input.store, input.user, input.lane, formInput),
 		input.store,

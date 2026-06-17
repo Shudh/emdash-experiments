@@ -27,7 +27,9 @@ export function isAllowedTestLaneHost(request: Request): boolean {
 }
 
 export function applyTestLaneNoStoreHeaders(headers: Headers): void {
-	headers.set("cache-control", "no-store");
+	headers.set("cache-control", "no-store, no-cache, max-age=0, must-revalidate");
+	headers.set("pragma", "no-cache");
+	headers.set("expires", "0");
 	headers.set("x-robots-tag", "noindex, nofollow");
 }
 

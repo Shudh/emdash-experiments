@@ -77,6 +77,10 @@ const resolvedDraftId = draftId || (purpose === "asset_draft_media" ? crypto.ran
 		appendIfPresent(body, "attachmentLabel", root.dataset.attachmentLabel);
 		appendIfPresent(body, "documentKind", root.dataset.documentKind);
 
+		const ownerForm = root.closest("form");
+		const assetDraftToken = ownerForm?.querySelector<HTMLInputElement>("[name='assetDraftToken']")?.value;
+		appendIfPresent(body, "assetDraftToken", assetDraftToken);
+
 		const uploadUrl = root.dataset.uploadUrl || "/api/wf1-rental/uploads";
 		const response = await fetch(uploadUrl, {
 			method: "POST",

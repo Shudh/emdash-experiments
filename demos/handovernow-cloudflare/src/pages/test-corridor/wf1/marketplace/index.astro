@@ -85,12 +85,6 @@ function viewerFor(asset: AssetRow) {
 		: {};
 }
 
-function configFor(asset: AssetRow) {
-	return asset.config_spec && typeof asset.config_spec === "object" && !Array.isArray(asset.config_spec)
-		? (asset.config_spec as Record<string, unknown>)
-		: {};
-}
-
 function numberTime(value: unknown): number {
 	if (typeof value !== "string") return 0;
 

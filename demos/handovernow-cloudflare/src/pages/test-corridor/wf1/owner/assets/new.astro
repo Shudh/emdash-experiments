@@ -4,6 +4,8 @@ import Wf1MediaUpload from "../../../../../components/wf1-test/Wf1MediaUpload.as
 import Wf1OwnerScreeningQuestionBuilderIsland from "../../../../../components/wf1/Wf1OwnerScreeningQuestionBuilderIsland.astro";
 
 import Wf1TestLaneBanner from "../../../../../components/wf1-test/Wf1TestLaneBanner.astro";
+import { getRuntimeEnvFromLocals } from "../../../../../lib/wf1/security/runtime-env.js";
+import { publicTurnstileSiteKeyFromEnv } from "../../../../../lib/wf1/security/turnstile.js";
 
 import {
 	applyTestLaneNoStoreHeaders,
@@ -22,6 +24,9 @@ applyTestLaneNoStoreHeaders(Astro.response.headers);
 
 const assetDraftId = crypto.randomUUID();
 const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
+const runtimeEnv = getRuntimeEnvFromLocals(Astro.locals);
+const turnstileSiteKey = publicTurnstileSiteKeyFromEnv(runtimeEnv) ?? "";
+const formStartedAt = new Date().toISOString();
 ---
 
 <Wf1TestBase title="Add asset under management" description="Create a managed rental asset">
@@ -39,7 +44,15 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 				</p>
 			</div>
 
-			<form class="rental-panel create-form" id="asset-form" data-asset-draft-id={assetDraftId} data-wf1-upload-url={wf1UploadUrl}>
+			<form class="rental-panel create-form" id="asset-form" data-asset-draft-id={assetDraftId} data-wf1-upload-url={wf1UploadUrl} data-turnstile-site-key={turnstileSiteKey} data-form-started-at={formStartedAt} data-asset-create-locked="true">
+				<input type="hidden" name="assetDraftToken" value="" data-asset-draft-token />
+				<input type="hidden" name="draftId" value={assetDraftId} />
+				<input type="hidden" name="formStartedAt" value={formStartedAt} />
+				<input class="hn-hidden-trap-input" type="text" name="companyWebsite" autocomplete="off" tabindex="-1" aria-hidden="true" value="" hidden style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;" />
+				<div class="asset-draft-guard" data-hn-asset-draft-guard-v1>
+					<p class="rental-muted" data-asset-draft-guard-status>Your typed listing is saved in this browser. Verification unlocks photo upload and review submission.</p>
+					<div data-asset-draft-turnstile data-site-key={turnstileSiteKey}></div>
+				</div>
 				<div class="rental-form-grid">
 					<div class="rental-field">
 						<label for="assetKind">Asset kind</label>
@@ -97,8 +110,9 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 
 					<Wf1MediaUpload
 						prefix="assetMedia"
-						label="Primary property image or PDF"
-						required={false}
+						label="Primary property image"
+						required={true}
+						accept="image/*"
 						uploadUrl={wf1UploadUrl}
 						purpose="asset_draft_media"
 						draftId={assetDraftId}
@@ -107,8 +121,8 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 
 					<div class="rental-field">
 						<label>
-							<input name="publish" type="checkbox" />
-							Request marketplace review
+							<input name="publish" type="checkbox" checked hidden />
+							Marketplace review is required before listing
 						</label>
 					</div>
 				</div>
@@ -135,156 +149,30 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 					<div class="inventory-editor" id="inventory-editor"></div>
 				</section>
 
-				<button class="rental-button" type="submit">Create asset</button>
+				<button class="rental-button" type="submit" hidden disabled data-asset-create-submit>Create asset</button>
 				<p class="rental-status" id="asset-status"></p>
 			</form>
 		</div>
 	</section>
 
 
-<script is:inline data-hn-create-asset-ux-v2>
-(() => {
-	const DRAFT_KEY = "hn:wf1:test:create-asset:draft:v2";
-	const NOTICE_CLASS = "hn-create-asset-auth-notice";
-
-	function loggedIn() {
-		const bodyText = document.body.textContent || "";
-		return bodyText.includes("Logout") || /Welcome\s+[^\s@]+@[^\s@]+/.test(bodyText);
-	}
-
-	function safeLoginUrl() {
-		return `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
-	}
-
-	function candidateForms() {
-		return Array.from(document.querySelectorAll("form")).filter((form) => form.querySelector("input, textarea, select"));
-	}
-
-	function mainForm() {
-		const forms = candidateForms();
-		return forms.find((form) => /asset|flat|property|marketplace|bedroom|furnishing/i.test(form.textContent || "")) || forms[0] || null;
-	}
-
-	function controlsFor(form) {
-		return Array.from(form.querySelectorAll("input, textarea, select")).filter((control) => {
-			if (!control.name && !control.id) return false;
-			if (control.type === "file") return false;
-			if (control.type === "password") return false;
-			return true;
-		});
-	}
-
-	function saveDraft() {
-		const form = mainForm();
-		if (!form) return;
-		const fields = {};
-		for (const control of controlsFor(form)) {
-			const key = control.name || control.id;
-			if (!key) continue;
-			if (control.type === "checkbox" || control.type === "radio") {
-				fields[key] = { checked: Boolean(control.checked), value: control.value };
-			} else {
-				fields[key] = { value: control.value };
-			}
-		}
-		try {
-			sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ savedAt: Date.now(), fields }));
-		} catch {}
-	}
-
-	function restoreDraft() {
-		const form = mainForm();
-		if (!form) return;
-		let parsed = null;
-		try {
-			parsed = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null");
-		} catch {}
-		if (!parsed || !parsed.fields) return;
-		for (const control of controlsFor(form)) {
-			const key = control.name || control.id;
-			const saved = parsed.fields[key];
-			if (!saved) continue;
-			if (control.type === "checkbox" || control.type === "radio") {
-				control.checked = Boolean(saved.checked);
-			} else if (typeof saved.value === "string" && !control.value) {
-				control.value = saved.value;
-			}
-		}
-		showNotice("We restored your saved form after login. Please reselect the photo/PDF, because browsers do not restore file inputs for security.");
-	}
-
-	function showNotice(message) {
-		const form = mainForm();
-		if (!form) return;
-		let notice = document.querySelector(`.${NOTICE_CLASS}`);
-		if (!notice) {
-			notice = document.createElement("div");
-			notice.className = NOTICE_CLASS;
-			form.prepend(notice);
-		}
-		notice.textContent = message;
-	}
-
-	function guardLogin(event, message) {
-		if (loggedIn()) return false;
-		event.preventDefault();
-		saveDraft();
-		showNotice(message);
-		setTimeout(() => {
-			location.href = safeLoginUrl();
-		}, 120);
-		return true;
-	}
-
-	function improveMandatoryReviewCheckbox() {
-		for (const checkbox of document.querySelectorAll("input[type='checkbox']")) {
-			const label = checkbox.closest("label") || checkbox.parentElement;
-			const labelText = label?.textContent || "";
-			if (!/request marketplace review/i.test(labelText)) continue;
-			checkbox.checked = true;
-			checkbox.style.position = "absolute";
-			checkbox.style.opacity = "0";
-			checkbox.style.pointerEvents = "none";
-			if (label && !label.querySelector("[data-review-required-pill]")) {
-				const pill = document.createElement("span");
-				pill.dataset.reviewRequiredPill = "true";
-				pill.className = "hn-review-required-pill";
-				pill.textContent = "Marketplace review is required before listing";
-				label.textContent = "";
-				label.append(checkbox, pill);
-			}
-		}
-	}
-
-	function attachGuards() {
-		const form = mainForm();
-		if (!form) return;
-
-		form.addEventListener("input", saveDraft, { passive: true });
-		form.addEventListener("change", saveDraft, { passive: true });
-
-		for (const fileInput of form.querySelectorAll("input[type='file']")) {
-			fileInput.addEventListener("click", (event) => {
-				guardLogin(event, "Login is needed before photo/PDF upload. Your typed listing details are saved and will be restored after login.");
-			});
-		}
-
-		form.addEventListener("submit", (event) => {
-			guardLogin(event, "Login is needed before sending the asset for marketplace review. Your typed listing details are saved and will be restored after login.");
-		});
-
-		if (!loggedIn()) {
-			showNotice("You can fill the listing now. Login is needed only before upload or final review request; typed fields are saved in this browser.");
-		}
-	}
-
-	restoreDraft();
-	improveMandatoryReviewCheckbox();
-	attachGuards();
-})();
-</script>
-
 <style is:global>
+
+	.hn-hidden-trap-input {
+		position: absolute !important;
+		left: -10000px !important;
+		top: auto !important;
+		width: 1px !important;
+		height: 1px !important;
+		overflow: hidden !important;
+		opacity: 0 !important;
+		pointer-events: none !important;
+	}
+
+	[data-asset-create-locked="true"] input[type="file"],
+	[data-asset-create-locked="true"] button[type="submit"] {
+		display: none !important;
+	}
 	.hn-create-asset-auth-notice {
 		border: 1px solid rgba(234, 88, 12, 0.35);
 		border-radius: var(--r-radius);
@@ -317,6 +205,269 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 	const addStarterInventoryButton = document.querySelector<HTMLButtonElement>("#add-starter-inventory");
 	const assetDraftId = form?.dataset.assetDraftId ?? crypto.randomUUID();
 	const wf1UploadUrl = form?.dataset.wf1UploadUrl ?? "/test-corridor/api/wf1-rental/uploads";
+
+	const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+	const CREATE_DRAFT_KEY = "hn:wf1:test:create-asset:login-redirect:v4";
+	const CREATE_DRAFT_SCHEMA_VERSION = 4;
+
+	type BrowserWindowWithTurnstile = Window & {
+		turnstile?: {
+			render: (element: HTMLElement, options: Record<string, unknown>) => string;
+		};
+	};
+
+	function browserTurnstile() {
+		return (window as BrowserWindowWithTurnstile).turnstile;
+	}
+
+	function createAssetControls() {
+		return {
+			fileInputs: [...document.querySelectorAll<HTMLInputElement>("#asset-form input[type='file']")],
+			submitButton: document.querySelector<HTMLButtonElement>("#asset-form button[type='submit']"),
+			status: document.querySelector<HTMLElement>("[data-asset-draft-guard-status]"),
+			turnstileSlot: document.querySelector<HTMLElement>("[data-asset-draft-turnstile]"),
+			tokenInput: document.querySelector<HTMLInputElement>("[data-asset-draft-token]"),
+		};
+	}
+
+	function userIsLoggedIn() {
+		const bodyText = document.body.textContent || "";
+		return bodyText.includes("Logout") || /Welcome\s+[^\s@]+@[^\s@]+/.test(bodyText);
+	}
+
+
+	const CREATE_DRAFT_ALLOWED_FIELD_NAMES = new Set([
+		"assetKind",
+		"title",
+		"locationLabel",
+		"publicPrice",
+		"minimumMonths",
+		"bedrooms",
+		"furnishing",
+		"walls",
+		"depositPolicy",
+		"preScreenQuestionsJson",
+		"publish",
+	]);
+
+	const CREATE_DRAFT_ALLOWED_FIELD_PREFIXES = ["inventory."];
+
+	function createAssetDraftKeyForControl(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
+		const key = control.name || control.id;
+		if (!key) return "";
+		if (CREATE_DRAFT_ALLOWED_FIELD_NAMES.has(key)) return key;
+		if (CREATE_DRAFT_ALLOWED_FIELD_PREFIXES.some((prefix) => key.startsWith(prefix))) return key;
+		return "";
+	}
+
+	function purgeOldCreateAssetDrafts() {
+		for (const storage of [window.sessionStorage, window.localStorage]) {
+			for (const key of Object.keys(storage)) {
+				if (key === CREATE_DRAFT_KEY) continue;
+				if (key.startsWith("hn:wf1:test:create-asset")) storage.removeItem(key);
+			}
+		}
+	}
+
+	function draftControlHasMeaningfulValue(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) {
+		if (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")) {
+			return control.checked;
+		}
+		return control.value.trim() !== "";
+	}
+
+	function saveCreateAssetDraft() {
+		if (!form) return false;
+		const fields: Record<string, unknown> = {};
+		let hasMeaningfulField = false;
+
+		for (const control of form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select")) {
+			if (control instanceof HTMLInputElement && control.type === "file") continue;
+			if (control instanceof HTMLInputElement && control.type === "password") continue;
+
+			const key = createAssetDraftKeyForControl(control);
+			if (!key) continue;
+
+			if (draftControlHasMeaningfulValue(control)) hasMeaningfulField = true;
+
+			if (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")) {
+				fields[key] = { checked: control.checked, value: control.value };
+			} else {
+				fields[key] = { value: control.value };
+			}
+		}
+
+		if (!hasMeaningfulField) return false;
+
+		try {
+			window.sessionStorage.setItem(CREATE_DRAFT_KEY, JSON.stringify({
+				schemaVersion: CREATE_DRAFT_SCHEMA_VERSION,
+				savedAt: Date.now(),
+				fields,
+			}));
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	function restoreCreateAssetDraft() {
+		purgeOldCreateAssetDrafts();
+		if (!form) return false;
+
+		let parsed: { schemaVersion?: number; fields?: Record<string, { value?: string; checked?: boolean }> } | null = null;
+		try { parsed = JSON.parse(window.sessionStorage.getItem(CREATE_DRAFT_KEY) || "null"); } catch {}
+		if (!parsed?.fields || parsed.schemaVersion !== CREATE_DRAFT_SCHEMA_VERSION) return false;
+
+		let restored = false;
+		for (const control of form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select")) {
+			const key = createAssetDraftKeyForControl(control);
+			if (!key) continue;
+
+			const saved = parsed.fields[key];
+			if (!saved) continue;
+
+			if (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")) {
+				control.checked = Boolean(saved.checked);
+				restored = true;
+			} else if (typeof saved.value === "string" && control.value === "") {
+				control.value = saved.value;
+				restored = true;
+			}
+		}
+
+		window.sessionStorage.removeItem(CREATE_DRAFT_KEY);
+		return restored;
+	}
+
+	function clearCreateAssetDraft() {
+		window.sessionStorage.removeItem(CREATE_DRAFT_KEY);
+	}
+
+	function safeLoginUrl() {
+		return `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+	}
+
+	function setAssetCreateLocked(locked: boolean, message: string) {
+		if (form) {
+			if (locked) {
+				form.dataset.assetCreateLocked = "true";
+			} else {
+				delete form.dataset.assetCreateLocked;
+			}
+		}
+		const controls = createAssetControls();
+		for (const fileInput of controls.fileInputs) fileInput.disabled = locked;
+		if (controls.submitButton) {
+			controls.submitButton.disabled = locked;
+			controls.submitButton.hidden = locked;
+		}
+		if (controls.status) controls.status.textContent = message;
+	}
+
+	function ensureLoggedInForCreate(event?: Event) {
+		if (userIsLoggedIn()) return true;
+		if (event) event.preventDefault();
+		saveCreateAssetDraft();
+		setAssetCreateLocked(true, "Your listing is saved in this browser. Continue securely to add photos and request review.");
+		setTimeout(() => { location.href = safeLoginUrl(); }, 120);
+		return false;
+	}
+
+	async function loadTurnstileScript() {
+		if (browserTurnstile()) return;
+		const existing = document.querySelector<HTMLScriptElement>(`script[src="${TURNSTILE_SCRIPT_URL}"]`);
+		if (existing) {
+			await new Promise<void>((resolve, reject) => {
+				existing.addEventListener("load", () => resolve(), { once: true });
+				existing.addEventListener("error", () => reject(new Error("Turnstile failed to load.")), { once: true });
+			});
+			return;
+		}
+		await new Promise<void>((resolve, reject) => {
+			const script = document.createElement("script");
+			script.src = TURNSTILE_SCRIPT_URL;
+			script.async = true;
+			script.addEventListener("load", () => resolve(), { once: true });
+			script.addEventListener("error", () => reject(new Error("Turnstile failed to load.")), { once: true });
+			document.head.appendChild(script);
+		});
+	}
+
+	async function issueAssetDraftIntent(turnstileToken: string) {
+		if (!form) throw new Error("Asset form is missing.");
+		const payload = {
+			draftId: assetDraftId,
+			turnstileToken,
+			formStartedAt: form.dataset.formStartedAt || new Date().toISOString(),
+			companyWebsite: (form.querySelector<HTMLInputElement>("[name='companyWebsite']")?.value ?? ""),
+		};
+		const response = await fetch("/test-corridor/api/wf1-rental/owner/assets/draft-intent", {
+			method: "POST",
+			credentials: "same-origin",
+			headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
+			body: JSON.stringify(payload),
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok) throw new Error(data?.error?.message ?? "Verification failed.");
+		return String((data?.data ?? data)?.assetDraftToken ?? "");
+	}
+
+	async function initAssetCreateGuard() {
+		restoreCreateAssetDraft();
+		if (!form) return;
+		for (const fileInput of form.querySelectorAll<HTMLInputElement>("input[type='file']")) {
+			fileInput.addEventListener("click", (event) => { ensureLoggedInForCreate(event); });
+		}
+		form.addEventListener("submit", (event) => { if (!ensureLoggedInForCreate(event)) return; });
+		if (!userIsLoggedIn()) {
+			setAssetCreateLocked(true, "Fill the listing now. Your data is safe in this browser; continue securely only when adding photos or sending for review.");
+			return;
+		}
+
+		const controls = createAssetControls();
+		const siteKey = form.dataset.turnstileSiteKey || controls.turnstileSlot?.dataset.siteKey || "";
+		if (!siteKey || !controls.turnstileSlot || !controls.tokenInput) {
+			setAssetCreateLocked(true, "Verification is not configured. Ask admin to configure Turnstile before asset creation.");
+			return;
+		}
+		setAssetCreateLocked(true, "Complete verification to unlock photo upload and review submission.");
+		try {
+			await loadTurnstileScript();
+			const api = browserTurnstile();
+			if (!api) throw new Error("Turnstile API is unavailable.");
+			api.render(controls.turnstileSlot, {
+				sitekey: siteKey,
+				appearance: "interaction-only",
+				callback: async (token: unknown) => {
+					try {
+						const assetDraftToken = await issueAssetDraftIntent(String(token));
+						controls.tokenInput!.value = assetDraftToken;
+						setAssetCreateLocked(false, "Verified. You can now upload one primary image and request marketplace review.");
+					} catch (error) {
+						controls.tokenInput!.value = "";
+						setAssetCreateLocked(true, error instanceof Error ? error.message : "Verification failed.");
+					}
+				},
+				"expired-callback": () => {
+					controls.tokenInput!.value = "";
+					setAssetCreateLocked(true, "Verification expired. Please verify again.");
+				},
+				"error-callback": () => {
+					controls.tokenInput!.value = "";
+					setAssetCreateLocked(true, "Verification failed. Please retry.");
+				},
+			});
+		} catch (error) {
+			setAssetCreateLocked(true, error instanceof Error ? error.message : "Verification could not load.");
+		}
+	}
+
+	window.addEventListener("pageshow", (event) => {
+		if (event.persisted) window.location.reload();
+	});
+
+	void initAssetCreateGuard();
 
 	type MediaRef = {
 		mediaId: string;
@@ -395,6 +546,14 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 		body.append("draftId", assetDraftId);
 		body.append("clientItemId", clientItemId);
 
+		const assetDraftToken = form?.querySelector<HTMLInputElement>("[name='assetDraftToken']")?.value ?? "";
+
+		if (!assetDraftToken) {
+			throw new Error("Complete verification before uploading asset media.");
+		}
+
+		body.append("assetDraftToken", assetDraftToken);
+
 		const response = await fetch(wf1UploadUrl, {
 			method: "POST",
 			credentials: "same-origin",
@@ -405,6 +564,10 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 		});
 
 		const payload = await response.json().catch(() => ({}));
+
+		if (response.status === 401 || response.status === 403) {
+			saveCreateAssetDraft();
+		}
 
 		if (!response.ok) {
 			throw new Error(payload?.error?.message ?? "Media upload failed");
@@ -561,14 +724,33 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 			};
 
 			const assetMediaRef = mediaRefFromHidden("assetMedia", "asset_thumbnail", "asset");
+			const assetDraftToken = form.querySelector<HTMLInputElement>("[name='assetDraftToken']")?.value ?? "";
+
+			if (!assetDraftToken) {
+				throw new Error("Complete verification before sending this asset for review.");
+			}
+
+			if (!assetMediaRef || !assetMediaRef.mimeType.startsWith("image/")) {
+				throw new Error("Upload one primary property image before creating this asset.");
+			}
 
 			const addData = await postJson("/test-corridor/api/wf1-rental/owner/assets/add", {
+				draftId: assetDraftId,
+				assetDraftToken,
+				primaryMediaRef: assetMediaRef,
 				assetKind: data.get("assetKind"),
 				title: data.get("title"),
 				locationLabel: data.get("locationLabel"),
 				publicPrice: Number(data.get("publicPrice")),
 				currency: "INR",
 				ownerConditionsSpec,
+				configSpec: {
+					bedrooms: Number(data.get("bedrooms")),
+					furnishing: data.get("furnishing"),
+					thumbnailMediaRef: assetMediaRef,
+					mediaRefs: [assetMediaRef],
+					draftId: assetDraftId,
+				},
 			});
 
 			const assetId = addData.asset.id;
@@ -594,6 +776,7 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 				await postJson(`/test-corridor/api/wf1-rental/owner/assets/${assetId}/request-marketplace-review`, {});
 			}
 
+			clearCreateAssetDraft();
 			location.href = `/test-corridor/wf1/marketplace/assets/${assetId}`;
 		} catch (error) {
 			if (status) {
@@ -622,6 +805,17 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 </script>
 
 <style>
+	.hn-hidden-trap-input {
+		position: absolute !important;
+		left: -10000px !important;
+		top: auto !important;
+		width: 1px !important;
+		height: 1px !important;
+		overflow: hidden !important;
+		opacity: 0 !important;
+		pointer-events: none !important;
+	}
+
 	.create-grid,
 	.create-form,
 	.inventory-editor {
