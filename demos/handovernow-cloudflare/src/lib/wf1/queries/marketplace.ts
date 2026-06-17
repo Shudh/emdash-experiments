@@ -12,8 +12,13 @@ import {
 	WORKFLOW_RENTAL_COLLECTIONS,
 } from "../store/collections.js";
 import { actorRoleFor } from "../store/repository.js";
-
-type MarketplaceViewerRelationship = "anonymous" | "owner" | "applicant" | "renter" | "interested_applicant" | "logged_in";
+import {
+	marketplaceApplicationContextForAsset,
+	publicMarketplaceAssetForAsset,
+	publicOwnerConditionsForAsset,
+	type MarketplaceViewer,
+	type MarketplaceViewerRelationship,
+} from "./marketplace-public-shape.js";
 
 export type MarketplaceQueryOptions = {
 	lane?: Wf1Lane;
@@ -49,6 +54,7 @@ export async function getWorkflowMarketplaceAsset(
 ) {
 	const asset = await store.get(WORKFLOW_RENTAL_COLLECTIONS.ASSETS, assetId);
 	if (!asset) return null;
+
 	const lane = options.lane ?? "public";
 
 	if (!isAssetVisibleInLane(asset, lane)) {
@@ -72,15 +78,17 @@ export async function getWorkflowMarketplaceAsset(
 		asset.business_state === WF_ASSET_STATE.LISTED &&
 		asset.visibility_state === WF_VISIBILITY.MARKETPLACE;
 
-	if (!isPublic && role !== "owner" && role !== "applicant" && role !== "renter") return null;
+	if (!isPublic && role !== "owner" && role !== "applicant" && role !== "renter") {
+		return null;
+	}
 
 	return {
-		asset: viewerAsset(asset, role, interest, workflowInstance),
-		ownerConditions: {
-			version: asset.conditions_version,
-			hash: asset.conditions_hash,
-			spec: asset.owner_conditions_spec,
-		},
+		asset: publicMarketplaceAssetForAsset(
+			asset,
+			viewerForAsset(asset, role, interest, workflowInstance),
+		),
+		ownerConditions: publicOwnerConditionsForAsset(asset),
+		application: marketplaceApplicationContextForAsset(asset),
 	};
 }
 
@@ -96,7 +104,10 @@ async function withViewer(store: DomainStore, user: UserContext | null, asset: D
 		? await findWorkflowInstanceForInterest(store, interest.id)
 		: null;
 
-	return viewerAsset(asset, actorRoleFor(user, asset, interest), interest, workflowInstance);
+	return publicMarketplaceAssetForAsset(
+		asset,
+		viewerForAsset(asset, actorRoleFor(user, asset, interest), interest, workflowInstance),
+	);
 }
 
 async function findWorkflowInstanceForInterest(
@@ -108,13 +119,19 @@ async function findWorkflowInstanceForInterest(
 	});
 }
 
-function viewerAsset(
+function viewerForAsset(
 	asset: DomainRow,
 	role: string,
 	interest: DomainRow | null,
 	workflowInstance: DomainRow | null,
-) {
-	const canExpressInterest = role !== "anonymous" && role !== "owner" && role !== "applicant" && role !== "renter" && !interest;
+): MarketplaceViewer {
+	const canExpressInterest =
+		role !== "anonymous" &&
+		role !== "owner" &&
+		role !== "applicant" &&
+		role !== "renter" &&
+		!interest;
+
 	const relationship: MarketplaceViewerRelationship =
 		role === "owner"
 			? "owner"
@@ -126,44 +143,49 @@ function viewerAsset(
 						? "anonymous"
 						: "logged_in";
 
-	const viewer =
-		relationship === "owner"
-			? {
-					relationship,
-					role,
-					canExpressInterest: false,
-					message: "This is your asset",
-				}
-			: relationship === "renter"
-				? {
-						relationship,
-						role,
-						canExpressInterest: false,
-						interestId: interest?.id ?? asString(asset.active_interest_id),
-						interestState: asString(interest?.interest_state),
-						workflowInstanceId: workflowInstance?.id ?? asString(asset.active_workflow_instance_id),
-						message: "You are the tenant for this asset",
-					}
-				: relationship === "interested_applicant"
-					? {
-							relationship,
-							role,
-							canExpressInterest: false,
-							interestId: interest?.id ?? "",
-							interestState: asString(interest?.interest_state),
-							workflowInstanceId: workflowInstance?.id ?? "",
-						}
-					: relationship === "anonymous"
-						? {
-								relationship,
-								role,
-								canExpressInterest: false,
-							}
-						: {
-								relationship,
-								role,
-								canExpressInterest,
-							};
+	if (relationship === "owner") {
+		return {
+			relationship,
+			role,
+			canExpressInterest: false,
+			message: "This is your asset",
+		};
+	}
 
-	return { ...asset, viewer };
+	if (relationship === "renter") {
+		return {
+			relationship,
+			role,
+			canExpressInterest: false,
+			interestId: interest?.id ?? asString(asset.active_interest_id),
+			interestState: asString(interest?.interest_state),
+			workflowInstanceId: workflowInstance?.id ?? asString(asset.active_workflow_instance_id),
+			message: "You are the tenant for this asset",
+		};
+	}
+
+	if (relationship === "interested_applicant") {
+		return {
+			relationship,
+			role,
+			canExpressInterest: false,
+			interestId: interest?.id ?? "",
+			interestState: asString(interest?.interest_state),
+			workflowInstanceId: workflowInstance?.id ?? "",
+		};
+	}
+
+	if (relationship === "anonymous") {
+		return {
+			relationship,
+			role,
+			canExpressInterest: false,
+		};
+	}
+
+	return {
+		relationship,
+		role,
+		canExpressInterest,
+	};
 }

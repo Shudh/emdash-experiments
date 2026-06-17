@@ -133,7 +133,10 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 					<h1>Dashboard</h1>
 					<p class="rental-muted">Latest assets are displayed first. Each asset shows application forms, Application Form State, and derived actions.</p>
 				</div>
-				<a class="rental-button" href="/test-corridor/wf1/owner/assets/new">Create asset</a>
+				<div class="asset-links">
+					<a class="rental-button secondary" href="/test-corridor/wf1/admin/publish-queue">Review queue</a>
+					<a class="rental-button" href="/test-corridor/wf1/owner/assets/new">Create asset</a>
+				</div>
 			</div>
 			{!dashboard.ok ? (
 				<div class="rental-panel">
@@ -166,10 +169,10 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 										<form
 											class="wf1-inline-publish"
 											data-wf1-publish-form
-											action={`/test-corridor/api/wf1-rental/owner/assets/${assetId}/publish-to-marketplace`}
+											action={`/test-corridor/api/wf1-rental/owner/assets/${assetId}/request-marketplace-review`}
 											method="post"
 										>
-											<button class="rental-button" type="submit">Publish to marketplace</button>
+											<button class="rental-button" type="submit">Request marketplace review</button>
 											<span class="rental-muted" data-wf1-publish-status></span>
 										</form>
 									) : null}

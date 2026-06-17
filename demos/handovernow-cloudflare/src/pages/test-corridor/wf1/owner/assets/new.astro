@@ -108,7 +108,7 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 					<div class="rental-field">
 						<label>
 							<input name="publish" type="checkbox" />
-							Publish to marketplace
+							Request marketplace review
 						</label>
 					</div>
 				</div>
@@ -140,6 +140,173 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 			</form>
 		</div>
 	</section>
+
+
+<script is:inline data-hn-create-asset-ux-v2>
+(() => {
+	const DRAFT_KEY = "hn:wf1:test:create-asset:draft:v2";
+	const NOTICE_CLASS = "hn-create-asset-auth-notice";
+
+	function loggedIn() {
+		const bodyText = document.body.textContent || "";
+		return bodyText.includes("Logout") || /Welcome\s+[^\s@]+@[^\s@]+/.test(bodyText);
+	}
+
+	function safeLoginUrl() {
+		return `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+	}
+
+	function candidateForms() {
+		return Array.from(document.querySelectorAll("form")).filter((form) => form.querySelector("input, textarea, select"));
+	}
+
+	function mainForm() {
+		const forms = candidateForms();
+		return forms.find((form) => /asset|flat|property|marketplace|bedroom|furnishing/i.test(form.textContent || "")) || forms[0] || null;
+	}
+
+	function controlsFor(form) {
+		return Array.from(form.querySelectorAll("input, textarea, select")).filter((control) => {
+			if (!control.name && !control.id) return false;
+			if (control.type === "file") return false;
+			if (control.type === "password") return false;
+			return true;
+		});
+	}
+
+	function saveDraft() {
+		const form = mainForm();
+		if (!form) return;
+		const fields = {};
+		for (const control of controlsFor(form)) {
+			const key = control.name || control.id;
+			if (!key) continue;
+			if (control.type === "checkbox" || control.type === "radio") {
+				fields[key] = { checked: Boolean(control.checked), value: control.value };
+			} else {
+				fields[key] = { value: control.value };
+			}
+		}
+		try {
+			sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ savedAt: Date.now(), fields }));
+		} catch {}
+	}
+
+	function restoreDraft() {
+		const form = mainForm();
+		if (!form) return;
+		let parsed = null;
+		try {
+			parsed = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null");
+		} catch {}
+		if (!parsed || !parsed.fields) return;
+		for (const control of controlsFor(form)) {
+			const key = control.name || control.id;
+			const saved = parsed.fields[key];
+			if (!saved) continue;
+			if (control.type === "checkbox" || control.type === "radio") {
+				control.checked = Boolean(saved.checked);
+			} else if (typeof saved.value === "string" && !control.value) {
+				control.value = saved.value;
+			}
+		}
+		showNotice("We restored your saved form after login. Please reselect the photo/PDF, because browsers do not restore file inputs for security.");
+	}
+
+	function showNotice(message) {
+		const form = mainForm();
+		if (!form) return;
+		let notice = document.querySelector(`.${NOTICE_CLASS}`);
+		if (!notice) {
+			notice = document.createElement("div");
+			notice.className = NOTICE_CLASS;
+			form.prepend(notice);
+		}
+		notice.textContent = message;
+	}
+
+	function guardLogin(event, message) {
+		if (loggedIn()) return false;
+		event.preventDefault();
+		saveDraft();
+		showNotice(message);
+		setTimeout(() => {
+			location.href = safeLoginUrl();
+		}, 120);
+		return true;
+	}
+
+	function improveMandatoryReviewCheckbox() {
+		for (const checkbox of document.querySelectorAll("input[type='checkbox']")) {
+			const label = checkbox.closest("label") || checkbox.parentElement;
+			const labelText = label?.textContent || "";
+			if (!/request marketplace review/i.test(labelText)) continue;
+			checkbox.checked = true;
+			checkbox.style.position = "absolute";
+			checkbox.style.opacity = "0";
+			checkbox.style.pointerEvents = "none";
+			if (label && !label.querySelector("[data-review-required-pill]")) {
+				const pill = document.createElement("span");
+				pill.dataset.reviewRequiredPill = "true";
+				pill.className = "hn-review-required-pill";
+				pill.textContent = "Marketplace review is required before listing";
+				label.textContent = "";
+				label.append(checkbox, pill);
+			}
+		}
+	}
+
+	function attachGuards() {
+		const form = mainForm();
+		if (!form) return;
+
+		form.addEventListener("input", saveDraft, { passive: true });
+		form.addEventListener("change", saveDraft, { passive: true });
+
+		for (const fileInput of form.querySelectorAll("input[type='file']")) {
+			fileInput.addEventListener("click", (event) => {
+				guardLogin(event, "Login is needed before photo/PDF upload. Your typed listing details are saved and will be restored after login.");
+			});
+		}
+
+		form.addEventListener("submit", (event) => {
+			guardLogin(event, "Login is needed before sending the asset for marketplace review. Your typed listing details are saved and will be restored after login.");
+		});
+
+		if (!loggedIn()) {
+			showNotice("You can fill the listing now. Login is needed only before upload or final review request; typed fields are saved in this browser.");
+		}
+	}
+
+	restoreDraft();
+	improveMandatoryReviewCheckbox();
+	attachGuards();
+})();
+</script>
+
+<style is:global>
+	.hn-create-asset-auth-notice {
+		border: 1px solid rgba(234, 88, 12, 0.35);
+		border-radius: var(--r-radius);
+		padding: 12px 14px;
+		margin: 0 0 16px;
+		background: rgba(255, 247, 237, 0.92);
+		color: var(--r-brand-strong);
+		font-weight: 750;
+	}
+
+	.hn-review-required-pill {
+		display: inline-flex;
+		align-items: center;
+		border: 1px solid var(--r-border);
+		border-radius: 999px;
+		padding: 6px 10px;
+		background: var(--r-panel-soft);
+		color: var(--r-muted);
+		font-weight: 800;
+	}
+</style>
+
 </Wf1TestBase>
 
 <script>
@@ -424,7 +591,7 @@ const wf1UploadUrl = "/test-corridor/api/wf1-rental/uploads";
 			});
 
 			if (data.get("publish")) {
-				await postJson(`/test-corridor/api/wf1-rental/owner/assets/${assetId}/publish-to-marketplace`, {});
+				await postJson(`/test-corridor/api/wf1-rental/owner/assets/${assetId}/request-marketplace-review`, {});
 			}
 
 			location.href = `/test-corridor/wf1/marketplace/assets/${assetId}`;

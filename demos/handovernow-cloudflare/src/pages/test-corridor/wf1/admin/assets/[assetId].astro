@@ -1,0 +1,339 @@
+---
+import Wf1TestBase from "../../../../../components/wf1-test/Wf1TestBase.astro";
+import Wf1TestLaneBanner from "../../../../../components/wf1-test/Wf1TestLaneBanner.astro";
+
+import { DomainError } from "../../../../../lib/domain/types.js";
+import { getAdminPublishQueueAsset } from "../../../../../lib/wf1/queries/admin-publish-queue.js";
+import { getRequiredWf1PageContext } from "../../../../../lib/wf1/server/context.js";
+import {
+	applyTestLaneNoStoreHeaders,
+	testLaneHostRejectionResponse,
+} from "../../../../../lib/wf1/routing/host-policy.js";
+
+export const prerender = false;
+
+const rejection = testLaneHostRejectionResponse(Astro.request);
+
+if (rejection) {
+	return rejection;
+}
+
+applyTestLaneNoStoreHeaders(Astro.response.headers);
+
+type JsonObject = Record<string, unknown>;
+
+type DetailLoadResult =
+	| { ok: true; item: JsonObject; error: null }
+	| { ok: false; item: JsonObject; error: string };
+
+function asObject(value: unknown): JsonObject {
+	return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {};
+}
+
+function asArray(value: unknown): JsonObject[] {
+	return Array.isArray(value)
+		? value.filter((item): item is JsonObject => item !== null && typeof item === "object" && !Array.isArray(item))
+		: [];
+}
+
+function text(value: unknown, fallback = ""): string {
+	if (typeof value === "string" && value.trim()) return value.trim();
+	if (typeof value === "number" || typeof value === "boolean") return String(value);
+	return fallback;
+}
+
+function mediaIsImage(media: JsonObject): boolean {
+	const mime = text(media.mimeType).toLowerCase();
+	const url = text(media.url).toLowerCase();
+	return mime.startsWith("image/") || /\.(png|jpg|jpeg|webp|gif)(\?|$)/.test(url);
+}
+
+async function loadDetail(): Promise<DetailLoadResult> {
+	try {
+		const assetId = decodeURIComponent(String(Astro.params.assetId ?? ""));
+		const { store, user } = await getRequiredWf1PageContext(Astro);
+		const item = await getAdminPublishQueueAsset(store, user, assetId, { lane: "test" });
+		return { ok: true, item: item as unknown as JsonObject, error: null };
+	} catch (error) {
+		if (error instanceof DomainError) {
+			return { ok: false, item: {}, error: `${error.code}: ${error.message}` };
+		}
+		console.error("[wf1-admin] Failed to load asset review detail", error);
+		return { ok: false, item: {}, error: "Asset review detail could not be loaded." };
+	}
+}
+
+const detail = await loadDetail();
+const item = detail.ok ? detail.item : {};
+const asset = asObject(item.asset);
+const summary = asObject(item.summary);
+const review = asObject(item.review);
+const facts = asArray(item.facts);
+const mediaPreviews = asArray(item.mediaPreviews);
+const configItems = asArray(item.configItemSummaries);
+const events = asArray(item.events);
+const riskFlags = Array.isArray(item.riskFlags) ? item.riskFlags.map((flag) => String(flag)) : [];
+const assetId = text(asset.id);
+const approveAction = `/test-corridor/api/wf1-rental/admin/assets/${encodeURIComponent(assetId)}/approve-marketplace`;
+const rejectAction = `/test-corridor/api/wf1-rental/admin/assets/${encodeURIComponent(assetId)}/reject-marketplace`;
+const reviewState = text(review.state, "not_requested");
+---
+
+<Wf1TestBase title="WF1 admin asset review" description="Superadmin asset review detail">
+	<Wf1TestLaneBanner />
+
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">Superadmin review</p>
+					<h1>{text(summary.title, "Asset review")}</h1>
+					<p class="rental-muted">{text(summary.locationLabel, "Location not set")} · {text(summary.currency, "INR")} {text(summary.publicPrice, "Price not set")}</p>
+				</div>
+				<div class="admin-actions">
+					<a class="rental-button secondary" href="/test-corridor/wf1/admin/publish-queue">Back to queue</a>
+					<a class="rental-button secondary" href="/test-corridor/wf1/admin">Admin hub</a>
+				</div>
+			</div>
+
+			{!detail.ok ? (
+				<div class="rental-panel">
+					<h2>Unavailable</h2>
+					<p class="rental-muted">{detail.error}</p>
+				</div>
+			) : (
+				<div class="review-detail-grid">
+					<section class="rental-panel detail-main">
+						<div class="rental-badges">
+							<span class="rental-badge">Review: {reviewState}</span>
+							<span class="rental-badge">Asset: {text(asset.business_state, "unknown")}</span>
+							<span class="rental-badge">Visibility: {text(asset.visibility_state, "unknown")}</span>
+							<span class="rental-badge">Owner: {text(summary.ownerUserId, "unknown")}</span>
+						</div>
+
+						{mediaPreviews.length ? (
+							<div class="media-gallery">
+								{mediaPreviews.map((media) => (
+									<a class="media-detail-tile" href={text(media.url, "#")} target="_blank" rel="noreferrer">
+										{mediaIsImage(media) ? (
+											<img src={text(media.url)} alt={text(media.label, "asset media")} loading="lazy" />
+										) : (
+											<span>{text(media.mimeType, "file")}</span>
+										)}
+										<strong>{text(media.label, "Media")}</strong>
+									</a>
+								))}
+							</div>
+						) : (
+							<p class="rental-muted">No media submitted.</p>
+						)}
+
+						<h2>Owner-entered facts</h2>
+						<dl class="detail-facts">
+							{facts.map((fact) => (
+								<div><dt>{text(fact.label)}</dt><dd>{text(fact.value)}</dd></div>
+							))}
+						</dl>
+
+						<h2>Inventory / configuration</h2>
+						{configItems.length ? (
+							<div class="inventory-table">
+								{configItems.map((configItem) => (
+									<div class="inventory-row">
+										<strong>{text(configItem.label, "Item")}</strong>
+										<span>{text(configItem.kind, "item")}</span>
+										<span>{text(configItem.room, "room not set")}</span>
+										<span>Qty {text(configItem.quantity, "1")}</span>
+										<span>{text(configItem.state)}</span>
+									</div>
+								))}
+							</div>
+						) : (
+							<p class="rental-muted">No inventory rows.</p>
+						)}
+					</section>
+
+					<aside class="rental-panel detail-side">
+						<h2>Decision</h2>
+						{reviewState === "requested" ? (
+							<>
+								<form class="admin-review-form" data-admin-review-form action={approveAction} method="post">
+									<button class="rental-button" type="submit">Approve marketplace</button>
+									<span class="rental-muted" data-admin-review-status></span>
+								</form>
+								<form class="admin-review-form reject-form" data-admin-review-form action={rejectAction} method="post">
+									<label>
+										Reject reason
+										<textarea name="reason" minlength="3" maxlength="1000" required></textarea>
+									</label>
+									<button class="rental-button secondary" type="submit">Reject</button>
+									<span class="rental-muted" data-admin-review-status></span>
+								</form>
+							</>
+						) : (
+							<p class="rental-muted">This asset is not currently waiting for review.</p>
+						)}
+
+						<h2>Risk flags</h2>
+						{riskFlags.length ? <ul class="risk-list">{riskFlags.map((flag) => <li>{flag}</li>)}</ul> : <p class="rental-muted">No obvious low-level risk flags.</p>}
+
+						<h2>Review history</h2>
+						<div class="event-list">
+							{events.map((event) => (
+								<div>
+									<strong>{text(event.event_kind, "event")}</strong>
+									<span>{text(event.created_at)}</span>
+								</div>
+							))}
+						</div>
+					</aside>
+				</div>
+			)}
+		</div>
+	</section>
+</Wf1TestBase>
+
+<script>
+	for (const element of document.querySelectorAll("[data-admin-review-form]")) {
+		const form = element instanceof HTMLFormElement ? element : null;
+		if (!form) continue;
+		form.dataset.hnAdminReviewFormV2 = "true";
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			const status = form.querySelector("[data-admin-review-status]");
+			const button = form.querySelector("button[type='submit']");
+			const formData = new FormData(form);
+			const reason = String(formData.get("reason") ?? "").trim();
+			if (status) status.textContent = "Submitting...";
+			if (button) button.setAttribute("disabled", "disabled");
+			try {
+				const response = await fetch(form.action, {
+					method: "POST",
+					credentials: "same-origin",
+					headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
+					body: JSON.stringify(reason ? { reason } : {}),
+				});
+				const payload = await response.json().catch(() => ({}));
+				if (!response.ok) throw new Error(payload?.error?.message ?? "Review action failed");
+				if (status) status.textContent = "Done. Reloading...";
+				location.reload();
+			} catch (error) {
+				if (button) button.removeAttribute("disabled");
+				if (status) status.textContent = error instanceof Error ? error.message : "Review action failed";
+			}
+		});
+	}
+</script>
+
+<style>
+	.admin-actions,
+	.review-detail-grid,
+	.detail-main,
+	.detail-side {
+		display: grid;
+		gap: 16px;
+	}
+
+	.admin-actions {
+		display: flex;
+		flex-wrap: wrap;
+	}
+
+	.review-detail-grid {
+		grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+		align-items: start;
+	}
+
+	.media-gallery {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 12px;
+	}
+
+	.media-detail-tile {
+		display: grid;
+		gap: 8px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 8px;
+		background: var(--r-panel-soft);
+		color: inherit;
+	}
+
+	.media-detail-tile img {
+		width: 100%;
+		height: 150px;
+		object-fit: cover;
+		border-radius: calc(var(--r-radius) - 2px);
+	}
+
+	.detail-facts,
+	.event-list {
+		display: grid;
+		gap: 0;
+		margin: 0;
+	}
+
+	.detail-facts div,
+	.event-list div,
+	.inventory-row {
+		display: grid;
+		grid-template-columns: 150px 1fr;
+		gap: 12px;
+		padding: 8px 0;
+		border-bottom: 1px solid var(--r-border);
+	}
+
+	.detail-facts dt {
+		font-weight: 800;
+		color: var(--r-muted);
+	}
+
+	.detail-facts dd {
+		margin: 0;
+	}
+
+	.inventory-table {
+		display: grid;
+		gap: 0;
+	}
+
+	.inventory-row {
+		grid-template-columns: 1.4fr 1fr 1fr 0.6fr 1fr;
+	}
+
+	.reject-form,
+	.admin-review-form {
+		display: grid;
+		gap: 10px;
+	}
+
+	.reject-form label {
+		display: grid;
+		gap: 6px;
+		font-weight: 750;
+	}
+
+	.reject-form textarea {
+		min-height: 100px;
+		border: 1px solid var(--r-border);
+		border-radius: var(--r-radius);
+		padding: 10px 12px;
+	}
+
+	.risk-list {
+		margin: 0;
+		padding-left: 1.1rem;
+		color: var(--r-danger);
+		font-weight: 750;
+	}
+
+	@media (max-width: 920px) {
+		.review-detail-grid,
+		.inventory-row,
+		.detail-facts div,
+		.event-list div {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

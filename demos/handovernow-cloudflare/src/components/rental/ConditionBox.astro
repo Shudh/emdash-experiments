@@ -14,11 +14,38 @@ const documentsValue =
 	"documentsRequired" in spec ? spec.documentsRequired : "documents_required" in spec ? spec.documents_required : [];
 const documentRows = Array.isArray(documentsValue) ? documentsValue : [];
 const conditionRows = Object.entries(spec).filter(
-	([key]) => key !== "documentsRequired" && key !== "documents_required",
+	([key, value]) =>
+		key !== "documentsRequired" &&
+		key !== "documents_required" &&
+		key !== "preScreenQuestions" &&
+		key !== "pre_screen_questions" &&
+		isDisplayValue(value),
 );
+const versionLabel =
+	conditions?.version !== undefined && conditions?.version !== null && String(conditions.version).trim() !== ""
+		? `v${String(conditions.version)}`
+		: "";
 
 function labelFor(key: string) {
 	return key.replaceAll("_", " ").replaceAll(CAMEL_BOUNDARY_PATTERN, "$1 $2");
+}
+
+function isDisplayValue(value: unknown): boolean {
+	if (typeof value === "string") return value.trim() !== "";
+	if (typeof value === "number") return Number.isFinite(value);
+	if (typeof value === "boolean") return true;
+	if (Array.isArray(value)) {
+		return value.every((entry) => typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean");
+	}
+	return false;
+}
+
+function displayValue(value: unknown): string {
+	if (Array.isArray(value)) {
+		return value.map((entry) => String(entry)).join(", ");
+	}
+
+	return String(value);
 }
 
 function documentKey(document: unknown, index: number) {
@@ -59,7 +86,7 @@ function documentDescription(document: unknown) {
 			<p class="rental-kicker">Owner conditions</p>
 			<h2>Current terms to accept</h2>
 		</div>
-		<span class="rental-badge">v{String(conditions?.version ?? "0")}</span>
+		{versionLabel ? <span class="rental-badge">{versionLabel}</span> : null}
 	</div>
 	{
 		conditionRows.length || documentRows.length ? (
@@ -69,7 +96,7 @@ function documentDescription(document: unknown) {
 				{conditionRows.map(([key, value]) => (
 					<li>
 						<strong>{labelFor(key)}:</strong>{" "}
-						<span>{Array.isArray(value) ? value.join(", ") : String(value)}</span>
+						<span>{displayValue(value)}</span>
 					</li>
 				))}
 					</ul>
@@ -99,7 +126,6 @@ function documentDescription(document: unknown) {
 			<p class="rental-muted">No owner conditions have been added.</p>
 		)
 	}
-	{conditions?.hash && <p class="condition-hash">Hash {String(conditions.hash)}</p>}
 </section>
 
 <style>
@@ -128,14 +154,6 @@ function documentDescription(document: unknown) {
 
 	.condition-box strong {
 		text-transform: capitalize;
-	}
-
-	.condition-hash {
-		margin: 0;
-		color: var(--r-muted);
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.78rem;
-		overflow-wrap: anywhere;
 	}
 
 	.condition-body {

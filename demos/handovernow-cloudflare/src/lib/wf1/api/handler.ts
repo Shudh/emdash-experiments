@@ -7,6 +7,11 @@ import { createTenantDocument } from "../commands/create-tenant-document.js";
 import { createWorkflowCard } from "../commands/create-workflow-card.js";
 import { decideWorkflowCard } from "../commands/decide-workflow-card.js";
 import { expressWorkflowInterest } from "../commands/express-interest.js";
+import {
+	approveMarketplaceReview,
+	rejectMarketplaceReview,
+	requestMarketplaceReview,
+} from "../commands/marketplace-review.js";
 import { publishWorkflowAsset } from "../commands/publish-asset.js";
 import { runWorkflowAction } from "../commands/run-workflow-action.js";
 import {
@@ -21,6 +26,7 @@ import {
 } from "../queries/marketplace.js";
 import { listMyWorkflowWorkspaces } from "../queries/my-workspaces.js";
 import { getWorkflowOwnerDashboard } from "../queries/owner-dashboard.js";
+import { listAdminPublishQueue } from "../queries/admin-publish-queue.js";
 import { getWf1WorkflowInstanceWorkspace } from "../queries/workspace-instance.js";
 import { assertWf1RouteLane } from "../routing/lane-guard.js";
 import { wf1WorkspaceHref, type Wf1Lane } from "../routing/lane.js";
@@ -123,6 +129,15 @@ export async function handleWorkflowRentalRoute(
 			return jsonOk(await getWorkflowOwnerDashboard(input.store, user, { lane }));
 		}
 
+		if (input.request.method === "GET" && input.path === "admin/publish-queue") {
+			return jsonOk(
+				await listAdminPublishQueue(input.store, user, {
+					lane,
+					limit: numberQueryParam(input.request, "limit", 100, MAX_WF1_INDEX_LIMIT),
+				}),
+			);
+		}
+
 		if (input.request.method === "POST" && input.path === "owner/assets/add") {
 			return jsonOk(
 				await createWorkflowAsset(input.store, user, {
@@ -179,8 +194,44 @@ export async function handleWorkflowRentalRoute(
 				return jsonOk(await updateWorkflowAssetConfig(input.store, user, parts[2], configInput));
 			}
 
+			if (parts[3] === "request-marketplace-review") {
+				return jsonOk(
+					await requestMarketplaceReview(input.store, user, parts[2], {
+						lane,
+						summary: asOptionalString(body.summary),
+						requestSpec: optionalRecord(body, "requestSpec"),
+					}),
+					201,
+				);
+			}
+
 			if (parts[3] === "publish-to-marketplace") {
 				return jsonOk(await publishWorkflowAsset(input.store, user, parts[2]));
+			}
+		}
+
+		if (
+			input.request.method === "POST" &&
+			parts[0] === "admin" &&
+			parts[1] === "assets" &&
+			parts[2]
+		) {
+			if (parts[3] === "approve-marketplace") {
+				return jsonOk(
+					await approveMarketplaceReview(input.store, user, parts[2], {
+						lane,
+					}),
+				);
+			}
+
+			if (parts[3] === "reject-marketplace") {
+				return jsonOk(
+					await rejectMarketplaceReview(input.store, user, parts[2], {
+						lane,
+						reason: asOptionalString(body.reason),
+						reviewSpec: optionalRecord(body, "reviewSpec"),
+					}),
+				);
 			}
 		}
 

@@ -7,7 +7,8 @@ interface Props {
 }
 
 const { title, description = "Rental record route" } = Astro.props;
-const user = Astro.locals.user as { email?: string | null } | undefined;
+const user = Astro.locals.user as { email?: string | null; role?: string | null } | undefined;
+const isWf1SuperadminViewer = String(user?.role ?? "") === "50" || user?.email === "shudh.datta@gmail.com";
 
 const fullTitle = title === "WF1" ? "HandoverNow" : `${title} - HandoverNow`;
 const currentPath = Astro.url.pathname + Astro.url.search;
@@ -349,6 +350,9 @@ const logoutRedirect = `/login?redirect=${encodeURIComponent(safeCurrentPath)}`;
 					<a href="/test-corridor/wf1/marketplace">Available flats</a>
 					<a href="/test-corridor/wf1/owner">Owner</a>
 					<a href="/test-corridor/wf1/owner/assets/new">List asset</a>
+					{isWf1SuperadminViewer ? (
+						<a class="rental-button secondary" href="/test-corridor/wf1/admin">Admin</a>
+					) : null}
 					{
 						user?.email ? (
 							<>

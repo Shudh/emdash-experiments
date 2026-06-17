@@ -47,6 +47,7 @@ type OwnerConditions = {
 type AssetDetails = {
 	asset?: JsonObject;
 	ownerConditions?: OwnerConditions | null;
+	application?: JsonObject | null;
 };
 
 const assetId = Astro.params.id;
@@ -97,10 +98,12 @@ function normalizeAssetDetails(value: unknown): AssetDetails | null {
 
 	const rawAsset = value.asset;
 	const rawOwnerConditions = value.ownerConditions;
+	const rawApplication = value.application;
 
 	return {
 		asset: isObjectRecord(rawAsset) ? rawAsset : undefined,
 		ownerConditions: normalizeOwnerConditions(rawOwnerConditions),
+		application: isObjectRecord(rawApplication) ? rawApplication : undefined,
 	};
 }
 
@@ -129,57 +132,31 @@ function conditionFor(asset: JsonObject | undefined): Record<string, unknown> {
 	return specFor(asset?.condition_spec);
 }
 
-function mediaUrlFromStorageKey(storageKey: string): string {
-	return `/_emdash/api/media/file/${storageKey
-		.split("/")
-		.map((part) => encodeURIComponent(part))
-		.join("/")}`;
-}
 
-function moneyLabel(asset: JsonObject | undefined): string {
-	const amount = Number(asset?.public_price ?? 0);
-	const currency = String(asset?.currency ?? "INR");
+function mediaArrayFor(asset: JsonObject | undefined): Array<JsonObject> {
+	const candidates: unknown[] = [];
 
-	if (!Number.isFinite(amount) || amount <= 0) {
-		return "";
+	if (isObjectRecord(asset?.thumbnail)) {
+		candidates.push(asset.thumbnail);
 	}
 
-	return new Intl.NumberFormat("en-IN", {
-		style: "currency",
-		currency,
-		maximumFractionDigits: 0,
-	}).format(amount);
-}
-
-function minimumMonthsLabel(asset: JsonObject | undefined): string {
-	const months = Number(asset?.minimum_months ?? 0);
-
-	if (!Number.isFinite(months) || months <= 0) {
-		return "";
+	if (Array.isArray(asset?.photos)) {
+		candidates.push(...asset.photos);
 	}
 
-	return `Minimum stay: ${months} month${months === 1 ? "" : "s"}`;
+	if (Array.isArray(asset?.media)) {
+		candidates.push(...asset.media);
+	}
+
+	return candidates.filter((entry): entry is JsonObject => isObjectRecord(entry));
 }
 
 function thumbnailFor(asset: JsonObject | undefined) {
-	const config = configFor(asset);
-	const thumbnail =
-		config.thumbnailMediaRef && typeof config.thumbnailMediaRef === "object"
-			? (config.thumbnailMediaRef as JsonObject)
-			: null;
-	const mediaRefs = Array.isArray(config.mediaRefs)
-		? (config.mediaRefs.filter((item) => isObjectRecord(item)) as Array<JsonObject>)
-		: [];
-	const media = thumbnail ?? mediaRefs[0] ?? null;
+	const media = mediaArrayFor(asset)[0] ?? null;
 
 	if (!media) return null;
 
-	const url =
-		typeof media.url === "string" && media.url
-			? media.url
-			: typeof media.storageKey === "string" && media.storageKey
-				? mediaUrlFromStorageKey(media.storageKey)
-				: "";
+	const url = typeof media.url === "string" && media.url.trim() !== "" ? media.url.trim() : "";
 
 	if (!url) return null;
 
@@ -188,6 +165,32 @@ function thumbnailFor(asset: JsonObject | undefined) {
 		mimeType: String(media.mimeType ?? ""),
 		filename: String(media.filename ?? "Asset media"),
 	};
+}
+
+
+function moneyLabel(asset: JsonObject | undefined): string {
+const amount = Number(asset?.public_price ?? 0);
+const currency = String(asset?.currency ?? "INR");
+
+if (!Number.isFinite(amount) || amount <= 0) {
+return "";
+}
+
+return new Intl.NumberFormat("en-IN", {
+style: "currency",
+currency,
+maximumFractionDigits: 0,
+}).format(amount);
+}
+
+function minimumMonthsLabel(asset: JsonObject | undefined): string {
+const months = Number(asset?.minimum_months ?? 0);
+
+if (!Number.isFinite(months) || months <= 0) {
+return "";
+}
+
+return `Minimum stay: ${months} month${months === 1 ? "" : "s"}`;
 }
 
 function assetIdForRoute(asset: JsonObject | undefined): string {
@@ -207,6 +210,7 @@ function assetIdForRoute(asset: JsonObject | undefined): string {
 const details = await loadDetails();
 const asset = details?.asset;
 const ownerConditions = details?.ownerConditions;
+const application = isObjectRecord(details?.application) ? details.application : {};
 const viewer = isObjectRecord(asset?.viewer) ? asset.viewer : {};
 const relationship = String(viewer.relationship ?? "anonymous");
 const workflowInstanceId =
@@ -230,8 +234,16 @@ const minimumMonths = minimumMonthsLabel(asset);
 const runtimeEnv = getRuntimeEnvFromLocals(Astro.locals);
 const humanCheckChallenge = asset?.id ? await createHumanCheckChallenge(String(asset.id), runtimeEnv) : null;
 const turnstileSiteKey = publicTurnstileSiteKeyFromEnv(runtimeEnv);
-const ownerConditionVersion = numberValue(ownerConditions?.version, 0);
-const ownerConditionHash = stringValue(ownerConditions?.hash);
+const ownerConditionVersion = numberValue(application.acceptedConditionsVersion, 0);
+const ownerConditionHash = stringValue(application.acceptedConditionsHash);
+const prescreenQuestions = Array.isArray(application.prescreenQuestions) ? application.prescreenQuestions : [];
+const chatbotifyOwnerConditions: OwnerConditions = {
+	version: ownerConditionVersion,
+	hash: ownerConditionHash,
+	spec: {
+		preScreenQuestions: prescreenQuestions,
+	},
+};
 const prescreenStartedAt = new Date().toISOString();
 ---
 
@@ -424,7 +436,7 @@ const prescreenStartedAt = new Date().toISOString();
 
 											<Wf1PrescreenChatbotifyIsland
 												asset={asset}
-												ownerConditions={ownerConditions}
+												ownerConditions={chatbotifyOwnerConditions}
 												action={expressInterestAction}
 												loginHref={loginHref}
 												canSubmit={canExpressInterest}

@@ -151,32 +151,34 @@ function sortMarketplaceAssets(items: Array<AssetRow>): Array<AssetRow> {
 	return items.toSorted((left, right) => publishedStamp(right) - publishedStamp(left));
 }
 
-function mediaUrlFromStorageKey(storageKey: string) {
-	return `/_emdash/api/media/file/${storageKey
-		.split("/")
-		.map((part) => encodeURIComponent(part))
-		.join("/")}`;
+
+function mediaArrayFor(asset: AssetRow): Array<Record<string, unknown>> {
+	const candidates: unknown[] = [];
+
+	if (asset.thumbnail && typeof asset.thumbnail === "object" && !Array.isArray(asset.thumbnail)) {
+		candidates.push(asset.thumbnail);
+	}
+
+	if (Array.isArray(asset.photos)) {
+		candidates.push(...asset.photos);
+	}
+
+	if (Array.isArray(asset.media)) {
+		candidates.push(...asset.media);
+	}
+
+	return candidates.filter(
+		(entry): entry is Record<string, unknown> =>
+			entry !== null && typeof entry === "object" && !Array.isArray(entry),
+	);
 }
 
 function thumbnailFor(asset: AssetRow) {
-	const config = configFor(asset);
-	const thumbnail =
-		config.thumbnailMediaRef && typeof config.thumbnailMediaRef === "object"
-			? (config.thumbnailMediaRef as Record<string, unknown>)
-			: null;
-	const mediaRefs = Array.isArray(config.mediaRefs)
-		? (config.mediaRefs.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>)
-		: [];
-	const media = thumbnail ?? mediaRefs[0] ?? null;
+	const media = mediaArrayFor(asset)[0] ?? null;
 
 	if (!media) return null;
 
-	const url =
-		typeof media.url === "string" && media.url
-			? media.url
-			: typeof media.storageKey === "string" && media.storageKey
-				? mediaUrlFromStorageKey(media.storageKey)
-				: "";
+	const url = typeof media.url === "string" && media.url.trim() !== "" ? media.url.trim() : "";
 
 	if (!url) return null;
 

@@ -1,0 +1,123 @@
+---
+import Wf1TestBase from "../../../../components/wf1-test/Wf1TestBase.astro";
+import Wf1TestLaneBanner from "../../../../components/wf1-test/Wf1TestLaneBanner.astro";
+
+import { DomainError } from "../../../../lib/domain/types.js";
+import { isWf1Superadmin } from "../../../../lib/wf1/core/marketplace-review.js";
+import { listAdminPublishQueue } from "../../../../lib/wf1/queries/admin-publish-queue.js";
+import { getRequiredWf1PageContext } from "../../../../lib/wf1/server/context.js";
+import {
+	applyTestLaneNoStoreHeaders,
+	testLaneHostRejectionResponse,
+} from "../../../../lib/wf1/routing/host-policy.js";
+
+export const prerender = false;
+
+const rejection = testLaneHostRejectionResponse(Astro.request);
+
+if (rejection) {
+	return rejection;
+}
+
+applyTestLaneNoStoreHeaders(Astro.response.headers);
+
+let canAdmin = false;
+let pendingCount = 0;
+let error = "";
+
+try {
+	const { store, user } = await getRequiredWf1PageContext(Astro);
+	canAdmin = isWf1Superadmin(user);
+	if (!canAdmin) {
+		throw new DomainError("FORBIDDEN", "Superadmin access is required", 403);
+	}
+	const queue = await listAdminPublishQueue(store, user, { lane: "test", limit: 100 });
+	pendingCount = queue.counts.pending;
+} catch (cause) {
+	if (cause instanceof DomainError) {
+		error = `${cause.code}: ${cause.message}`;
+	} else {
+		console.error("[wf1-admin] Failed to load admin hub", cause);
+		error = "Admin hub could not be loaded.";
+	}
+}
+---
+
+<Wf1TestBase title="WF1 admin" description="HandoverNow test-corridor admin hub">
+	<Wf1TestLaneBanner />
+
+	<section class="rental-section">
+		<div class="rental-shell">
+			<div class="rental-section-header">
+				<div>
+					<p class="rental-kicker">Superadmin</p>
+					<h1>Admin hub</h1>
+					<p class="rental-muted">Permanent test-corridor control room. Cloudflare Access protects the route; app-level superadmin guard protects the actions.</p>
+				</div>
+				<a class="rental-button secondary" href="/test-corridor/wf1">Test corridor home</a>
+			</div>
+
+			{!canAdmin ? (
+				<div class="rental-panel">
+					<h2>Access denied</h2>
+					<p class="rental-muted">{error || "Superadmin access is required."}</p>
+				</div>
+			) : (
+				<div class="admin-hub-grid">
+					<a class="rental-panel admin-hub-card primary" href="/test-corridor/wf1/admin/publish-queue">
+						<p class="rental-kicker">Marketplace</p>
+						<h2>Publish review queue</h2>
+						<p>{pendingCount} pending review{pendingCount === 1 ? "" : "s"}</p>
+						<span class="rental-button">Open queue</span>
+					</a>
+
+					<a class="rental-panel admin-hub-card" href="/test-corridor/wf1/owner">
+						<p class="rental-kicker">Owner</p>
+						<h2>Owner dashboard</h2>
+						<p>Check owned assets and owner-side workflow state.</p>
+					</a>
+
+					<a class="rental-panel admin-hub-card" href="/test-corridor/wf1/marketplace">
+						<p class="rental-kicker">Public lane</p>
+						<h2>Marketplace</h2>
+						<p>See what applicants can browse after approval.</p>
+					</a>
+
+					<div class="rental-panel admin-hub-card muted-card">
+						<p class="rental-kicker">Coming next</p>
+						<h2>Definition and DB audit</h2>
+						<p>Workflow definition setup, DB audit snapshots, and moderation history can live here next without exposing public routes.</p>
+					</div>
+				</div>
+			)}
+		</div>
+	</section>
+</Wf1TestBase>
+
+<style>
+	.admin-hub-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+		gap: 16px;
+	}
+
+	.admin-hub-card {
+		display: grid;
+		gap: 10px;
+		align-content: start;
+		text-decoration: none;
+	}
+
+	.admin-hub-card.primary {
+		border-color: rgba(234, 88, 12, 0.42);
+		background: linear-gradient(180deg, rgba(255, 247, 237, 0.82), rgba(255, 255, 255, 0.96));
+	}
+
+	.admin-hub-card p {
+		margin: 0;
+	}
+
+	.muted-card {
+		opacity: 0.84;
+	}
+</style>
