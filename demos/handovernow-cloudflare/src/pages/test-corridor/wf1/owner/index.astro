@@ -162,9 +162,6 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 						const review = objectValue(row.asset.marketplaceReview);
 						const reviewState = String(review.state ?? "not_requested");
 						const rejectReason = String(review.rejectReason ?? "").trim();
-						const configSpec = objectValue(row.asset.config_spec);
-						const conditionSpec = objectValue(row.asset.condition_spec);
-						const ownerConditionsSpec = objectValue(row.asset.owner_conditions_spec);
 						const canPublish = (assetState === "draft_asset" || assetState === "listed") && visibilityState !== "marketplace";
 						const canRequestReview = canPublish && reviewState !== "requested";
 						return (
@@ -182,6 +179,7 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 								</div>
 								<div class="asset-links">
 									<a class="rental-button secondary" href={`/test-corridor/wf1/marketplace/assets/${assetId}`}>View listing</a>
+									<a class="rental-button secondary" href={`/test-corridor/wf1/owner/assets/${assetId}/edit`}>Edit full listing</a>
 									{canRequestReview ? (
 										<form
 											class="wf1-inline-publish"
@@ -206,21 +204,6 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 									</div>
 								) : null}
 
-								<details class="wf1-owner-edit-panel">
-									<summary>Edit listing details</summary>
-									<form data-wf1-owner-config-form action={`/test-corridor/api/wf1-rental/owner/assets/${assetId}/config`}>
-										<div class="rental-form-grid">
-											<div class="rental-field"><label>Price<input name="publicPrice" type="number" value={String(row.asset.public_price ?? "")} /></label></div>
-											<div class="rental-field"><label>Minimum months<input name="minimumMonths" type="number" value={String(row.asset.minimum_months ?? "")} /></label></div>
-											<div class="rental-field"><label>Bedrooms<input name="bedrooms" type="number" value={String(configSpec.bedrooms ?? "")} /></label></div>
-											<div class="rental-field"><label>Furnishing<input name="furnishing" value={String(configSpec.furnishing ?? "")} /></label></div>
-											<div class="rental-field"><label>Physical condition<input name="walls" value={String(conditionSpec.walls ?? "")} /></label></div>
-											<div class="rental-field full"><label>Owner rental conditions<textarea name="depositPolicy">{String(ownerConditionsSpec.depositPolicy ?? "")}</textarea></label></div>
-										</div>
-										<button class="rental-button secondary" type="submit">Save changes</button>
-										<span class="rental-muted" data-wf1-owner-config-status></span>
-									</form>
-								</details>
 
 								<h3>Applications</h3>
 								<Wf1ApplicationList applications={row.applications} />
@@ -235,43 +218,7 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 	</section>
 </Wf1TestBase>
 
-<script>
-	for (const form of document.querySelectorAll<HTMLFormElement>("[data-wf1-owner-config-form]")) {
-		form.addEventListener("submit", async (event) => {
-			event.preventDefault();
-			const status = form.querySelector<HTMLElement>("[data-wf1-owner-config-status]");
-			const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-			const data = new FormData(form);
-			if (submit) submit.disabled = true;
-			if (status) status.textContent = "Saving changes...";
-			try {
-				const response = await fetch(form.action, {
-					method: "POST",
-					credentials: "same-origin",
-					headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
-					body: JSON.stringify({
-						publicPrice: Number(data.get("publicPrice") || "0"),
-						minimumMonths: Number(data.get("minimumMonths") || "0"),
-						configSpec: {
-							bedrooms: Number(data.get("bedrooms") || "0"),
-							furnishing: data.get("furnishing"),
-						},
-						conditionSpec: { walls: data.get("walls") },
-						ownerConditionsSpec: { depositPolicy: data.get("depositPolicy"), documentsRequired: [] },
-					}),
-				});
-				const payload = await response.json().catch(() => ({}));
-				if (!response.ok) throw new Error(payload?.error?.message ?? "Save failed");
-				if (status) status.textContent = "Saved.";
-				setTimeout(() => location.reload(), 250);
-			} catch (error) {
-				if (status) status.textContent = error instanceof Error ? error.message : "Save failed";
-				if (submit) submit.disabled = false;
-			}
-		});
-	}
-
-	for (const form of document.querySelectorAll<HTMLFormElement>("[data-wf1-publish-form]")) {
+<script>for (const form of document.querySelectorAll<HTMLFormElement>("[data-wf1-publish-form]")) {
 		form.addEventListener("submit", async (event) => {
 			event.preventDefault();
 

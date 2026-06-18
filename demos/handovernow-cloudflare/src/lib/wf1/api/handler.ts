@@ -195,6 +195,18 @@ export async function handleWorkflowRentalRoute(
 			if (parts[3] === "config") {
 				const configInput: UpdateWorkflowAssetConfigInput = {};
 
+				if (hasOwn(body, "assetKind")) {
+					configInput.assetKind = asOptionalString(body.assetKind);
+				}
+
+				if (hasOwn(body, "title")) {
+					configInput.title = asOptionalString(body.title);
+				}
+
+				if (hasOwn(body, "locationLabel")) {
+					configInput.locationLabel = asOptionalString(body.locationLabel);
+				}
+
 				if (hasOwn(body, "publicPrice")) {
 					configInput.publicPrice = optionalNumber(body, "publicPrice");
 				}

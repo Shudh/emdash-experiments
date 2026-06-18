@@ -5,6 +5,9 @@ import { WORKFLOW_RENTAL_COLLECTIONS } from "../store/collections.js";
 import { getAssetOrThrow } from "../store/repository.js";
 
 export type UpdateWorkflowAssetConfigInput = {
+	assetKind?: string;
+	title?: string;
+	locationLabel?: string;
 	publicPrice?: number;
 	currency?: string;
 	minimumMonths?: number;
@@ -15,6 +18,9 @@ export type UpdateWorkflowAssetConfigInput = {
 };
 
 type AssetPatch = {
+	asset_kind?: string;
+	title?: string;
+	location_label?: string | null;
 	public_price?: number | null;
 	currency?: string;
 	minimum_months?: number | null;
@@ -49,6 +55,21 @@ export async function updateWorkflowAssetConfig(
 
 		const assetPatch: AssetPatch = {};
 		let configChanged = false;
+
+		if (hasOwn(input, "assetKind")) {
+			assetPatch.asset_kind = requiredText(input.assetKind, "assetKind");
+			configChanged = true;
+		}
+
+		if (hasOwn(input, "title")) {
+			assetPatch.title = requiredText(input.title, "title");
+			configChanged = true;
+		}
+
+		if (hasOwn(input, "locationLabel")) {
+			assetPatch.location_label = input.locationLabel?.trim() || null;
+			configChanged = true;
+		}
 
 		if (hasOwn(input, "publicPrice")) {
 			assetPatch.public_price = input.publicPrice ?? null;
@@ -132,4 +153,13 @@ export async function updateWorkflowAssetConfig(
 
 function hasOwn(object: object, key: PropertyKey): boolean {
 	return Object.hasOwn(object, key);
+}
+
+
+function requiredText(value: string | undefined, label: string): string {
+	const text = value?.trim() ?? "";
+	if (!text) {
+		throw new DomainError("VALIDATION_ERROR", `${label} is required`, 400);
+	}
+	return text;
 }
