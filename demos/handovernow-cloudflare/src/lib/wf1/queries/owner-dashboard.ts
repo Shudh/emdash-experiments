@@ -6,6 +6,7 @@ import {
 	type Wf1Lane,
 } from "../routing/lane.js";
 import { WORKFLOW_RENTAL_COLLECTIONS } from "../store/collections.js";
+import { marketplaceReviewSnapshot } from "../core/marketplace-review.js";
 import { listWorkspace } from "../store/repository.js";
 import { projectWorkflowWorkspace } from "./workspace-projection.js";
 
@@ -69,16 +70,29 @@ export async function getWorkflowOwnerDashboard(
 		applicationRowsByAssetId.set(assetId, [...(applicationRowsByAssetId.get(assetId) ?? []), row]);
 	}
 
+	const assetsWithReview = await Promise.all(
+		visibleAssets.map(async (asset) => {
+			const events = await store.list(
+				WORKFLOW_RENTAL_COLLECTIONS.ASSET_EVENTS,
+				{ asset_id: asset.id },
+				{ orderBy: "created_at", direction: "desc", limit: 50 },
+			);
+
+			return {
+				...asset,
+				viewer: { relationship: "owner" },
+				assetState: {
+					id: asString(asset.business_state, "draft"),
+					label: asString(asset.business_state, "draft").replaceAll("_", " "),
+				},
+				marketplaceReview: marketplaceReviewSnapshot(events),
+				applications: applicationRowsByAssetId.get(asset.id) ?? [],
+			};
+		}),
+	);
+
 	return {
-		assets: visibleAssets.map((asset) => ({
-			...asset,
-			viewer: { relationship: "owner" },
-			assetState: {
-				id: asString(asset.business_state, "draft"),
-				label: asString(asset.business_state, "draft").replaceAll("_", " "),
-			},
-			applications: applicationRowsByAssetId.get(asset.id) ?? [],
-		})),
+		assets: assetsWithReview,
 		inbox: applicationRows,
 		applicationRows,
 	};

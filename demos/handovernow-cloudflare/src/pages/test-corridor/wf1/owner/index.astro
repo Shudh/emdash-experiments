@@ -5,6 +5,7 @@ import Wf1ApplicationList from "../../../../components/wf1-test/Wf1ApplicationLi
 import { DomainError } from "../../../../lib/domain/types.js";
 import { getWorkflowOwnerDashboard } from "../../../../lib/wf1/queries/owner-dashboard.js";
 import { getRequiredWf1PageContext } from "../../../../lib/wf1/server/context.js";
+import { isWf1Superadmin } from "../../../../lib/wf1/core/marketplace-review.js";
 
 import Wf1TestLaneBanner from "../../../../components/wf1-test/Wf1TestLaneBanner.astro";
 
@@ -31,12 +32,14 @@ type DashboardLoadResult =
 			ok: true;
 			assets: Array<JsonObject>;
 			applicationRows: Array<JsonObject>;
+			isSuperadmin: boolean;
 			error: null;
 	  }
 	| {
 			ok: false;
 			assets: Array<JsonObject>;
 			applicationRows: Array<JsonObject>;
+			isSuperadmin: boolean;
 			error: string;
 	  };
 
@@ -51,6 +54,7 @@ async function loadDashboardDirect(): Promise<DashboardLoadResult> {
 			applicationRows: Array.isArray(dashboard.applicationRows)
 				? (dashboard.applicationRows as Array<JsonObject>)
 				: [],
+			isSuperadmin: isWf1Superadmin(user),
 			error: null,
 		};
 	} catch (error) {
@@ -59,6 +63,7 @@ async function loadDashboardDirect(): Promise<DashboardLoadResult> {
 				ok: false,
 				assets: [],
 				applicationRows: [],
+				isSuperadmin: false,
 				error: `${error.code}: ${error.message}`,
 			};
 		}
@@ -69,6 +74,7 @@ async function loadDashboardDirect(): Promise<DashboardLoadResult> {
 			ok: false,
 			assets: [],
 			applicationRows: [],
+			isSuperadmin: false,
 			error: "Owner dashboard could not be loaded.",
 		};
 	}
@@ -78,6 +84,10 @@ function rowsFrom(value: unknown): Array<JsonObject> {
 	return Array.isArray(value)
 		? value.filter((item): item is JsonObject => item !== null && typeof item === "object" && !Array.isArray(item))
 		: [];
+}
+
+function objectValue(value: unknown): JsonObject {
+	return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
 }
 
 function numberTime(value: unknown): number {
@@ -134,7 +144,7 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 					<p class="rental-muted">Latest assets are displayed first. Each asset shows application forms, Application Form State, and derived actions.</p>
 				</div>
 				<div class="asset-links">
-					<a class="rental-button secondary" href="/test-corridor/wf1/admin/publish-queue">Review queue</a>
+					{dashboard.ok && dashboard.isSuperadmin ? <a class="rental-button secondary" href="/test-corridor/wf1/admin/publish-queue">Review queue</a> : null}
 					<a class="rental-button" href="/test-corridor/wf1/owner/assets/new">Create asset</a>
 				</div>
 			</div>
@@ -149,7 +159,14 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 						const assetId = String(row.asset.id ?? "");
 						const assetState = String(row.asset.business_state ?? "draft");
 						const visibilityState = String(row.asset.visibility_state ?? "private");
+						const review = objectValue(row.asset.marketplaceReview);
+						const reviewState = String(review.state ?? "not_requested");
+						const rejectReason = String(review.rejectReason ?? "").trim();
+						const configSpec = objectValue(row.asset.config_spec);
+						const conditionSpec = objectValue(row.asset.condition_spec);
+						const ownerConditionsSpec = objectValue(row.asset.owner_conditions_spec);
 						const canPublish = (assetState === "draft_asset" || assetState === "listed") && visibilityState !== "marketplace";
+						const canRequestReview = canPublish && reviewState !== "requested";
 						return (
 							<section class="rental-panel asset-management">
 								<div class="asset-head">
@@ -165,7 +182,7 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 								</div>
 								<div class="asset-links">
 									<a class="rental-button secondary" href={`/test-corridor/wf1/marketplace/assets/${assetId}`}>View listing</a>
-									{canPublish ? (
+									{canRequestReview ? (
 										<form
 											class="wf1-inline-publish"
 											data-wf1-publish-form
@@ -177,6 +194,34 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 										</form>
 									) : null}
 								</div>
+
+								{reviewState === "requested" ? (
+									<p class="rental-muted wf1-review-status">Marketplace review is waiting for superadmin approval.</p>
+								) : null}
+
+								{reviewState === "rejected" ? (
+									<div class="wf1-review-rejected">
+										<strong>Marketplace review rejected.</strong>
+										<p>{rejectReason || "No reason was provided."}</p>
+									</div>
+								) : null}
+
+								<details class="wf1-owner-edit-panel">
+									<summary>Edit listing details</summary>
+									<form data-wf1-owner-config-form action={`/test-corridor/api/wf1-rental/owner/assets/${assetId}/config`}>
+										<div class="rental-form-grid">
+											<div class="rental-field"><label>Price<input name="publicPrice" type="number" value={String(row.asset.public_price ?? "")} /></label></div>
+											<div class="rental-field"><label>Minimum months<input name="minimumMonths" type="number" value={String(row.asset.minimum_months ?? "")} /></label></div>
+											<div class="rental-field"><label>Bedrooms<input name="bedrooms" type="number" value={String(configSpec.bedrooms ?? "")} /></label></div>
+											<div class="rental-field"><label>Furnishing<input name="furnishing" value={String(configSpec.furnishing ?? "")} /></label></div>
+											<div class="rental-field"><label>Physical condition<input name="walls" value={String(conditionSpec.walls ?? "")} /></label></div>
+											<div class="rental-field full"><label>Owner rental conditions<textarea name="depositPolicy">{String(ownerConditionsSpec.depositPolicy ?? "")}</textarea></label></div>
+										</div>
+										<button class="rental-button secondary" type="submit">Save changes</button>
+										<span class="rental-muted" data-wf1-owner-config-status></span>
+									</form>
+								</details>
+
 								<h3>Applications</h3>
 								<Wf1ApplicationList applications={row.applications} />
 							</section>
@@ -191,6 +236,41 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 </Wf1TestBase>
 
 <script>
+	for (const form of document.querySelectorAll<HTMLFormElement>("[data-wf1-owner-config-form]")) {
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			const status = form.querySelector<HTMLElement>("[data-wf1-owner-config-status]");
+			const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+			const data = new FormData(form);
+			if (submit) submit.disabled = true;
+			if (status) status.textContent = "Saving changes...";
+			try {
+				const response = await fetch(form.action, {
+					method: "POST",
+					credentials: "same-origin",
+					headers: { "Content-Type": "application/json", "X-EmDash-Request": "1" },
+					body: JSON.stringify({
+						publicPrice: Number(data.get("publicPrice") || "0"),
+						minimumMonths: Number(data.get("minimumMonths") || "0"),
+						configSpec: {
+							bedrooms: Number(data.get("bedrooms") || "0"),
+							furnishing: data.get("furnishing"),
+						},
+						conditionSpec: { walls: data.get("walls") },
+						ownerConditionsSpec: { depositPolicy: data.get("depositPolicy"), documentsRequired: [] },
+					}),
+				});
+				const payload = await response.json().catch(() => ({}));
+				if (!response.ok) throw new Error(payload?.error?.message ?? "Save failed");
+				if (status) status.textContent = "Saved.";
+				setTimeout(() => location.reload(), 250);
+			} catch (error) {
+				if (status) status.textContent = error instanceof Error ? error.message : "Save failed";
+				if (submit) submit.disabled = false;
+			}
+		});
+	}
+
 	for (const form of document.querySelectorAll<HTMLFormElement>("[data-wf1-publish-form]")) {
 		form.addEventListener("submit", async (event) => {
 			event.preventDefault();
@@ -243,6 +323,23 @@ const assetRows = latestFirst(dashboard.assets).map((asset) => ({
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
+	}
+
+	.wf1-inline-publish,
+	.wf1-owner-edit-panel form {
+		display: grid;
+		gap: 10px;
+	}
+
+	.wf1-review-rejected {
+		border: 1px solid rgba(220, 38, 38, 0.28);
+		border-radius: var(--r-radius);
+		background: rgba(254, 242, 242, 0.9);
+		padding: 12px;
+	}
+
+	.wf1-review-rejected p {
+		margin: 6px 0 0;
 	}
 
 	.wf1-inline-publish {

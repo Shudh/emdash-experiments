@@ -111,8 +111,7 @@ function valueFrom(input: FormDataEntryValue, element: Element) {
 			if (submit) submit.disabled = true;
 			for (const [name, raw] of data.entries()) {
 				const element = form.querySelector(`[name="${CSS.escape(name)}"]`);
-				if (!element) continue;
-				const value = valueFrom(raw, element);
+				const value = element ? valueFrom(raw, element) : String(raw).trim() || undefined;
 				if (value === undefined || value === false) continue;
 				setNested(body, name, value);
 			}

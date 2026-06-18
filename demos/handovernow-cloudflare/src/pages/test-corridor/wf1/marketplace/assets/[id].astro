@@ -392,10 +392,10 @@ const prescreenStartedAt = new Date().toISOString();
 											</div>
 
 											<div class="application-action-row">
-												<button class="rental-button" type="submit" data-express-interest-submit hidden={turnstileSiteKey !== ""} disabled={turnstileSiteKey !== ""}>
+												<button class="rental-button" type="submit" data-express-interest-submit data-express-locked-action hidden={turnstileSiteKey !== "" && canExpressInterest} disabled={turnstileSiteKey !== "" && canExpressInterest}>
 													{canExpressInterest ? "Express interest" : "Continue securely"}
 												</button>
-												<button class="rental-button secondary" type="button" data-chatbotify-open>
+												<button class="rental-button secondary" type="button" data-chatbotify-open data-express-locked-action hidden={turnstileSiteKey !== "" && canExpressInterest} disabled={turnstileSiteKey !== "" && canExpressInterest}>
 													Chat with agent
 												</button>
 											</div>
@@ -814,8 +814,15 @@ const prescreenStartedAt = new Date().toISOString();
 			const tokenInput = document.querySelector("[data-express-turnstile-token]");
 			const status = document.querySelector("[data-express-turnstile-status]");
 			const submit = document.querySelector("[data-express-interest-submit]");
+			const lockedActions = document.querySelectorAll("[data-express-locked-action]");
 
 			function setSubmitReady(ready, message) {
+				for (const action of lockedActions) {
+					if (action instanceof HTMLButtonElement) {
+						action.disabled = !ready;
+						action.hidden = !ready;
+					}
+				}
 				if (submit instanceof HTMLButtonElement) {
 					submit.disabled = !ready;
 					submit.hidden = !ready;

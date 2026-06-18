@@ -230,7 +230,7 @@ const agentFolderKey = agentFolderKeyFor(asset, interest, instance);
 							<h1>{String(asset.title ?? "Asset application form")}</h1>
 							<p class="rental-muted">Workflow definition: {String(instance.definition_id ?? "unknown")}@{String(instance.definition_version ?? "1")}</p>
 						</div>
-						<a class="rental-button secondary" href="/test-corridor/wf1/owner">Owner dashboard</a>
+						{viewerRole === "owner" ? <a class="rental-button secondary" href="/test-corridor/wf1/owner">Owner dashboard</a> : null}
 					</div>
 
 					<Wf1StatePanel projection={projection} viewerRole={viewerRole} />
